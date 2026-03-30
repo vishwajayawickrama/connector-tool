@@ -85,19 +85,39 @@ public function checkCodeServerRunning(int port) returns boolean {
 }
 
 # Checks whether a VS Code extension is installed in code-server.
-# Pipes `code-server --list-extensions` through grep via `sh -c`.
+# Runs `code-server --list-extensions` directly (no shell) and searches stdout
+# for an exact line match of extensionId.
+# extensionId is validated against a strict allowlist before use.
 # + extensionId - the extension identifier to look for (e.g. "wso2.wso2-integrator")
 # + return - true if the extension is installed, false otherwise
 public function checkExtensionInstalled(string extensionId) returns boolean {
+    // Reject extensionIds containing characters outside the safe allowlist.
+    if !re`[A-Za-z0-9._\-/]+`.isFullMatch(extensionId) {
+        return false;
+    }
     os:Process|error proc = os:exec({
-        value: "sh",
-        arguments: ["-c", "code-server --list-extensions | grep -q '" + extensionId + "'"]
+        value: "code-server",
+        arguments: ["--list-extensions"]
     });
     if proc is error {
         return false;
     }
+    byte[]|error outBytes = proc.output();
     int|error exitCode = proc.waitForExit();
-    return exitCode is int && exitCode == 0;
+    if outBytes is error || exitCode is error {
+        return false;
+    }
+    string|error outStr = string:fromBytes(outBytes);
+    if outStr is error {
+        return false;
+    }
+    string[] lines = re`\n`.split(outStr);
+    foreach string line in lines {
+        if line.trim() == extensionId {
+            return true;
+        }
+    }
+    return false;
 }
 
 # Ensures a VS Code extension is installed in code-server.

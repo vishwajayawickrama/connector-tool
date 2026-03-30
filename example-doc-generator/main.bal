@@ -133,14 +133,14 @@ public function main() returns error? {
     // Write connector name to artifacts/run-log/ for downstream steps
     string runLogDir = "./artifacts/run-log";
     file:Error? cnDirErr = file:createDir(runLogDir, file:RECURSIVE);
-    if cnDirErr is () {
-        io:Error? cnWriteErr = io:fileWriteString(runLogDir + "/connector-name.txt", connectorName.trim());
-        if cnWriteErr is io:Error {
-            utils:log("\t[WARN] Could not write connector-name.txt: " + cnWriteErr.message());
-        } else {
-            utils:log("\t[INFO] Connector name saved to " + runLogDir + "/connector-name.txt");
-        }
+    if cnDirErr is file:Error {
+        return error("Could not create run-log directory: " + cnDirErr.message());
     }
+    io:Error? cnWriteErr = io:fileWriteString(runLogDir + "/connector-name.txt", connectorName.trim());
+    if cnWriteErr is io:Error {
+        return error("Could not write connector-name.txt: " + cnWriteErr.message());
+    }
+    utils:log("\t[INFO] Connector name saved to " + runLogDir + "/connector-name.txt");
     utils:log("");
 
     // Step 7: Build system and user prompts

@@ -238,39 +238,20 @@ def extract_connector_info(content: str) -> tuple[str, str, str]:
     Extract connector display name, slug, and primary operation name from the doc.
     Returns (display_name, slug, operation_name).
 
-    Priority for slug: connector-name.txt written by Ballerina pipeline (authoritative).
-    Priority for display_name: H1 title → "## Adding the X connector" heading → title-case slug.
+    connector-name.txt written by the Ballerina pipeline is the authoritative source.
     """
-    # Priority 1: slug from connector-name.txt (authoritative)
-    slug_from_file: str | None = None
-    if CONNECTOR_NAME_FILE.exists():
-        raw = CONNECTOR_NAME_FILE.read_text(encoding="utf-8").strip()
-        if raw:
-            slug_from_file = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
-            info(f"Connector slug from file: {slug_from_file}")
-
-    # display_name: parse from doc (H1 → H2 heading → title-case slug)
-    m = re.match(r"^#\s+(.+?)\s+Connector\s+Example", content.strip(), re.IGNORECASE)
-    if m:
-        display_name = m.group(1).strip()
-    else:
-        m2 = re.search(
-            r"^##\s+Adding the\s+(.+?)\s+connector\b",
-            content,
-            re.MULTILINE | re.IGNORECASE,
+    # connector-name.txt is required — written by the Ballerina pipeline at startup
+    if not CONNECTOR_NAME_FILE.exists():
+        fail(
+            "connector-name.txt not found in artifacts/run-log/. "
+            "Run the Ballerina pipeline first."
         )
-        if m2:
-            display_name = m2.group(1).strip()
-        elif slug_from_file:
-            display_name = slug_from_file.replace("-", " ").title()
-        else:
-            fail(
-                "Could not determine connector display name from file, H1 title, or headings.\n"
-                "Ensure connector-name.txt exists in artifacts/run-log/ or the doc contains\n"
-                "'# [ConnectorName] Connector Example' or '## Adding the [ConnectorName] connector'."
-            )
-
-    slug = slug_from_file or re.sub(r"[^a-z0-9]+", "-", display_name.lower()).strip("-")
+    raw = CONNECTOR_NAME_FILE.read_text(encoding="utf-8").strip()
+    if not raw:
+        fail("connector-name.txt is empty. Run the Ballerina pipeline first.")
+    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    display_name = raw.replace("-", " ").title()
+    info(f"Connector slug from file: {slug}")
 
     # Last "## Configuring the X Y Operation" heading
     ops = re.findall(
@@ -882,7 +863,7 @@ def main() -> None:
     sync_and_branch(docs_repo, branch_name, args.dry_run,
                     upstream_slug=upstream)
 
-    # ── 5–8. Place example.md, copy screenshots, update sidebar ───────────────
+    # ── 5-8. Place example.md, copy screenshots, update sidebar ───────────────
     run_claude_code_placement(
         docs_repo, category, connector_slug, connector_name,
         source_doc_path, screenshot_files, args.dry_run,

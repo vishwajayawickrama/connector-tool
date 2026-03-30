@@ -25,25 +25,6 @@ type CentralPackageMetadata record {
     string readme?;
 };
 
-// Returns the lowercase connector name from a "# [Name] Connector Example" H1, or nil.
-// Matching is case-insensitive via toLowerAscii() on the first line.
-isolated function extractConnectorName(string docContent) returns string? {
-    string firstLine = docContent.trim();
-    int? nlIdx = firstLine.indexOf("\n");
-    if nlIdx is int {
-        firstLine = firstLine.substring(0, nlIdx).trim();
-    }
-    regexp:Groups? groups = re `^#\s+(\w+)\s+connector\s+example`.findGroups(firstLine.toLowerAscii());
-    if groups is () {
-        return ();
-    }
-    regexp:Span? nameSpan = groups[1];
-    if nameSpan is () {
-        return ();
-    }
-    return nameSpan.substring(); // already lowercased
-}
-
 // Finds the Examples section (any heading level, case-insensitive) in a readme,
 // and returns its body up to the next same-or-higher-level heading, or nil if not found.
 isolated function extractExamplesSection(string readme) returns string? {
@@ -101,22 +82,14 @@ public function appendExamplesSection(string docPath) {
         return;
     }
 
-    // Priority 1: connector-name.txt written by pipeline at startup
-    string? connectorName = ();
+    // connector-name.txt written by pipeline at startup is the authoritative source
     string|io:Error savedName = io:fileReadString("./artifacts/run-log/connector-name.txt");
-    if savedName is string && savedName.trim().length() > 0 {
-        string nameFromFile = savedName.trim().toLowerAscii();
-        log("\t[INFO] appendExamplesSection: connector name from file: '" + nameFromFile + "'");
-        connectorName = nameFromFile;
-    } else {
-        // Fallback: extract from doc headings
-        connectorName = extractConnectorName(content);
-    }
-
-    if connectorName is () {
-        log("\t[WARN] appendExamplesSection: could not determine connector name — skipping.");
+    if savedName is io:Error || savedName.trim().length() == 0 {
+        log("\t[WARN] appendExamplesSection: connector-name.txt missing or empty — skipping.");
         return;
     }
+    string connectorName = savedName.trim().toLowerAscii();
+    log("\t[INFO] appendExamplesSection: connector name from file: '" + connectorName + "'");
 
     log("\t[INFO] appendExamplesSection: fetching metadata for '" + connectorName + "' from Ballerina Central...");
 
