@@ -25,15 +25,15 @@ pnpm-lock.yaml
 yarn.lock
 
 # Python
-agent/.venv/
-agent/__pycache__/
+python/.venv/
+python/__pycache__/
 __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
 dist/
 .python-version
-agent/uv.lock
+python/uv.lock
 
 # OS specific
 Thumbs.db
@@ -60,8 +60,9 @@ temp/
 .cache/
 
 # Environment
-.env*
-!.env.example
+.env
+.env.local
+.env.*.local
 
 # Ballerina config (contains secrets)
 Config.toml

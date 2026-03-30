@@ -15,28 +15,32 @@
 // under the License.
 
 # Builds the user message containing only the dynamic/variable parts:
-# goal, code-server URL, and absolute artifact paths. All rules, template
+# connector name, code-server URL, and absolute artifact paths. All rules, template
 # structure, and formatting instructions live in system_prompt.bal.
 #
-# + userGoal      - The goal definition
+# + connectorName - Exact Ballerina Central package name (e.g. "mysql", "kafka")
 # + codeServerUrl - The URL where code-server is running
 # + projectRoot   - Absolute path to the project root directory
 # + return - the user message string
-public function buildUserMessage(string userGoal, string codeServerUrl, string projectRoot) returns string {
+public function buildUserMessage(string connectorName, string codeServerUrl, string projectRoot) returns string {
     string screenshotsDir = projectRoot + "/artifacts/screenshots";
     string workflowDocsDir = projectRoot + "/artifacts/workflow-docs";
     return string `Generate a highly detailed execution prompt for the following goal.
 
 THE MAIN GOAL (this must be the central focus of the ENTIRE execution prompt):
-${userGoal}
+Create a WSO2 Integrator workflow using the ${connectorName} connector (ballerinax/${connectorName} from Ballerina Central). The workflow must:
+1. Locate and add the ${connectorName} connector from the connector palette.
+2. Configure the connection by binding each required parameter to a Configurable variable.
+3. Add an entry point (Automation trigger or Event Listener as appropriate) and call the primary remote operation for this connector type.
+4. Document every step with screenshots at the mandatory milestones.
 
 Make sure the goal above is clearly reflected in:
-- The prompt TITLE (name the goal explicitly)
-- The OVERVIEW section (first sentence must state the goal)
-- The OBJECTIVES (list goal-specific implementation objectives)
+- The prompt TITLE (name the connector explicitly)
+- The OVERVIEW section (first sentence must state the connector and operation)
+- The OBJECTIVES (list connector-specific implementation objectives)
 - The IMPLEMENTATION STAGES (Stage 5+ must break down this exact goal into detailed, actionable steps with specific UI element names, fields to fill, buttons to click)
-- The DELIVERABLES (filename should reflect the goal)
-- The SUCCESS CRITERIA (what does achieving THIS goal look like?)
+- The DELIVERABLES (filename should use the connector name)
+- The SUCCESS CRITERIA (what does a successful ${connectorName} connector integration look like?)
 
 CODE-SERVER URL: ${codeServerUrl}
 (Use this exact URL in Stage 1 when navigating to the code-server instance)

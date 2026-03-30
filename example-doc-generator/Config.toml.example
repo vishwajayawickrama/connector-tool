@@ -13,28 +13,11 @@ llmApiKey = ""
 # Start manually with: code-server --auth none --bind-addr 0.0.0.0:8080
 codeServerPort = 8080
 
-# Python agent server port (agent/agent_server.py listens on this port)
+# Python agent server port (python/agent_server.py listens on this port)
 # The pipeline will start the agent server automatically if not running.
 # Start manually with: make start-agent
 agentServerPort = 8765
 
-# User Goal — the task to generate an execution prompt for
-userGoal = ""
-
-# === External Repo Paths (local filesystem) ===
-# Path to your local clone of the integration-samples fork
-integrationSamplesRepo = "../integration-samples"
-# Path to your local clone of the docs-integrator fork
-docsIntegratorRepo = "../docs-integrator"
-
-# === GitHub Repo Identifiers ===
-# GitHub org/repo to target for integration samples PRs
-integrationSamplesUpstream = "wso2/integration-samples"
-# Base branch for integration samples PRs
-integrationSamplesBaseBranch = "main"
-# Your fork of docs-integrator to push feature branches to (org/repo)
-docsIntegratorFork = "[your-github/docs-integrator]"
-# Upstream docs-integrator repo to open PRs against (org/repo)
-docsIntegratorUpstream = "wso2/docs-integrator"
-# Base branch for docs-integrator PRs
-docsIntegratorBaseBranch = "dev"
+# Connector name — exact Ballerina Central package name (lowercase).
+# Examples: "mysql", "googlesheets", "kafka", "salesforce", "redis"
+connectorName = ""
