@@ -101,6 +101,7 @@ You are also a Technical Documentation Specialist — after automation, write th
 - **If a .bal file tab opens automatically** (e.g., VS Code auto-opens it when creating an integration), **immediately close that editor tab** — click the × on the tab or use Ctrl+W — before proceeding. Do NOT read, inspect, or document its contents.
 - **If any source code window or code editor tab is open**, close it before taking any milestone screenshot. Screenshots must never show source code.
 - If a step appears to require manual code editing, **stop and request user guidance**.
+- Do **NOT** click the **Expression** toggle/button for any connection parameter field — this includes boolean fields. Boolean fields (showing a true/false dropdown) must be set by selecting from the dropdown, never by switching to Expression mode. For non-boolean fields, use the helper panel directly without switching to Expression mode.
 </rules_lowcode>
 
 <rules_playwright_mcp>
@@ -180,12 +181,13 @@ You are also a Technical Documentation Specialist — after automation, write th
 ### Stage 3: Create New Integration Project
 1. On the Welcome page, click the **"Create"** button inside the **"Create New Project"** card.
 2. When prompted for a project name, enter a **goal-relevant name** that clearly describes the purpose (e.g., "mysql-db-connection", "http-get-endpoint", "salesforce-data-sync"). The name must reflect the user's specific goal.
-3. If any additional fields appear (e.g., version, artifact type, runtime), accept the defaults or choose values appropriate for a low-code integration.
-4. If the name already exists (duplicate), append a version suffix (e.g., "mysql-db-connection-v2") to make it unique.
-5. Confirm/save to create the project.
-6. Wait for the low-code editor canvas or integration design view to open.
-7. Call ${bt}browser_snapshot${bt} to confirm the canvas/design view is open.
-8. Use the Bash tool to find and record the project's absolute filesystem path so the pipeline can clean it up after the run:
+3. **If a "Create within a project" checkbox is visible and currently checked, click it to uncheck it.** This ensures the integration is created as a standalone project (not nested inside a project folder), which produces the correct integration design canvas view. If the checkbox is already unchecked, leave it as-is.
+4. If any additional fields appear (e.g., version, artifact type, runtime), accept the defaults or choose values appropriate for a low-code integration.
+5. If the name already exists (duplicate), append a version suffix (e.g., "mysql-db-connection-v2") to make it unique.
+6. Confirm/save to create the project.
+7. Wait for the low-code editor canvas or integration design view to open.
+8. Call ${bt}browser_snapshot${bt} to confirm the canvas/design view is open.
+9. Use the Bash tool to find and record the project's absolute filesystem path so the pipeline can clean it up after the run:
    - Run: ${bt}find ~ -name 'Ballerina.toml' -maxdepth 4 2>/dev/null | head -1 | xargs dirname${bt}
    - Write the result to the run log: ${bt}echo "$PROJ_PATH" > "${projectRoot}/artifacts/run-log/created-project.txt"${bt}
    - If ${bt}find${bt} returns nothing, try: ${bt}ls -td ~/*/Ballerina.toml 2>/dev/null | head -1 | xargs dirname${bt}
@@ -223,27 +225,38 @@ MANDATORY STAGE STRUCTURE — you MUST include ALL of the following stage catego
 **CATEGORY B — Configure Connection Parameters (1 stage)**
 - Name it "Configure [ConnectorName] Connection Parameters"
 - This is a CONTINUOUS form interaction — the form was opened at the end of CATEGORY A. Do NOT leave the form, save with defaults, and re-open it. Fill all parameters in one visit.
-- For EACH required connection field, must use a Configurable variable instead of a literal value.
+- **ALL non-boolean connection fields — required AND optional — MUST be bound to a Configurable variable.**
+  Do NOT leave any field empty or skip it because it appears optional.
+  **Exception — Boolean fields (dropdowns showing true/false):** Do NOT create a configurable for
+  these. Instead, simply select **true** or **false** from the dropdown as appropriate for the
+  default/recommended value. Never switch a boolean dropdown to Expression mode.
+  Every visible non-boolean field in the connection form must have a configurable bound to it
+  before saving.
+  Before saving, scroll through the entire form from top to bottom to confirm no field was missed.
   The workflow MUST be done field-by-field — do NOT try to create configurables for multiple
   fields from the same helper panel session. Follow these sub-steps for EACH field individually:
 
   1. Focus the specific field you want to configure (click or scroll to it).
-  2. Click the **Expression** toggle button next to THAT field to switch it to expression mode.
-  3. Click **Open Helper Panel** (the small button that appears next to the expression textbox).
-  4. In the helper panel, click the **Configurables** tab.
-  5. Click **+ New Configurable**.
-  6. In the **New Configurable** dialog:
+  2. Click **Open Helper Panel** (the small button that appears next to the field).
+  3. In the helper panel, click the **Configurables** tab.
+  4. Click **+ New Configurable**.
+  5. In the **New Configurable** dialog:
      - **Variable Name**: enter a descriptive camelCase name (e.g., ${bt}redisHost${bt}, ${bt}dbPassword${bt}, ${bt}kafkaBrokerUrl${bt}, ${bt}salesforceClientId${bt}).
-     - **Variable Type**: choose the primitive type — ${bt}string${bt} for text/URLs/credentials, ${bt}int${bt} for numeric ports or counts, ${bt}boolean${bt} for flags.
+     - **Variable Type**: choose the primitive type — ${bt}string${bt} for text/URLs/credentials, ${bt}int${bt} for numeric ports or counts. Do NOT create boolean configurables — boolean fields use dropdowns instead (see rule above).
      - **Default Value**: leave blank for sensitive values (passwords, API keys).
      - Click **Save**.
-  7. **CRITICAL**: After clicking Save, the new configurable is AUTOMATICALLY injected into
+  6. **CRITICAL**: After clicking Save, the new configurable is AUTOMATICALLY injected into
      the currently active field as a proper variable reference. Do NOT click the configurable
      name again in the list — it is already bound. Close the helper panel immediately.
-  8. Move to the next field and repeat from step 1.
+  7. Move to the next field and repeat from step 1.
 
-  **NEVER type a configurable name directly into an expression textbox using ${bt}browser_type${bt}.**
-  Typing text into an expression-mode field creates a Ballerina STRING LITERAL
+  **Pre-save field audit (MANDATORY):** Before clicking Save/Add, scroll the entire connection
+  form from top to bottom and call ${bt}browser_snapshot${bt}. Verify that EVERY field — including
+  any that appeared collapsed, optional, or greyed-out — now shows a configurable variable
+  reference. If any field is still empty, bind it to a new configurable before proceeding.
+
+  **NEVER type a configurable name directly into a field using ${bt}browser_type${bt}.**
+  Typing text into a field creates a Ballerina STRING LITERAL
   (e.g., ${bt}"snowflakeAccountIdentifier"${bt}) not a variable reference. The integration will fail
   because it passes the literal text as the credential instead of the configured value.
   The ONLY correct way to bind a configurable is via the auto-inject after clicking Save in the
@@ -252,12 +265,12 @@ MANDATORY STAGE STRUCTURE — you MUST include ALL of the following stage catego
   **Recovery — if the wrong configurable was injected into a field:**
   - Open THAT field's helper panel → Configurables tab → click the CORRECT configurable name
     in the list to replace the current value with the proper variable reference.
-  - Do NOT clear the textbox and retype — that creates a string literal.
-- **MANDATORY screenshot 2**: After binding ALL required connection parameters to Configurable variables (fields show configurable variable names, not literal values), BEFORE clicking Save. Every field must be visible with its configurable reference shown. The documentation step for this screenshot MUST list each parameter as a bullet: **[paramName]** — [one-line description of what this parameter controls].
+- **MANDATORY screenshot 2**: After binding ALL connection parameters (required AND optional) to Configurable variables (fields show configurable variable names, not literal values), BEFORE clicking Save. Every field — with no exceptions — must be visible with its configurable reference shown. The documentation step for this screenshot MUST list each parameter as a bullet: **[paramName]** — [one-line description of what this parameter controls].
   - **CRITICAL placement rule**: Embed in the sub-step that describes filling parameters, NOT in a step about opening the form or saving.
   - **Filename**: ${bt}[goal_prefix]_screenshot_02_connection_form.png${bt}.
 - Click Save/Add to persist the connection.
-- **MANDATORY screenshot 3**: Immediately after saving, take a screenshot showing the connector entry now visible in the Connections panel or on the low-code canvas.
+- Before taking screenshot 3, call ${bt}browser_snapshot${bt} to confirm you are viewing the **integration design canvas** (the canvas that shows the connection node directly — the title reads "Design" and the connector node is visible on the canvas). If you see a project-level file tree, a project overview page, or any view other than the integration design canvas, navigate to the correct canvas first: click on the integration name in the sidebar or click the "Design" tab/link to open the integration-level design view.
+- **MANDATORY screenshot 3**: Immediately after confirming you are on the integration design canvas, take a screenshot showing the connector entry now visible in the Connections panel or on the low-code canvas.
   - **CRITICAL placement rule**: Embed in the sub-step that describes saving the connection / confirming the connector appears on canvas.
   - **Filename**: ${bt}[goal_prefix]_screenshot_03_connections_list.png${bt}.
 
@@ -295,8 +308,9 @@ If the goal uses an event listener entry point, or the connector can be called d
 5. Inspect all available input fields and the **Record Configuration** panel.
 6. Populate the Record Configuration or input fields with a valid, functional data template:
    - For byte-based systems (Kafka, MQTT): use ${bt}.toBytes()${bt} — e.g., ${bt}"Hello World".toBytes()${bt} for the message payload
-   - For record-based connectors (Database INSERT): provide a typed record literal — e.g., ${bt}{ id: 1, name: "test-record", value: 0.0 }${bt}
-   - For REST/HTTP: provide a JSON body — e.g., ${bt}{ "key": "value" }${bt}
+   - For record-based connectors (Database INSERT): provide a typed record literal — e.g., ${bt}{ id: 1, name: "John Doe", email: "john@example.com" }${bt}
+   - For key-value stores (Redis, DynamoDB, Hazelcast): use meaningful key/value pairs — e.g., key ${bt}"greeting"${bt}, value ${bt}"Hello, World!"${bt}
+   - For REST/HTTP: provide a JSON body — e.g., ${bt}{ "message": "Hello, World!", "sender": "integration" }${bt}
    - For Salesforce: provide an sObject map — e.g., ${bt}{ Name: "Test Account", Industry: "Technology" }${bt}
 7. Map or bind the operation output to a variable if the panel requires it (e.g., assign the result to a local variable named ${bt}result${bt}).
 8. **MANDATORY screenshot 5**: After populating ALL operation input fields / Record Configuration, take a screenshot showing all filled values — before or after clicking Save. Every configured field must be visible.
@@ -354,6 +368,35 @@ Step format:
   - **[paramName]** — [one-line description of what this parameter controls]
   ![screenshot description](../screenshots/[prefix]_screenshot_NN.png)
 
+**Numbered sub-list rule (applies to ALL sections — MANDATORY):**
+If a step body paragraph contains **2 or more distinct sequential instructions**, format them
+as a numbered sub-list instead of a prose paragraph. A "distinct sequential instruction" is
+any sentence that describes a UI action (click, type, select, expand, fill, save, etc.) or
+a distinct configuration step. Do NOT write multiple instructions as a single prose paragraph.
+Parameter bullet lines (**paramName** — description) and screenshot references remain outside
+the numbered sub-list, after the last numbered item.
+
+  Example — CORRECT: numbered sub-list (2+ instructions):
+  ### Step N: Add an automation trigger and configure the Send operation
+  1. On the canvas, click **+ Add Automation** to add a new automation entry point.
+  2. In the trigger configuration panel, set the interval to **1 minute** and click **Save**.
+  3. Inside the automation body, click **+**, expand the **kafkaClient** connection node, and select the **Send** operation.
+  4. In the Record Configuration panel, set the **topic** to ${bt}"orders"${bt} and the **value** to ${bt}"Hello World".toBytes()${bt}.
+  5. Click **Save** to confirm the operation configuration.
+  - **topic** — the Kafka topic to publish the message to
+  - **value** — the message payload as a byte array
+  ![...](../screenshots/kafka_screenshot_05_operation_filled.png)
+
+  Example — CORRECT: single sentence (only 1 instruction):
+  ### Step N: Search for the Redis connector in the palette
+  Type "redis" in the search box and click the **Redis** connector card.
+  ![...](../screenshots/redis_screenshot_01_palette.png)
+
+  Example — WRONG: multiple instructions written as prose (must be converted):
+  ### Step N: Open the palette and add the connector
+  Click the **+ Add Connection** button to open the palette. Search for the connector and click the connector card to open the form.
+  ↑ This has 3 distinct instructions — convert to a numbered sub-list.
+
 ${bt}${bt}${bt}markdown
 # Example
 
@@ -369,19 +412,22 @@ covered and what API resources will be created, (3) the overall flow assembled o
 
 ## Architecture
 
-[Generate a horizontal Mermaid flowchart (flowchart LR) that visualises the integration flow for this specific connector.
+[Generate a horizontal Mermaid flowchart that visualises the integration flow for this specific connector.
 Rules:
-- Use 3–5 nodes — choose the count appropriate for this connector's complexity.
+- **MANDATORY: Use ${bt}flowchart LR${bt} — the diagram MUST be horizontal (left-to-right). Never use TD, TB, BT, or RL.**
+- **MANDATORY: Minimum 4 nodes.** A 3-node diagram is never acceptable. If the flow seems simple, split the connector node into separate "Connector" and "Operation" nodes to reach at least 4.
+- **MANDATORY: No ${bt}\n${bt} characters anywhere in the diagram** — not inside node labels, not in edge labels, nowhere. Use a space instead.
 - Do NOT include WSO2 Integrator, code-server, or any tooling/environment nodes.
 - Focus only on WHAT is being built: the entry point, the connector operation(s), and the target resource(s).
-- Use real names from the actual workflow (e.g., "Kafka Connector\nSend Operation", "MySQL Database").
+- Use real names from the actual workflow (e.g., "Kafka Connector Send Operation", "MySQL Database").
 - Add branching where it naturally fits (e.g., multiple operations or multiple target resources) — not mandatory for simple flows.
 
-Example — simple (3 nodes):
+Example — simple (4 nodes):
 ${bt}${bt}${bt}mermaid
 flowchart LR
-    A[Automation Trigger] --> B[MySQL Connector\nQuery Operation]
-    B --> C[MySQL Database]
+    A[Automation Trigger] --> B[MySQL Connector]
+    B --> C[MySQL Query Operation]
+    C --> D[MySQL Database]
 ${bt}${bt}${bt}
 
 Example — with branching (5 nodes):
@@ -452,7 +498,12 @@ and configuring its parameters. Combine selecting the operation AND filling its 
 into ONE step. Do NOT split them into separate steps.]
 
 ### Step N: [Description — e.g., "Add automation and configure [OperationName] operation"]
-[One sentence describing what was configured.]
+[This step typically involves multiple sequential UI actions (adding an entry point, expanding the connection node, selecting an operation, filling values, saving). Because it has 3+ distinct actions, use a numbered sub-list:]
+1. [First action — e.g., "On the canvas, click **+ Add Automation** to add an automation entry point."]
+2. [Second action — e.g., "Set the interval to **1 minute** in the trigger panel and click **Save**."]
+3. [Third action — e.g., "Inside the automation body, click **+**, expand the **[connectorClient]** connection node, and select the **[OperationName]** operation."]
+4. [Fourth action — e.g., "In the Record Configuration panel, fill in the required fields (see parameters below)."]
+5. [Fifth action — e.g., "Click **Save** to confirm the operation configuration."]
 - **[paramName]** — [one-line description of what this parameter controls]
 - **[paramName]** — [one-line description of what this parameter controls]
 [List ALL parameters configured in this step]

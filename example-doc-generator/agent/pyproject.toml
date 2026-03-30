@@ -1,9 +1,0 @@
-[project]
-name = "connector-docs-automation-agent"
-version = "0.1.0"
-description = "Claude Agent SDK server for WSO2 connector documentation automation"
-requires-python = ">=3.11"
-dependencies = [
-    "aiohttp>=3.9",
-    "claude-agent-sdk>=0.1",
-]

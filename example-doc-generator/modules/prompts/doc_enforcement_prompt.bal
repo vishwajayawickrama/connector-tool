@@ -30,7 +30,7 @@ You will receive a connector workflow documentation file. Your job is to fix it 
 
 The very first line of the document MUST be:
 
-  # [ConnectorName] Connector Example
+  # Example
 
 Replace [ConnectorName] with the actual connector name already present in the document.
 
@@ -50,6 +50,7 @@ Replace [ConnectorName] with the actual connector name already present in the do
 5a. "WSO2 Integrator BI" — replace every occurrence with "WSO2 Integrator" (remove the "BI" suffix; it must NEVER appear in the document)
 6. .bal file references — remove references to .bal files or Ballerina-syntax explanations
 7. Code fence blocks — remove ALL triple-backtick fenced code blocks EXCEPT mermaid diagram blocks (fenced with triple backticks and the "mermaid" language tag) inside the ## Architecture section, which must be preserved exactly as-is. Remove all other triple-backtick blocks.
+16. Literal \n in mermaid node labels — inside every mermaid fenced block, replace every occurrence of the literal two-character sequence \n inside node brackets ([...], (...), {...}) with a single space character.
 8. Stage 1 setup actions — remove steps describing code-server navigation, terminal commands, or workspace creation
 9. Internal automation details — remove references to browser_type, browser_fill, browser_navigate, "helper dropdown", MCP tool calls, or any automation-internal language
 10. Extra sections — remove any H2 section not in the fixed template (see SECTION STRUCTURE below). **Exception: preserve "## More code examples" if present — it is appended by the pipeline after enforcement.**
@@ -103,6 +104,10 @@ Cross-check every operation listed under "**Operations used:**" against the actu
 
 Include ONLY if the workflow requires an external service, credentials, or accounts.
 If no external dependency exists, omit this section entirely.
+
+Content rules for this section:
+- List ONLY connector-specific external requirements (e.g., a running Kafka broker, a MySQL database, Salesforce credentials).
+- Do NOT mention WSO2 Integrator, the WSO2 Integrator extension, VS Code, code-server, Ballerina, or any tooling / environment setup. Those are assumed and must not appear here.
 
 ### ## Configuring the [ConnectorName] connection
 
@@ -229,6 +234,39 @@ Example: "use pipelines — logical groups — to..." → "use pipelines—logic
 EXCEPTION: Do NOT apply this rule to parameter bullet lines where " — " is the intentional
 separator between the parameter name and its description (e.g., **host** — the Redis server hostname).
 
+### Rule MSG-9: Numbered sub-list for multi-instruction step bodies (MANDATORY)
+
+If a step body contains **2 or more distinct sequential instructions written as prose**, convert them to a numbered sub-list.
+
+A "distinct sequential instruction" is any sentence (or clause separated by a period, semicolon, or "then") that describes a UI action such as click, type, select, expand, fill, navigate, or save.
+
+**How to detect a violation:**
+- The step body is a prose paragraph (not already a numbered list).
+- It contains 2 or more sentences (or comma/semicolon-joined clauses) that each describe a separate UI action.
+
+**How to fix:**
+- Split each instruction into its own numbered item (1., 2., 3., …).
+- Keep parameter bullet lines (- **paramName** — description) and screenshot references AFTER the last numbered item, outside the numbered list.
+
+**Examples:**
+
+VIOLATION — must be converted:
+  Click the **+ Add Connection** button to open the palette. Search for the connector by name and click the connector card to open the form.
+FIXED:
+  1. Click the **+ Add Connection** button to open the palette.
+  2. Search for the connector by name.
+  3. Click the connector card to open the form.
+
+VIOLATION — multi-clause single sentence with "then":
+  In the left panel click **Configurations**, then set a value for each configurable listed below.
+FIXED:
+  1. In the left panel, click **Configurations**.
+  2. Set a value for each configurable listed below.
+
+NOT a violation — single compound action (keep as prose):
+  Type "redis" in the search box and click the **Redis** connector card.
+(One compound action — no conversion needed.)
+
 ---
 
 ## CONFIGURABLE USAGE
@@ -305,14 +343,47 @@ Each screenshot must be embedded in the step whose **action directly produced wh
 
 ---
 
+## ARCHITECTURE DIAGRAM
+
+The ## Architecture section MUST contain exactly one mermaid flowchart fenced block. Apply all three rules below — fix any violation found.
+
+### Rule ARCH-1: Horizontal direction (MANDATORY)
+
+The first line inside the mermaid block MUST be exactly:
+  flowchart LR
+
+Any other direction (TD, TB, BT, RL, or missing direction) is a violation. Replace it with flowchart LR.
+
+### Rule ARCH-2: Minimum 4 nodes (MANDATORY)
+
+Count every distinct node identifier in the diagram. There MUST be at least 4 nodes.
+
+If the diagram has only 3 nodes, split the connector node into two: one for the connector itself and one for the operation. Example fix:
+
+  BEFORE (3 nodes — violation):
+    A[Automation Trigger] --> B[Redis Connector]
+    B --> C[Redis Cache]
+
+  AFTER (4 nodes — fixed):
+    A[Automation Trigger] --> B[Redis Connector]
+    B --> C[Set Operation]
+    C --> D[Redis Cache]
+
+### Rule ARCH-3: No \n characters anywhere in the diagram (MANDATORY)
+
+Scan every line inside the mermaid fenced block. Replace every occurrence of the literal two-character sequence \n (backslash + n) with a single space — inside node labels, edge labels, or anywhere else it appears.
+
+---
+
 ## PROCEDURE
 
 1. Read the entire document
 2. Fix every violation from the BANNED CONTENT list
 3. Ensure the SECTION STRUCTURE is correct (right names, right order, no extras)
 4. Ensure every step follows the STEP FORMAT
-5. Apply all MICROSOFT STYLE GUIDE COMPLIANCE rules (MSG-1 through MSG-8)
+5. Apply all MICROSOFT STYLE GUIDE COMPLIANCE rules (MSG-1 through MSG-9)
 5b. Apply CONFIGURABLE USAGE rules (CFG-1 and CFG-2)
+5c. Apply ARCHITECTURE DIAGRAM rules (ARCH-1 through ARCH-3)
 6. Preserve all image paths exactly as-is
 7. Output the corrected document — raw Markdown only, starting with the # title line
 `;

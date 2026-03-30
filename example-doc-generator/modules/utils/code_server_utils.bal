@@ -84,6 +84,80 @@ public function checkCodeServerRunning(int port) returns boolean {
     return exitCode is int && exitCode == 0;
 }
 
+# Checks whether a VS Code extension is installed in code-server.
+# Runs `code-server --list-extensions` directly (no shell) and searches stdout
+# for an exact line match of extensionId.
+# extensionId is validated against a strict allowlist before use.
+# + extensionId - the extension identifier to look for (e.g. "wso2.wso2-integrator")
+# + return - true if the extension is installed, false otherwise
+public function checkExtensionInstalled(string extensionId) returns boolean {
+    // Reject extensionIds containing characters outside the safe allowlist.
+    if !re`[A-Za-z0-9._\-/]+`.isFullMatch(extensionId) {
+        return false;
+    }
+    os:Process|error proc = os:exec({
+        value: "code-server",
+        arguments: ["--list-extensions"]
+    });
+    if proc is error {
+        return false;
+    }
+    byte[]|error outBytes = proc.output();
+    int|error exitCode = proc.waitForExit();
+    if outBytes is error || exitCode is error {
+        return false;
+    }
+    string|error outStr = string:fromBytes(outBytes);
+    if outStr is error {
+        return false;
+    }
+    string[] lines = re`\n`.split(outStr);
+    foreach string line in lines {
+        if line.trim() == extensionId {
+            return true;
+        }
+    }
+    return false;
+}
+
+# Ensures a VS Code extension is installed in code-server.
+# First attempts to install from the Open VSX marketplace; if that fails,
+# falls back to installing from a local .vsix file.
+# + extensionId - the extension identifier (e.g. "wso2.wso2-integrator")
+# + vsixFallbackPath - absolute path to the .vsix file to use as fallback
+# + return - an error if both install attempts fail
+public function ensureExtensionInstalled(string extensionId, string vsixFallbackPath) returns error? {
+    // Attempt 1: marketplace install
+    log("\t[INFO] Trying marketplace install for: " + extensionId);
+    os:Process|error marketProc = os:exec({
+        value: "code-server",
+        arguments: ["--install-extension", extensionId]
+    });
+    if marketProc is os:Process {
+        int|error marketExit = marketProc.waitForExit();
+        if marketExit is int && marketExit == 0 {
+            return;
+        }
+    }
+    log("\t[WARN] Marketplace install failed — trying local VSIX: " + vsixFallbackPath);
+
+    // Attempt 2: fallback to local .vsix
+    os:Process|error vsixProc = os:exec({
+        value: "code-server",
+        arguments: ["--install-extension", vsixFallbackPath]
+    });
+    if vsixProc is error {
+        return error("Failed to launch extension install from VSIX: " + vsixProc.message());
+    }
+    int|error vsixExit = vsixProc.waitForExit();
+    if vsixExit is error {
+        return error("Extension install from VSIX process error: " + vsixExit.message());
+    }
+    if vsixExit != 0 {
+        return error("Extension install from VSIX failed with exit code: " + vsixExit.toString());
+    }
+}
+
 # Starts code-server on the given port and waits until it is ready.
 # + port - the port to bind code-server to
 # + return - an error if code-server fails to start within the timeout
