@@ -48,7 +48,9 @@ make setup
 **5. Run the pipeline**
 
 ```bash
-make run
+make run CONNECTOR=mysql
+# or directly:
+bal run -- mysql
 ```
 
 Artifacts are saved under `artifacts/` (git-ignored).
@@ -64,9 +66,10 @@ Copy `Config.toml.example` to get started.
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | `llmApiKey` | ✅ | — | Anthropic API key for Ballerina AI calls |
-| `userGoal` | ✅ | — | The integration to document |
 | `codeServerPort` | No | `8080` | Port for the code-server instance |
 | `agentServerPort` | No | `8765` | Port for the Python agent server |
+
+> **Connector name** is passed as a CLI argument, not a configurable: `make run CONNECTOR=mysql` or `bal run -- mysql`.
 
 > **Never commit `Config.toml`** — it is git-ignored.
 
@@ -133,7 +136,7 @@ Setup
   make setup-bal            Build the Ballerina project
 
 Run
-  make run                  Run the full pipeline (bal run)
+  make run CONNECTOR=mysql  Run the full pipeline for a connector
   make start-agent          Start the Python agent server in the foreground
   make stop-agent           Send shutdown to the agent server
 
@@ -171,14 +174,14 @@ Run `make help` for the full list with configurable variables.
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/run` | Submit job: `{ "prompt_path": "..." }` → `{ "job_id": "..." }` |
-| `GET` | `/jobs/<id>` | Poll: `{ "status": "running\|done", "logs": [...], "cost": {...} }` |
+| `GET` | `/jobs/<id>` | Poll: `{ "status": "queued\|running\|done\|error", "logs": [...], "cost": {...} }` |
 | `GET` | `/health` | `{ "status": "ok" }` |
 | `POST` | `/shutdown` | Graceful stop |
 
 ```bash
 make start-agent                                    # start in foreground
 make stop-agent                                     # send shutdown
-cd agent && .venv/bin/python agent_server.py --port 9000  # custom port
+cd python && .venv/bin/python agent_server.py --port 9000  # custom port
 ```
 
 ## GitHub Actions

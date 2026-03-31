@@ -84,7 +84,7 @@ def truncate_tool_input(tool_input: any, max_length: int = 500) -> str:
 
 
 async def run_agent(job_id: str, prompt_path: str) -> None:
-    jobs[job_id] = {"logs": [], "status": "running", "cost": None}
+    jobs[job_id]["status"] = "running"
 
     def log(label: str, text: str) -> None:
         jobs[job_id]["logs"].append(f"[{label}] {text}")
@@ -218,6 +218,7 @@ async def post_run(request: web.Request) -> web.Response:
             {"error": f"prompt file not found: {resolved}"}, status=404
         )
     job_id = str(uuid.uuid4())
+    jobs[job_id] = {"logs": [], "status": "queued", "cost": None}
     task = asyncio.create_task(run_agent(job_id, str(resolved)))
     running_tasks.add(task)
     task.add_done_callback(running_tasks.discard)
@@ -255,7 +256,7 @@ def main() -> None:
     app.router.add_get("/health", get_health)
     app.router.add_post("/shutdown", post_shutdown)
 
-    web.run_app(app, port=args.port)
+    web.run_app(app, host="127.0.0.1", port=args.port)
 
 
 if __name__ == "__main__":

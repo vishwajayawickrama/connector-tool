@@ -33,8 +33,9 @@ import wso2/example_doc_generator.utils;
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
 # Phase 5  (Steps 13–16): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log.
 #
-# + return - an error if any step fails
-public function main() returns error? {
+# + connectorName - exact Ballerina Central package name, e.g. "mysql", "kafka"
+# + return        - an error if any step fails
+public function main(string connectorName) returns error? {
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
 
@@ -147,7 +148,7 @@ public function main() returns error? {
     utils:log("[STEP 7] Building system and user prompts...");
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
-    string systemPrompt = prompts:buildSystemPrompt(projectRoot);
+    string systemPrompt = prompts:buildSystemPrompt(projectRoot, connectorName);
     string userMessage = prompts:buildUserMessage(connectorName, codeServerUrl, projectRoot);
 
     // Step 8: Call Anthropic API to generate the execution prompt
@@ -195,39 +196,35 @@ public function main() returns error? {
     string enforcedDocPath = "";
     file:MetaData[]|file:Error dirEntries = file:readDir(workflowDocsDir);
     if dirEntries is file:MetaData[] {
-        string docPath = "";
+        file:MetaData? latestEntry = ();
         foreach file:MetaData entry in dirEntries {
             if entry.absPath.endsWith(".md") {
-                docPath = entry.absPath;
-                break;
+                if latestEntry is () || time:utcDiffSeconds(entry.modifiedTime, latestEntry.modifiedTime) > 0d {
+                    latestEntry = entry;
+                }
             }
         }
+        string docPath = latestEntry is file:MetaData ? latestEntry.absPath : "";
         if docPath == "" {
-            utils:log("\t[INFO] No .md file found in " + workflowDocsDir + " — skipping enforcement.");
+            return error("No .md file found in " + workflowDocsDir + " — enforcement cannot proceed.");
         } else {
             utils:log("\t[INFO] Found workflow doc: " + docPath);
             string|io:Error rawDoc = io:fileReadString(docPath);
-            if rawDoc is string {
-                string enforcementSystemPrompt = prompts:buildDocEnforcementSystemPrompt();
-                ai_client:LlmResult|error enfResult = ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
-                if enfResult is ai_client:LlmResult {
-                    io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
-                    if writeErr is io:Error {
-                        utils:log("\t[WARN] Could not write enforced doc: " + writeErr.message());
-                    } else {
-                        enforcedDocPath = docPath;
-                        docEnfUsage = enfResult.usage;
-                        utils:log("\t[INFO] Documentation structure enforced successfully.");
-                    }
-                } else {
-                    utils:log("\t[WARN] Doc enforcement LLM call failed: " + enfResult.message());
-                }
-            } else {
-                utils:log("\t[WARN] Could not read doc file: " + rawDoc.message());
+            if rawDoc is io:Error {
+                return error("Could not read workflow doc: " + rawDoc.message());
             }
+            enforcedDocPath = docPath;
+            string enforcementSystemPrompt = prompts:buildDocEnforcementSystemPrompt();
+            ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
+            io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
+            if writeErr is io:Error {
+                return error("Could not write enforced doc: " + writeErr.message());
+            }
+            docEnfUsage = enfResult.usage;
+            utils:log("\t[INFO] Documentation structure enforced successfully.");
         }
     } else {
-        utils:log("\t[INFO] Workflow docs directory not found — skipping enforcement.");
+        return error("Workflow docs directory not found: " + workflowDocsDir);
     }
     utils:log("");
 

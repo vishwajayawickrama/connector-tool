@@ -18,6 +18,3 @@ codeServerPort = 8080
 # Start manually with: make start-agent
 agentServerPort = 8765
 
-# Connector name — exact Ballerina Central package name (lowercase).
-# Examples: "mysql", "googlesheets", "kafka", "salesforce", "redis"
-connectorName = ""

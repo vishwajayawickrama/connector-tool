@@ -466,30 +466,32 @@ def main() -> None:
 
     # ── 1. Read project path ──────────────────────────────────────────────────
     project = read_project_path()
-    project_name = project.name
 
     if not args.no_publish:
         # ── 2. Validate samples repo ──────────────────────────────────────────
         if not (samples_repo / ".git").exists():
             fail(f"{samples_repo} is not a git repository.")
         fork = infer_fork(samples_repo)
+
+        # ── 3. Resolve actual Ballerina project + patch org ───────────────────
+        actual_project = find_ballerina_project(project)
+        project_name = actual_project.name
         branch_name = f"samples/add-{project_name}"
         info(f"Fork: {fork}  |  Upstream: {args.upstream}  |  Branch: {branch_name}")
 
-        # ── 3. Sync main + create branch ──────────────────────────────────────
+        # ── 4. Sync main + create branch ──────────────────────────────────────
         sync_and_branch(samples_repo, branch_name, args.base_branch, args.dry_run)
 
-        # ── 4. Resolve actual Ballerina project + patch org ───────────────────
-        actual_project = find_ballerina_project(project)
+        # ── 5. Patch org ──────────────────────────────────────────────────────
         patch_ballerina_toml(actual_project, args.dry_run)
 
-        # ── 5. Copy sample ────────────────────────────────────────────────────
+        # ── 6. Copy sample ────────────────────────────────────────────────────
         copy_sample(samples_repo, actual_project, project_name, args.dry_run)
 
-        # ── 6. Commit + push ──────────────────────────────────────────────────
+        # ── 7. Commit + push ──────────────────────────────────────────────────
         commit_and_push(samples_repo, project_name, branch_name, args.dry_run)
 
-        # ── 7. Create PR (unless --no-pr) ─────────────────────────────────────
+        # ── 8. Create PR (unless --no-pr) ─────────────────────────────────────
         if not args.no_pr:
             pr_body = build_pr_body(project_name)
             pr_url = create_pr(

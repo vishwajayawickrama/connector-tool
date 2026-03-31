@@ -17,7 +17,7 @@
 """
 crop_screenshots.py — Post-process pipeline screenshots by cropping UI chrome.
 
-Default margins are tuned for a 1720×968 headless Playwright / code-server viewport.
+Default margins are tuned for a 1720x968 headless Playwright / code-server viewport.
 Only the VS Code tab bar (top) and status bar (bottom) are removed — no left/right crop:
   top    = 32   (VS Code tab bar row)
   bottom = 18   (VS Code status bar)
@@ -45,18 +45,34 @@ DEFAULT_LEFT = 0
 DEFAULT_RIGHT = 0
 
 
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"Invalid integer: {value!r}") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError(f"Value must be >= 0, got: {parsed}")
+    return parsed
+
+
+def _env_or_default(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return _non_negative_int(raw)
+    except argparse.ArgumentTypeError as exc:
+        raise SystemExit(f"[ERROR] Environment variable {name}: {exc}") from exc
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Crop UI chrome from pipeline screenshots in-place."
     )
-    parser.add_argument("--top", type=int,
-                        default=int(os.environ.get("CROP_TOP", DEFAULT_TOP)))
-    parser.add_argument("--bottom", type=int,
-                        default=int(os.environ.get("CROP_BOTTOM", DEFAULT_BOTTOM)))
-    parser.add_argument("--left", type=int,
-                        default=int(os.environ.get("CROP_LEFT", DEFAULT_LEFT)))
-    parser.add_argument("--right", type=int,
-                        default=int(os.environ.get("CROP_RIGHT", DEFAULT_RIGHT)))
+    parser.add_argument("--top",    type=_non_negative_int, default=_env_or_default("CROP_TOP",    DEFAULT_TOP))
+    parser.add_argument("--bottom", type=_non_negative_int, default=_env_or_default("CROP_BOTTOM", DEFAULT_BOTTOM))
+    parser.add_argument("--left",   type=_non_negative_int, default=_env_or_default("CROP_LEFT",   DEFAULT_LEFT))
+    parser.add_argument("--right",  type=_non_negative_int, default=_env_or_default("CROP_RIGHT",  DEFAULT_RIGHT))
     parser.add_argument("--dry-run", action="store_true",
                         help="Print what would happen without writing any files.")
     parser.add_argument("--backup", action="store_true",
@@ -100,7 +116,7 @@ def main():
 
             # Sanity check: skip if margins exceed image dimensions
             if args.left >= right_coord or args.top >= bottom_coord:
-                print(f"[SKIP] {png.name} — margins exceed image size ({width}×{height}), skipping.")
+                print(f"[SKIP] {png.name} — margins exceed image size ({width}x{height}), skipping.")
                 skipped += 1
                 continue
 
@@ -113,7 +129,7 @@ def main():
 
             if args.dry_run:
                 print(
-                    f"[DRY-RUN] {png.name}: {width}×{height} → {new_width}×{new_height} "
+                    f"[DRY-RUN] {png.name}: {width}x{height} → {new_width}x{new_height} "
                     f"(crop box {box})"
                 )
                 processed += 1
@@ -128,7 +144,7 @@ def main():
             cropped = img.crop(box)
             # Preserve original format/mode; re-open so we can save in place
             cropped.save(png)
-            print(f"[CROP] {png.name}: {width}×{height} → {new_width}×{new_height}")
+            print(f"[CROP] {png.name}: {width}x{height} → {new_width}x{new_height}")
             processed += 1
 
     # Summary

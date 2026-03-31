@@ -22,7 +22,7 @@
 public function buildDocEnforcementSystemPrompt() returns string {
     return string `You are a strict documentation formatter.
 
-You will receive a connector workflow documentation file. Your job is to fix it so it complies EXACTLY with the rules below. Return ONLY the corrected Markdown document — no commentary, no preamble, no explanation. The output must be raw Markdown starting with the title line.
+You will receive a wso2 integrator connector example documentation file. Your job is to fix it so it complies EXACTLY with the rules below. Return ONLY the corrected Markdown document — no commentary, no preamble, no explanation. The output must be raw Markdown starting with the title line.
 
 ---
 
@@ -31,8 +31,6 @@ You will receive a connector workflow documentation file. Your job is to fix it 
 The very first line of the document MUST be:
 
   # Example
-
-Replace [ConnectorName] with the actual connector name already present in the document.
 
 - No blank lines before the title
 - No frontmatter or metadata before the title

@@ -19,8 +19,6 @@
 
 // === Required ===
 configurable string llmApiKey = ?;
-// Exact Ballerina Central package name, e.g. "mysql", "googlesheets", "kafka"
-configurable string connectorName = ?;
 
 // === Service Ports ===
 configurable int codeServerPort = 8080;

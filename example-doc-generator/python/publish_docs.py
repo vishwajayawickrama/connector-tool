@@ -346,6 +346,7 @@ def sync_and_branch(
     branch_name: str,
     dry_run: bool,
     upstream_slug: str = DEFAULT_UPSTREAM,
+    base_branch: str = "dev",
 ) -> None:
     """Fast-forward fork's base branch from upstream, then create the feature branch."""
     remotes = run(["git", "remote"], cwd=docs_repo).split()
@@ -358,22 +359,22 @@ def sync_and_branch(
 
     if dry_run:
         dry(f"git fetch upstream  (in {docs_repo})")
-        dry("git checkout dev && git merge upstream/dev --ff-only")
+        dry(f"git checkout {base_branch} && git merge upstream/{base_branch} --ff-only")
         dry(f"git checkout -b {branch_name}")
         return
 
-    info("Fetching upstream/dev...")
+    info(f"Fetching upstream/{base_branch}...")
     subprocess.run(["git", "fetch", "upstream"], cwd=str(docs_repo), check=True)
-    subprocess.run(["git", "checkout", "dev"], cwd=str(docs_repo), check=True)
+    subprocess.run(["git", "checkout", base_branch], cwd=str(docs_repo), check=True)
     try:
         subprocess.run(
-            ["git", "merge", "upstream/dev", "--ff-only"],
+            ["git", "merge", f"upstream/{base_branch}", "--ff-only"],
             cwd=str(docs_repo),
             check=True,
         )
     except subprocess.CalledProcessError:
         fail(
-            "Could not fast-forward fork's dev to upstream/dev.\n"
+            f"Could not fast-forward fork's {base_branch} to upstream/{base_branch}.\n"
             "Your fork has diverged. Resolve manually before running this script."
         )
     info(f"Creating branch: {branch_name}")
@@ -861,7 +862,7 @@ def main() -> None:
     branch_name = f"docs/add-{connector_slug}-connector-example-documentation"
     info(f"Branch: {branch_name}")
     sync_and_branch(docs_repo, branch_name, args.dry_run,
-                    upstream_slug=upstream)
+                    upstream_slug=upstream, base_branch=args.base_branch)
 
     # ── 5-8. Place example.md, copy screenshots, update sidebar ───────────────
     run_claude_code_placement(

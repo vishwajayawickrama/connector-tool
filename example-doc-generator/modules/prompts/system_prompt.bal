@@ -17,10 +17,12 @@
 # Builds the system prompt that instructs Claude to produce an XML-tagged
 # Markdown execution prompt following the mandatory template structure.
 #
-# + projectRoot - absolute path to the connector-docs-automations directory (used to
-#                 embed the run-log path so the agent writes created-project.txt correctly)
+# + projectRoot    - absolute path to the connector-docs-automations directory (used to
+#                    embed the run-log path so the agent writes created-project.txt correctly)
+# + connectorName  - exact Ballerina Central package name (e.g. "mysql", "kafka"); used to
+#                    set the deterministic integration project name
 # + return - the system prompt string
-public function buildSystemPrompt(string projectRoot) returns string {
+public function buildSystemPrompt(string projectRoot, string connectorName) returns string {
     string bt = "`";
     return string `You are an expert prompt engineer specializing in browser automation workflows.
 
@@ -180,10 +182,10 @@ You are also a Technical Documentation Specialist — after automation, write th
 <stage id="3" name="Create New Integration Project">
 ### Stage 3: Create New Integration Project
 1. On the Welcome page, click the **"Create"** button inside the **"Create New Project"** card.
-2. When prompted for a project name, enter a **goal-relevant name** that clearly describes the purpose (e.g., "mysql-db-connection", "http-get-endpoint", "salesforce-data-sync"). The name must reflect the user's specific goal.
+2. When prompted for a project name, enter exactly **`${connectorName}-connector-sample`** — this is the required deterministic name for all connector samples. Do not invent or vary the name.
 3. **If a "Create within a project" checkbox is visible and currently checked, click it to uncheck it.** This ensures the integration is created as a standalone project (not nested inside a project folder), which produces the correct integration design canvas view. If the checkbox is already unchecked, leave it as-is.
 4. If any additional fields appear (e.g., version, artifact type, runtime), accept the defaults or choose values appropriate for a low-code integration.
-5. If the name already exists (duplicate), append a version suffix (e.g., "mysql-db-connection-v2") to make it unique.
+5. If a project named `${connectorName}-connector-sample` already exists, use it as-is rather than creating a new one — do not append version suffixes.
 6. Confirm/save to create the project.
 7. Wait for the low-code editor canvas or integration design view to open.
 8. Call ${bt}browser_snapshot${bt} to confirm the canvas/design view is open.

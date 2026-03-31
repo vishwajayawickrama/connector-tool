@@ -17,7 +17,7 @@ help:
 	@echo "    make setup-bal        Build the Ballerina project"
 	@echo ""
 	@echo "  Run"
-	@echo "    make run              Run the full pipeline (bal run)"
+	@echo "    make run CONNECTOR=mysql  Run the full pipeline for a connector"
 	@echo "    make start-agent      Start the Python agent server in the foreground"
 	@echo "    make stop-agent       Send shutdown request to the agent server"
 	@echo ""
@@ -71,9 +71,13 @@ setup-bal:
 	@echo "Ballerina build complete."
 
 # ── Run ──────────────────────────────────────────────────────────────────────
+
+AGENT_SERVER_PORT ?= 8765
+
 run:
-	@echo "→ Running full pipeline..."
-	bal run
+	@[ "$(CONNECTOR)" ] || { echo "Usage: make run CONNECTOR=mysql"; exit 1; }
+	@echo "→ Running full pipeline for connector: $(CONNECTOR)"
+	bal run -- $(CONNECTOR)
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py
@@ -86,9 +90,7 @@ crop-screenshots-backup: python/.venv/.installed
 
 start-agent: python/.venv/.installed
 	@echo "→ Starting Python agent server (python/agent_server.py)..."
-	cd python && unset CLAUDECODE && .venv/bin/python agent_server.py
-
-AGENT_SERVER_PORT ?= 8765
+	cd python && unset CLAUDECODE && .venv/bin/python agent_server.py --port $(AGENT_SERVER_PORT)
 
 stop-agent:
 	@echo "→ Sending shutdown to agent server..."
