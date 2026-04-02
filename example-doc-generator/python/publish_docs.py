@@ -465,14 +465,25 @@ Confirm each step as you complete it. If a step fails, report the error clearly.
         "--model", "claude-sonnet-4-6",
         "-p", prompt,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if result.stdout:
-        for line in result.stdout.strip().splitlines():
-            info(f"  [claude] {line}")
-    if result.returncode != 0:
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    # Stream stdout in real-time so progress is visible while Claude works
+    for line in proc.stdout:
+        info(f"  [claude] {line.rstrip()}")
+
+    # Read stderr only after stdout is exhausted (avoids pipe deadlock)
+    stderr_output = proc.stderr.read()
+    proc.wait()
+
+    if proc.returncode != 0:
         fail(
-            f"Claude Code doc placement failed (exit {result.returncode}).\n"
-            f"{result.stderr.strip()}"
+            f"Claude Code doc placement failed (exit {proc.returncode}).\n"
+            f"{stderr_output.strip()}"
         )
     info("Claude Code placement complete.")
 
