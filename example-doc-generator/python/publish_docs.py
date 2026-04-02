@@ -47,6 +47,7 @@ Prerequisites:
 
 import argparse
 import datetime
+from collections.abc import Sequence
 import os
 import re
 import signal
@@ -648,14 +649,17 @@ def commit_and_push(
     connector_name: str,
     branch_name: str,
     dry_run: bool,
+    generated_paths: Sequence[Path],
 ) -> None:
-    """Stage all changes, commit, and push the feature branch to origin."""
+    """Stage only the generated files, commit, and push the feature branch to origin."""
+    paths_str = " ".join(map(str, generated_paths))
     if dry_run:
-        dry(f"git add . && git commit -m 'docs: add {connector_name} connector example guide'")
+        dry(f"git add -- {paths_str}")
+        dry(f"git commit -m 'docs: add {connector_name} connector example guide'")
         dry(f"git push origin {branch_name}")
         return
     info("Committing changes...")
-    subprocess.run(["git", "add", "."], cwd=str(docs_repo), check=True)
+    subprocess.run(["git", "add", "--", *map(str, generated_paths)], cwd=str(docs_repo), check=True)
     subprocess.run(
         ["git", "commit", "-m", f"docs: add {connector_name} connector example guide"],
         cwd=str(docs_repo),
@@ -719,7 +723,6 @@ Added {connector_name} connector example guide showing how to configure the \
 
 - Followed secure coding standards: N/A (documentation only)
 - Ran FindSecurityBugs plugin: N/A (documentation only)
-- Confirmed no keys, passwords, or secrets committed: yes\
 {preview_section}
 """
 
@@ -776,7 +779,6 @@ def parse_args() -> argparse.Namespace:
             "Examples:\n"
             "  python python/publish_docs.py\n"
             "  python python/publish_docs.py --dry-run\n"
-            "  python python/publish_docs.py --test --no-preview\n"
             "  python python/publish_docs.py --category messaging --no-preview\n"
             "  python python/publish_docs.py --docs-repo ~/repos/docs-integrator\n"
         ),
@@ -882,7 +884,12 @@ def main() -> None:
     )
 
     # ── 9. Commit + push ──────────────────────────────────────────────────────
-    commit_and_push(docs_repo, connector_name, branch_name, args.dry_run)
+    generated_paths: list[Path] = [
+        docs_repo / "en" / "docs" / "connectors" / "catalog" / category / connector_slug / "example.md",
+        docs_repo / "en" / "static" / "img" / "connectors" / "catalog" / category / connector_slug,
+        docs_repo / "en" / "sidebars.ts",
+    ]
+    commit_and_push(docs_repo, connector_name, branch_name, args.dry_run, generated_paths)
 
     if args.no_pr:
         print()
@@ -897,13 +904,16 @@ def main() -> None:
     # ── 10. Preview screenshots (not committed to docs repo) ──────────────────
     preview_urls: list[str] = []
     if not args.no_preview:
-        preview_files = take_preview_screenshots(
-            docs_repo, connector_slug, category, artifacts_dir, args.dry_run
-        )
-        if preview_files and not args.dry_run:
-            preview_urls = upload_preview_as_release(
-                preview_files, connector_name, connector_slug, branch_name, fork
+        try:
+            preview_files = take_preview_screenshots(
+                docs_repo, connector_slug, category, artifacts_dir, args.dry_run
             )
+            if preview_files and not args.dry_run:
+                preview_urls = upload_preview_as_release(
+                    preview_files, connector_name, connector_slug, branch_name, fork
+                )
+        except Exception as exc:
+            warn(f"Preview step failed (branch already pushed — continuing to PR creation): {exc}")
 
     # ── 11. Create PR ─────────────────────────────────────────────────────────
     pr_body = build_pr_body(

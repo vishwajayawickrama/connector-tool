@@ -191,7 +191,7 @@ public function main(string connectorName) returns error? {
     // The agent writes the doc with all browser-automation context in its window;
     // rules stated early in the system prompt get buried. This call has the rules
     // fresh in context with no other noise, so they are reliably applied.
-    utils:log("[STEP 13] Enforcing documentation structure...");
+    utils:log("[STEP 12] Enforcing documentation structure...");
     string workflowDocsDir = "./artifacts/workflow-docs";
     string enforcedDocPath = "";
     file:MetaData[]|file:Error dirEntries = file:readDir(workflowDocsDir);

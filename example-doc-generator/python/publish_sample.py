@@ -237,12 +237,31 @@ def commit_and_push(
     branch_name: str,
     dry_run: bool,
 ) -> None:
+    staged_path = f"connectors/{project_name}"
     if dry_run:
-        dry(f"git add . && git commit -m 'samples: add {project_name} connector integration sample'")
+        dry(f"git add -- {staged_path}")
+        dry(f"git commit -m 'samples: add {project_name} connector integration sample'")
         dry(f"git push origin {branch_name}")
         return
+    # Abort if the working tree contains unrelated changes that git add . would sweep up.
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=str(samples_repo),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    unrelated = [
+        line for line in status.stdout.splitlines()
+        if line[3:] and not line[3:].startswith(staged_path)
+    ]
+    if unrelated:
+        raise RuntimeError(
+            "Working tree has unrelated changes; aborting to avoid staging them:\n"
+            + "\n".join(unrelated)
+        )
     info("Committing changes...")
-    subprocess.run(["git", "add", "."], cwd=str(samples_repo), check=True)
+    subprocess.run(["git", "add", "--", staged_path], cwd=str(samples_repo), check=True)
     subprocess.run(
         ["git", "commit", "-m", f"samples: add {project_name} connector integration sample"],
         cwd=str(samples_repo),
@@ -284,9 +303,7 @@ Contains Ballerina source files demonstrating connector operations.
 
 ## Security checks
 
-- Followed secure coding standards: yes
 - Ran FindSecurityBugs plugin: N/A (Ballerina project)
-- Confirmed no keys, passwords, tokens, usernames, or secrets committed: yes
 """
 
 
@@ -460,9 +477,12 @@ def main() -> None:
     # ── 0. Write project path file if supplied manually ───────────────────────
     if args.project_path:
         path_file = Path(PROJECT_PATH_FILE)
-        path_file.parent.mkdir(parents=True, exist_ok=True)
-        path_file.write_text(args.project_path.strip(), encoding="utf-8")
-        info(f"Written project path to {PROJECT_PATH_FILE}: {args.project_path.strip()}")
+        if args.dry_run:
+            info(f"[dry-run] Would write project path '{args.project_path.strip()}' to {PROJECT_PATH_FILE}")
+        else:
+            path_file.parent.mkdir(parents=True, exist_ok=True)
+            path_file.write_text(args.project_path.strip(), encoding="utf-8")
+            info(f"Written project path to {PROJECT_PATH_FILE}: {args.project_path.strip()}")
 
     # ── 1. Read project path ──────────────────────────────────────────────────
     project = read_project_path()

@@ -190,9 +190,8 @@ You are also a Technical Documentation Specialist — after automation, write th
 7. Wait for the low-code editor canvas or integration design view to open.
 8. Call ${bt}browser_snapshot${bt} to confirm the canvas/design view is open.
 9. Use the Bash tool to find and record the project's absolute filesystem path so the pipeline can clean it up after the run:
-   - Run: ${bt}find ~ -name 'Ballerina.toml' -maxdepth 4 2>/dev/null | head -1 | xargs dirname${bt}
-   - Write the result to the run log: ${bt}echo "$PROJ_PATH" > "${projectRoot}/artifacts/run-log/created-project.txt"${bt}
-   - If ${bt}find${bt} returns nothing, try: ${bt}ls -td ~/*/Ballerina.toml 2>/dev/null | head -1 | xargs dirname${bt}
+   - Run this single command to assign the path: ${bt}PROJ_PATH="$(find ~ -maxdepth 4 -type f -name 'Ballerina.toml' -path '*/${connectorName}-connector-sample/*' 2>/dev/null | head -1 | xargs dirname)"${bt}
+   - Then write it to the run log: ${bt}echo "$PROJ_PATH" > "${projectRoot}/artifacts/run-log/created-project.txt"${bt}
 </stage>
 
 <stage id="4" name="Explore Low-Code UI">
