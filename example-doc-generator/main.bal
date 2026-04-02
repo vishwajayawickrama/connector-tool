@@ -228,12 +228,12 @@ public function main(string connectorName) returns error? {
     }
     utils:log("");
 
-    // Step 13: Inject "Deploy to Devant" button into the workflow doc
-    utils:log("[STEP 13] Injecting Deploy to Devant button into workflow doc...");
+    // Step 13: Inject "Try it yourself" section into the workflow doc
+    utils:log("[STEP 13] Injecting 'Try it yourself' section into workflow doc...");
     if enforcedDocPath != "" {
-        utils:injectDevantButton(enforcedDocPath);
+        utils:injectTryItYourselfSection(enforcedDocPath);
     } else {
-        utils:log("\t[INFO] No enforced doc path available — skipping Devant button injection.");
+        utils:log("\t[INFO] No enforced doc path available — skipping 'Try it yourself' section injection.");
     }
     utils:log("");
 

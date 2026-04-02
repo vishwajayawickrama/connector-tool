@@ -41,57 +41,59 @@ public function saveExecutionPrompt(string content, string goalSlug) returns str
     return filePath;
 }
 
-# Injects a "Deploy to Devant" button under a "## Try it yourself" section
-# into the workflow doc. The project name is read from
+# Injects the "## Try it yourself" section (description, Deploy to Devant button,
+# and GitHub source link) into the workflow doc. The project name is read from
 # artifacts/run-log/created-project.txt.
 # Failures are logged as warnings; this function never blocks the pipeline.
 #
 # + docPath - absolute path to the workflow doc .md file to update
-public function injectDevantButton(string docPath) {
+public function injectTryItYourselfSection(string docPath) {
     string projectPathFile = "artifacts/run-log/created-project.txt";
     string sectionHeading = "## Try it yourself";
 
     // Read project name from run-log
     string|error rawResult = io:fileReadString(projectPathFile);
     if rawResult is error {
-        log("\t[WARN] created-project.txt not found — skipping Devant button injection");
+        log("\t[WARN] created-project.txt not found — skipping 'Try it yourself' section injection");
         return;
     }
     string raw = rawResult.trim();
     if raw == "" {
-        log("\t[WARN] created-project.txt is empty — skipping Devant button injection");
+        log("\t[WARN] created-project.txt is empty — skipping 'Try it yourself' section injection");
         return;
     }
 
     // Extract last path segment as project name
     string[] parts = re`[/\\]`.split(raw);
     string projectName = parts[parts.length() - 1];
+    string description = "Try this sample in WSO2 Integration Platform.";
     string buttonLine = string `[![Deploy to Devant](https://openindevant.choreoapps.dev/images/DeployDevant-White.svg)](https://console.devant.dev/new?gh=wso2/integration-samples/tree/main/connectors/${projectName})`;
+    string githubLink = string `[View source on GitHub](https://github.com/wso2/integration-samples/tree/main/connectors/${projectName})`;
 
     // Read doc content
     string|error contentResult = io:fileReadString(docPath);
     if contentResult is error {
-        log("\t[WARN] Failed to read doc file — skipping Devant button injection");
+        log("\t[WARN] Failed to read doc file — skipping 'Try it yourself' section injection");
         return;
     }
     string content = contentResult;
 
     // Idempotency check
     if content.includes(sectionHeading) {
-        log("\t[INFO] '" + sectionHeading + "' already present — skipping Devant button injection");
+        log("\t[INFO] '" + sectionHeading + "' already present — skipping 'Try it yourself' section injection");
         return;
     }
 
     // Build section block and append
-    string sectionBlock = sectionHeading + "\n\n" + buttonLine;
+    string sectionBlock = sectionHeading + "\n\n" + description + "\n\n" + buttonLine + "\n\n" + githubLink;
     string updated = content.trim() + "\n\n" + sectionBlock + "\n";
 
     // Write updated content
     error? writeErr = io:fileWriteString(docPath, updated);
     if writeErr is error {
-        log("\t[WARN] Failed to write doc file — skipping Devant button injection");
+        log("\t[WARN] Failed to write doc file — skipping 'Try it yourself' section injection");
         return;
     }
 
-    log("\t[INFO] Injected Deploy to Devant button for project '" + projectName + "' into " + docPath);
+    log("\t[INFO] Injected 'Try it yourself' section for project '" + projectName + "' into " + docPath);
 }

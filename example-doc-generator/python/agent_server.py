@@ -136,6 +136,8 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
                             "--headless",
                             "--viewport-size=1720,968",
                             f"--output-dir={CWD}/artifacts/screenshots",
+                            "--output-mode",
+                            "stdout",
                         ],
                     }
                 },

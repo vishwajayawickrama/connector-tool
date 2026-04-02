@@ -56,7 +56,9 @@ The very first line of the document MUST be:
 12. Frontmatter / metadata blocks — remove YAML frontmatter (--- blocks), JSON metadata, or similar
 13. Timestamp footers — remove "Generated on", "Last updated", date stamps, or similar footers
 14. Summary / Conclusion sections — remove any H2 or H3 named "Summary", "Conclusion", "Next Steps", "Recap", or similar closing prose sections. **Exception: do NOT remove a section named "## More code examples"** — this is a valid optional section added by the pipeline.
-15. Numbered steps in the "Setting up" section — the ## Setting up section must contain ONLY the redirect note linking to the shared project-creation guide; remove any ### Step N headers, screenshot image references, or inline parameters from this section
+15. "Setting up" section content — replace the entire body of ## Setting up the [ConnectorName] integration with EXACTLY this single blockquote and nothing else:
+    > **New to WSO2 Integrator?** Follow the [Create a New Integration](../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
+    Remove any ### Step N headers, screenshot image references, parameter bullets, or any other prose. Preserve the exact link text and path.
 
 ---
 
@@ -81,10 +83,15 @@ Rules:
 
 ### ## Setting up the [ConnectorName] integration
 
-This section MUST contain ONLY the redirect note linking to the shared project-creation guide.
-It must NOT contain any numbered steps (### Step N headers), screenshot image references, or parameter bullets.
-If steps or images are present in this section, remove them entirely.
-Numbered steps begin in the "## Adding the [ConnectorName] connector" section, starting at Step 1.
+This section MUST contain EXACTLY the following content and nothing else:
+
+> **New to WSO2 Integrator?** Follow the [Create a New Integration](../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
+
+Rules:
+- Preserve the blockquote (>) prefix, the bold text, and the exact link text and path.
+- Do NOT change the link path — it must be ../develop/create-integrations/create-new-integration.md
+- Remove any ### Step N headers, screenshot image references, parameter bullets, or any other prose.
+- Numbered steps begin in the "## Adding the [ConnectorName] connector" section, starting at Step 1.
 
 ### ## What you'll build
 
@@ -343,7 +350,7 @@ Each screenshot must be embedded in the step whose **action directly produced wh
 
 ## ARCHITECTURE DIAGRAM
 
-The ## Architecture section MUST contain exactly one mermaid flowchart fenced block. Apply all three rules below — fix any violation found.
+The ## Architecture section MUST contain exactly one mermaid flowchart fenced block. Apply all five rules below — fix any violation found.
 
 ### Rule ARCH-1: Horizontal direction (MANDATORY)
 
@@ -359,17 +366,50 @@ Count every distinct node identifier in the diagram. There MUST be at least 4 no
 If the diagram has only 3 nodes, split the connector node into two: one for the connector itself and one for the operation. Example fix:
 
   BEFORE (3 nodes — violation):
-    A[Automation Trigger] --> B[Redis Connector]
-    B --> C[Redis Cache]
+    A((User)) --> B[Redis Connector]
+    B --> C[(Redis Cache)]
 
   AFTER (4 nodes — fixed):
-    A[Automation Trigger] --> B[Redis Connector]
-    B --> C[Set Operation]
-    C --> D[Redis Cache]
+    A((User)) --> B[Set Operation]
+    B --> C[Redis Connector]
+    C --> D[(Redis Cache)]
 
 ### Rule ARCH-3: No \n characters anywhere in the diagram (MANDATORY)
 
 Scan every line inside the mermaid fenced block. Replace every occurrence of the literal two-character sequence \n (backslash + n) with a single space — inside node labels, edge labels, or anywhere else it appears.
+
+### Rule ARCH-4: Fixed node order — User → Operation → Connector → Target (MANDATORY)
+
+The diagram MUST follow this exact node sequence:
+  1. First node: User in oval/circle shape — A((User))
+  2. Second node: The specific operation being executed, in a rectangle — B[OperationName]
+  3. Third node: The ConnectorName Connector, in a rectangle — C[ConnectorName Connector]
+  4. Last node(s): The target resource(s)
+
+If the first node is not User in circle/oval shape, restructure the diagram to start with A((User)).
+If the order does not match User → Operation → Connector → Target, reorder the nodes accordingly.
+
+Example fix:
+
+  BEFORE (wrong order — violation):
+    A[HTTP Listener] --> B[MySQL Connector]
+    B --> C[Query Operation]
+    C --> D[(MySQL Database)]
+
+  AFTER (correct order — fixed):
+    A((User)) --> B[Query Operation]
+    B --> C[MySQL Connector]
+    C --> D[(MySQL Database)]
+
+### Rule ARCH-5: Target node shape based on service type (MANDATORY)
+
+The shape of the final target node MUST reflect the type of service:
+- If the target is a **database, data warehouse, cache store, or any data storage** (e.g., MySQL, PostgreSQL, Redis, BigQuery, Snowflake, MongoDB): use a **cylinder shape** — D[(ServiceName)]
+- For **all other services** (e.g., Slack, Salesforce, GitHub, Kafka, HTTP API, email): use a **circle shape** — D((ServiceName))
+
+If the target node uses the wrong shape, replace its syntax:
+  - Wrong: D[MySQL Database] or D((MySQL Database)) for a database → Fix to: D[(MySQL Database)]
+  - Wrong: D[Slack] or D[(Slack)] for a non-database service → Fix to: D((Slack))
 
 ---
 
@@ -381,7 +421,7 @@ Scan every line inside the mermaid fenced block. Replace every occurrence of the
 4. Ensure every step follows the STEP FORMAT
 5. Apply all MICROSOFT STYLE GUIDE COMPLIANCE rules (MSG-1 through MSG-9)
 5b. Apply CONFIGURABLE USAGE rules (CFG-1 and CFG-2)
-5c. Apply ARCHITECTURE DIAGRAM rules (ARCH-1 through ARCH-3)
+5c. Apply ARCHITECTURE DIAGRAM rules (ARCH-1 through ARCH-5)
 6. Preserve all image paths exactly as-is
 7. Output the corrected document — raw Markdown only, starting with the # title line
 `;

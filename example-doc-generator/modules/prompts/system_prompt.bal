@@ -419,26 +419,40 @@ Rules:
 - **MANDATORY: Use ${bt}flowchart LR${bt} — the diagram MUST be horizontal (left-to-right). Never use TD, TB, BT, or RL.**
 - **MANDATORY: Minimum 4 nodes.** A 3-node diagram is never acceptable. If the flow seems simple, split the connector node into separate "Connector" and "Operation" nodes to reach at least 4.
 - **MANDATORY: No ${bt}\n${bt} characters anywhere in the diagram** — not inside node labels, not in edge labels, nowhere. Use a space instead.
+- **MANDATORY: The first node MUST always be the User, using an oval/circle shape:** ${bt}A((User))${bt}
+- **MANDATORY: The second node MUST be the specific operation being executed, using a rectangle:** ${bt}B[Execute Operation]${bt} — use the real operation name (e.g., "Insert Record", "Send Message").
+- **MANDATORY: The third node MUST be the ConnectorName Connector, using a rectangle:** ${bt}C[ConnectorName Connector]${bt}
+- **MANDATORY: The last node (target resource) shape depends on the type of service:**
+  - If it is a **database, data warehouse, cache store, or any data storage** (e.g., MySQL, PostgreSQL, Redis, BigQuery, Snowflake): use a **cylinder shape**: ${bt}D[(ServiceName)]${bt}
+  - For **all other services** (e.g., Slack, Salesforce, GitHub, Kafka, HTTP API): use a **circle shape**: ${bt}D((ServiceName))${bt}
 - Do NOT include WSO2 Integrator, code-server, or any tooling/environment nodes.
-- Focus only on WHAT is being built: the entry point, the connector operation(s), and the target resource(s).
-- Use real names from the actual workflow (e.g., "Kafka Connector Send Operation", "MySQL Database").
+- Use real names from the actual workflow (e.g., "Insert Record", "PostgreSQL Connector", "PostgreSQL Database").
 - Add branching where it naturally fits (e.g., multiple operations or multiple target resources) — not mandatory for simple flows.
 
-Example — simple (4 nodes):
+Example — database connector (4 nodes):
 ${bt}${bt}${bt}mermaid
 flowchart LR
-    A[Automation Trigger] --> B[MySQL Connector]
-    B --> C[MySQL Query Operation]
-    C --> D[MySQL Database]
+    A((User)) --> B[Execute Operation]
+    B --> C[PostgreSQL Connector]
+    C --> D[(PostgreSQL Database)]
 ${bt}${bt}${bt}
 
-Example — with branching (5 nodes):
+Example — non-database connector (4 nodes):
 ${bt}${bt}${bt}mermaid
 flowchart LR
-    A[HTTP Listener] --> B[Salesforce Connector]
-    B --> C[Create Account]
-    B --> D[Create Contact]
-    C & D --> E[Salesforce CRM]
+    A((User)) --> B[Send Message]
+    B --> C[Slack Connector]
+    C --> D((Slack))
+${bt}${bt}${bt}
+
+Example — with branching (5+ nodes):
+${bt}${bt}${bt}mermaid
+flowchart LR
+    A((User)) --> B[Execute Operation]
+    B --> C[Salesforce Connector]
+    C --> D[Create Account]
+    C --> E[Create Contact]
+    D & E --> F((Salesforce CRM))
 ${bt}${bt}${bt}
 
 Replace the examples above with the diagram appropriate for this connector and workflow.]
@@ -453,7 +467,7 @@ Replace the examples above with the diagram appropriate for this connector and w
 
 ## Setting up the [ConnectorName] integration
 
-> **New to WSO2 Integrator?** Follow the [Create a New Integration](../getting-started/create-integration.md) guide to set up your project first, then return here to add the connector.
+> **New to WSO2 Integrator?** Follow the [Create a New Integration](../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
 
 [No numbered steps in this section. Project creation is a common prerequisite covered in the shared guide above. Numbered steps begin in the next section, starting from Step 1.]
 

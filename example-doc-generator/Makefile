@@ -3,6 +3,7 @@
         crop-screenshots crop-screenshots-dry crop-screenshots-backup \
         publish-docs publish-docs-dry publish-docs-no-preview publish-docs-no-pr \
         publish-sample publish-sample-dry publish-sample-no-pr publish-sample-no-publish \
+        publish-all publish-all-dry publish-all-no-preview publish-all-no-pr publish-all-open \
         cleanup cleanup-dry \
         clean clean-artifacts
 
@@ -43,6 +44,15 @@ help:
 	@echo "    INTEGRATION_BASE_BRANCH=BRANCH    Override samples PR base branch (.env: INTEGRATION_SAMPLES_BASE_BRANCH)"
 	@echo "    PROJECT_PATH=PATH                 Manually set project path (writes created-project.txt)"
 	@echo "    NO_PR=1                           Push branch but skip PR creation"
+	@echo ""
+	@echo "  Publish All (docs + sample together)"
+	@echo "    make publish-all              Run publish-docs then publish-sample, show both PR links"
+	@echo "    make publish-all-dry          Dry run for both scripts, no changes"
+	@echo "    make publish-all-no-preview   Skip Playwright preview screenshots"
+	@echo "    make publish-all-no-pr        Push both branches, skip PR creation"
+	@echo "    make publish-all-open         Run both and open PR links in the browser automatically"
+	@echo "    PUBLISH_ALL_ARGS='...'        Extra flags forwarded to publish_all.py"
+	@echo "    (Docs + Sample overrides above all apply here too)"
 	@echo ""
 	@echo "  Artifacts"
 	@echo "    make clean            Remove artifacts/, target/, Dependencies.toml, python/.venv"
@@ -172,6 +182,44 @@ publish-sample-no-pr: python/.venv/.installed
 publish-sample-no-publish: python/.venv/.installed
 	@echo "→ Deleting local project and closing editor tabs (skip sample publishing)..."
 	$(_publish_sample_cmd) --no-publish
+
+# ── Publish all (docs + sample) ───────────────────────────────────────────────
+# Reuses the same override vars as the individual publish targets.
+# Extra flags: PUBLISH_ALL_ARGS — forwarded verbatim to publish_all.py.
+
+PUBLISH_ALL_ARGS ?=
+
+_publish_all_cmd = python/.venv/bin/python python/publish_all.py \
+  $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
+  $(if $(DOCS_UPSTREAM),--docs-upstream "$(DOCS_UPSTREAM)",) \
+  $(if $(DOCS_BASE_BRANCH),--docs-base-branch "$(DOCS_BASE_BRANCH)",) \
+  $(if $(CODE_SERVER_PORT),--url "http://localhost:$(CODE_SERVER_PORT)",) \
+  $(if $(SAMPLES_REPO),--samples-repo "$(SAMPLES_REPO)",) \
+  $(if $(PROJECT_PATH),--project-path "$(PROJECT_PATH)",) \
+  $(if $(INTEGRATION_UPSTREAM),--samples-upstream "$(INTEGRATION_UPSTREAM)",) \
+  $(if $(INTEGRATION_BASE_BRANCH),--samples-base-branch "$(INTEGRATION_BASE_BRANCH)",) \
+  $(if $(NO_PR),--no-pr,) \
+  $(PUBLISH_ALL_ARGS)
+
+publish-all: python/.venv/.installed
+	@echo "→ Publishing docs + sample, showing both PR links..."
+	$(_publish_all_cmd)
+
+publish-all-dry: python/.venv/.installed
+	@echo "→ Publishing docs + sample (dry run)..."
+	$(_publish_all_cmd) --dry-run
+
+publish-all-no-preview: python/.venv/.installed
+	@echo "→ Publishing docs + sample (no Playwright preview)..."
+	$(_publish_all_cmd) --no-preview
+
+publish-all-no-pr: python/.venv/.installed
+	@echo "→ Publishing docs + sample (branch + commit only, no PR)..."
+	$(_publish_all_cmd) --no-pr
+
+publish-all-open: python/.venv/.installed
+	@echo "→ Publishing docs + sample and opening PR links in browser..."
+	$(_publish_all_cmd) --open
 
 # Aliases for backward compatibility
 cleanup: publish-sample
