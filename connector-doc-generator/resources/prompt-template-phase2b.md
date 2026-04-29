@@ -118,6 +118,7 @@ ReturnType result = check client->{functionName}({params});
 ```
 
 {{updateModeNote}}
+
 ---
 
 ## Formatting Conventions
@@ -127,7 +128,7 @@ ReturnType result = check client->{functionName}({params});
 | Type values in tables | Wrap in `<code>TypeName</code>` — NOT backticks |
 | Required config field defaults | Use the literal string `Required` (no code wrapping) |
 | Optional config field defaults | Wrap in `<code>defaultValue</code>` |
-| `returns` / **Returns** field | Type expression only, e.g. `record {}|error` |
+| `returns` / **Returns** field | Type expression only, e.g. `record {}&#124;error` |
 | Sample code | Operation call and result assignment only — do NOT include `io:println()` |
 | Sample response | Required for any operation returning data; omit only for `error?` or `()` |
 | Operations | Each operation appears **exactly once** |

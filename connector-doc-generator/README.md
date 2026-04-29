@@ -80,7 +80,7 @@ changes what differs from the current source code.
 ## Output
 
 Generated files are written to:
-```
+```text
 <docsRepoRoot>/en/docs/connectors/catalog/<category>/<moduleSlug>/
 ├── overview.md
 ├── setup-guide.md          (only if service-side setup steps exist)

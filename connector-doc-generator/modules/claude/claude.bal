@@ -46,10 +46,11 @@ public function isClaudeInstalled() returns boolean {
 # + maxTurns   - Maximum tool-use turns (use phase-specific constants)
 # + return     - ClaudeResult with the generated text, or an error
 public function callClaude(string promptText, string model = DEFAULT_MODEL, int maxTurns = MAX_TURNS_PHASE1) returns ClaudeResult|error {
-    int ts = <int>time:utcNow()[0];
-    string promptFile = string `/tmp/conn_doc_prompt_${ts}.md`;
-    string outputFile = string `/tmp/conn_doc_output_${ts}.jsonl`;
-    string stderrFile = string `/tmp/conn_doc_stderr_${ts}.txt`;
+    time:Utc now = time:utcNow();
+    string uid = string `${now[0]}_${now[1]}`;
+    string promptFile = string `/tmp/conn_doc_prompt_${uid}.md`;
+    string outputFile = string `/tmp/conn_doc_output_${uid}.jsonl`;
+    string stderrFile = string `/tmp/conn_doc_stderr_${uid}.txt`;
 
     check io:fileWriteString(promptFile, promptText);
 
@@ -165,7 +166,8 @@ function parseStreamJson(string output) returns ClaudeResult|error {
 
             json dur = ev["duration_ms"];
             durationMs = dur is decimal ? dur : (dur is int ? <decimal>dur : ());
-            costUsd = ev["total_cost_usd"] is decimal ? <decimal>ev["total_cost_usd"] : ();
+            json cost = ev["total_cost_usd"];
+            costUsd = cost is decimal ? cost : (cost is float ? <decimal>cost : ());
 
             json usageField = ev["usage"];
             if usageField is map<json> {

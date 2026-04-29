@@ -63,7 +63,7 @@ public function insertConnectorEntry(
     string link = string `${categorySlug}/${module}/overview`;
     string iconUrl = buildIconUrl(packageOrg, module, packageVersion);
 
-    string newEntry = string `    { name: "${name}", description: "${description}", operations: "${operations}", auth: "${auth}", link: "${link}", category: "${catalogCategory}"`;
+    string newEntry = string `    { name: "${escapeJs(name)}", description: "${escapeJs(description)}", operations: "${escapeJs(operations)}", auth: "${escapeJs(auth)}", link: "${link}", category: "${catalogCategory}"`;
     if iconUrl.length() > 0 {
         newEntry += string `, icon: "${iconUrl}"`;
     }
@@ -142,6 +142,21 @@ function buildIconUrl(string org, string module, string version) returns string 
         return "";
     }
     return string `https://bcentral-packageicons.azureedge.net/images/${org}_${module}_${version}.png`;
+}
+
+// Escape a string for embedding inside a JS double-quoted string literal.
+function escapeJs(string s) returns string {
+    string result = "";
+    foreach string:Char ch in s {
+        if ch == "\\" {
+            result += "\\\\";
+        } else if ch == "\"" {
+            result += "\\\"";
+        } else {
+            result += ch;
+        }
+    }
+    return result;
 }
 
 // Find the last occurrence of searchStr in text. Returns () if not found.

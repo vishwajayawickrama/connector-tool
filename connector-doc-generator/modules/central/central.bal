@@ -28,8 +28,10 @@ public function fetchLatestVersion(string pkg) returns string|error {
         if versions.length() == 0 {
             return error(string `No versions found for ${pkg} on Ballerina Central`);
         }
-        string ver = versions[0].toString();
-        return ver;
+        if versions[0] is string {
+            return <string>versions[0];
+        }
+        return error(string `Unexpected version format for ${pkg} on Ballerina Central`);
     }
     return error(string `Unexpected response format from Ballerina Central for ${pkg}`);
 }

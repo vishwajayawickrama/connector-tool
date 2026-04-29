@@ -46,7 +46,7 @@ Generate exactly two output blocks:
 
 Everything before the first `## ClientName` section:
 
-```
+```markdown
 <action_header>
 ---
 connector: true
@@ -77,7 +77,7 @@ Available clients:
 
 ### 2. `<clients>` — JSON array of all clients to document in Phase 2b
 
-```
+```json
 <clients>
 [
   {

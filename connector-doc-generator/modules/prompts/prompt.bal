@@ -6,25 +6,25 @@ const string PROMPT_TEMPLATE_PHASE1  = "./resources/prompt-template-phase1.md";
 const string PROMPT_TEMPLATE_PHASE2A = "./resources/prompt-template-phase2a.md";
 const string PROMPT_TEMPLATE_PHASE2B = "./resources/prompt-template-phase2b.md";
 
-// Map of category slug → display label
+// Map of category slug → display label (must match CATALOG_CATEGORIES in modules/category/category.bal)
 final map<string> CATEGORIES = {
-    "ai-ml": "AI & Machine Learning",
-    "built-in": "Built-in Connectors",
+    "ai-ml": "AI & ML",
+    "built-in": "Built-in",
     "cloud-infrastructure": "Cloud & Infrastructure",
     "communication": "Communication",
     "crm-sales": "CRM & Sales",
     "database": "Database",
     "developer-tools": "Developer Tools",
     "ecommerce": "E-Commerce",
-    "erp-business": "ERP & Business Operations",
+    "erp-business": "ERP & Business",
     "finance-accounting": "Finance & Accounting",
     "healthcare": "Healthcare",
     "hrms": "HRMS",
-    "marketing-social": "Marketing & Social Media",
+    "marketing-social": "Marketing & Social",
     "messaging": "Messaging",
     "productivity-collaboration": "Productivity & Collaboration",
     "security-identity": "Security & Identity",
-    "storage-file": "Storage & File Management"
+    "storage-file": "Storage & Files"
 };
 
 # Input parameters for prompt generation.

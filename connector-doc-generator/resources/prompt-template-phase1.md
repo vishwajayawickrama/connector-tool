@@ -227,6 +227,7 @@ The listener supports the following connection strategies:
 ```
 
 {{updateModeNote}}
+
 ---
 
 ## Formatting Conventions
