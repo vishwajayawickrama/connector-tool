@@ -1,10 +1,7 @@
 package io.ballerina.aigentool.workflows;
 
 import io.ballerina.aigentool.spi.AiGenWorkflow;
-import io.ballerina.runtime.api.Module;
-import io.ballerina.runtime.api.Runtime;
 import io.ballerina.runtime.api.values.BArray;
-import io.ballerina.runtime.api.values.BError;
 import io.ballerina.aigentool.utils.Utils;
 
 public final class OpenApiAutomatorWorkflow implements AiGenWorkflow {
@@ -21,29 +18,7 @@ public final class OpenApiAutomatorWorkflow implements AiGenWorkflow {
 
     @Override
     public void runWorkflow(BArray args) {
-        Runtime runtime = null;
-        boolean runtimeStarted = false;
-        try {
-            Module module = new Module(ORG, MODULE, VERSION);
-            BArray workflowArgs = Utils.addToFront(args, NAME);
-            runtime = Runtime.from(module);
-
-            runtime.init();
-            runtime.start();
-            runtimeStarted = true;
-
-            Object result = runtime.callFunction(module, "main", null, workflowArgs);
-            if (result instanceof BError error) {
-                System.err.println("Error occurred while running connector automator: " + error.getErrorMessage());
-            }
-        } catch (Exception e) {
-            System.err.println("Error occurred while running connector automator: " + e.getMessage());
-        } finally {
-            // Stop the runtime if it was started
-            if (runtimeStarted && runtime != null) {
-                runtime.stop();
-            }
-        }
+        Utils.callBallerinaRunteimAPiWithName(ORG, MODULE, VERSION, NAME, args);
     }
 
     @Override
