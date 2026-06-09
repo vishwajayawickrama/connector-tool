@@ -62,6 +62,13 @@ public function executeSanitizor(string... args) returns error? {
     // Step 1: Execute OpenAPI flatten
     printStepHeader(1, "Flattening OpenAPI Specification", quietMode);
     string flattenedSpecPath = outputDir + "/docs/spec";
+    error? createDirResult = file:createDir(flattenedSpecPath, file:RECURSIVE);
+    if createDirResult is error {
+        if !quietMode {
+            log:printError("Failed to create output directory: " + flattenedSpecPath, 'error = createDirResult);
+        }
+        return error("Failed to create output directory: " + flattenedSpecPath + ", reason: " + createDirResult.message());
+    }
     utils:CommandResult flattenResult = utils:executeBalFlatten(inputSpecPath, flattenedSpecPath);
     if !utils:isCommandSuccessfull(flattenResult) {
         if !quietMode {

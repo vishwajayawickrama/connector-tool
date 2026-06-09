@@ -1,15 +1,12 @@
 package io.ballerina.aigentool;
 
 import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
 
 import io.ballerina.aigentool.spi.AiGenWorkflow;
-import io.ballerina.aigentool.spi.AiGenWorkflowProvider;
 import io.ballerina.cli.BLauncherCmd;
-import io.ballerina.runtime.api.utils.StringUtils;
-import io.ballerina.runtime.api.values.BArray;
 import picocli.CommandLine;
+
+import java.util.ServiceLoader;
 
 @CommandLine.Command(
         name = "aigen",
@@ -23,36 +20,14 @@ public class AiGenCmd implements BLauncherCmd {
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
 
-    @CommandLine.Parameters(
-        index = "0",
-        arity = "0..1",
-        description = "Subcommand to execute"
-    )
-    private String subCommand;
-
-    @CommandLine.Parameters(
-        index = "1..*", 
-        arity = "0..*", 
-        description = "arguments + flags and options")
-    private final List<String> args = new ArrayList<>();
-
     public AiGenCmd() {
         outStream = System.out;
     }
 
     @Override
     public void execute() {
-        // TODO: Are we going to handle subcommands --help functionality also in here?
-        if (baseCmd.helpFlag || subCommand == null) {
-            String helpCommand = subCommand == null ? getName() : getName() + "-" + subCommand;
-            String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(helpCommand, AiGenCmd.class.getClassLoader());
-            outStream.println(commandUsageInfo);
-            return;
-        }
-        
-        BArray balArgs = StringUtils.fromStringArray(args.toArray(new String[0]));
-        AiGenWorkflow workflow = AiGenWorkflowProvider.getWorkflow(subCommand);
-        workflow.runWorkflow(balArgs);
+        String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(getName(), AiGenCmd.class.getClassLoader());
+        outStream.println(commandUsageInfo);
     }
 
     @Override
@@ -66,12 +41,18 @@ public class AiGenCmd implements BLauncherCmd {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public void printUsage(StringBuilder out) {
         out.append("bal aigen <sdk|openapi> <command> [args...]");
     }
 
     @Override
     public void setParentCmdParser(CommandLine parentCmdParser) {
+        CommandLine aigenCmd = parentCmdParser.getSubcommands().get(COMMAND_NAME);
+        if (aigenCmd != null) {
+            ServiceLoader<AiGenWorkflow> workflows = ServiceLoader.load(AiGenWorkflow.class);
+            for (AiGenWorkflow workflow : workflows) {
+                aigenCmd.addSubcommand(workflow.getName(), workflow);
+            }
+        }
     }
 }

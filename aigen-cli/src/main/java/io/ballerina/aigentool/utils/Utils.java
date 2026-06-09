@@ -6,6 +6,7 @@ import io.ballerina.runtime.api.types.ArrayType;
 import io.ballerina.runtime.api.types.PredefinedTypes;
 import io.ballerina.runtime.api.values.BArray;
 import io.ballerina.runtime.api.values.BError;
+import io.ballerina.runtime.api.values.BString;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.Module;
 import io.ballerina.runtime.api.Runtime;
@@ -27,6 +28,10 @@ public class Utils {
     }
 
     public static void callBallerinaRunteimAPi(String org, String module, String version, BArray args) {   
+        callBallerinaRuntimeApiWithSingleArg(org, module, version, args);
+    }
+
+    public static void callBallerinaRuntimeApiWithSingleArg(String org, String module, String version, BArray args) {   
         Runtime runtime = null;
         boolean runtimeStarted = false;
         try {
@@ -37,14 +42,43 @@ public class Utils {
             runtime.start();
             runtimeStarted = true;
 
-            Object result = runtime.callFunction(balModule, "main", null, args);
+            BString arg = args.size() > 0 ? args.getBString(0) : StringUtils.fromString("");
+            Object result = runtime.callFunction(balModule, "main", null, arg);
             if (result instanceof BError error) {
-                System.err.println("Error occurred while running connector doc generator: " + error.getErrorMessage());
+                System.err.println("Error occurred while running " + module + ": " + error.getErrorMessage());
             }
         } catch (Exception e) {
-            System.err.println("Error occurred while running connector doc generator: " + e.getMessage());
+            System.err.println("Error occurred while running " + module + ": " + e.getMessage());
         } finally {
-            // Stop the runtime if it was started
+            if (runtimeStarted && runtime != null) {
+                runtime.stop();
+            }
+        }
+    }
+
+    public static void callBallerinaRuntimeApiWithMultipleArgs(String org, String module, String version, BArray args, int expectedCount) {   
+        Runtime runtime = null;
+        boolean runtimeStarted = false;
+        try {
+            Module balModule = new Module(org, module, version);
+            runtime = Runtime.from(balModule);
+
+            runtime.init();
+            runtime.start();
+            runtimeStarted = true;
+
+            Object[] functionArgs = new Object[expectedCount];
+            for (int i = 0; i < expectedCount; i++) {
+                functionArgs[i] = i < args.size() ? args.getBString(i) : StringUtils.fromString("");
+            }
+
+            Object result = runtime.callFunction(balModule, "main", null, functionArgs);
+            if (result instanceof BError error) {
+                System.err.println("Error occurred while running " + module + ": " + error.getErrorMessage());
+            }
+        } catch (Exception e) {
+            System.err.println("Error occurred while running " + module + ": " + e.getMessage());
+        } finally {
             if (runtimeStarted && runtime != null) {
                 runtime.stop();
             }

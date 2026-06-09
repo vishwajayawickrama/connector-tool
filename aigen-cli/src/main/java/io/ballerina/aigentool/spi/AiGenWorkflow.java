@@ -1,12 +1,5 @@
 package io.ballerina.aigentool.spi;
 
-import io.ballerina.runtime.api.values.BArray;
+import io.ballerina.cli.BLauncherCmd;
 
-public interface AiGenWorkflow {
-
-    public String getName();
-
-    public void runWorkflow(BArray args);
-
-    public void help();
-}
+public interface AiGenWorkflow extends BLauncherCmd {}
