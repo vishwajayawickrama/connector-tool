@@ -1,16 +1,12 @@
 package io.ballerina.connectortool.utils;
 
 import io.ballerina.runtime.api.creators.TypeCreator;
-import io.ballerina.runtime.api.creators.TypeCreator;
 import io.ballerina.runtime.api.creators.ValueCreator;
 import io.ballerina.runtime.api.types.ArrayType;
 import io.ballerina.runtime.api.types.PredefinedTypes;
 import io.ballerina.runtime.api.values.BArray;
 import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BString;
-import io.ballerina.runtime.api.utils.StringUtils;
-import io.ballerina.runtime.api.Module;
-import io.ballerina.runtime.api.Runtime;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.Module;
 import io.ballerina.runtime.api.Runtime;
@@ -109,6 +105,31 @@ public class Utils {
             System.err.println("Error occurred while running connector automator: " + e.getMessage());
         } finally {
             // Stop the runtime if it was started
+            if (runtimeStarted && runtime != null) {
+                runtime.stop();
+            }
+        }
+    }
+
+    public static void callBallerinaFunction(String org, String module, String version,
+            String functionName, String inputPath, String outputPath) {
+        Runtime runtime = null;
+        boolean runtimeStarted = false;
+        try {
+            Module balModule = new Module(org, module, version);
+            runtime = Runtime.from(balModule);
+            runtime.init();
+            runtime.start();
+            runtimeStarted = true;
+
+            Object result = runtime.callFunction(balModule, functionName, null,
+                    StringUtils.fromString(inputPath), StringUtils.fromString(outputPath));
+            if (result instanceof BError error) {
+                System.err.println("Error occurred while running connector automator: " + error.getErrorMessage());
+            }
+        } catch (Exception e) {
+            System.err.println("Error occurred while running connector automator: " + e.getMessage());
+        } finally {
             if (runtimeStarted && runtime != null) {
                 runtime.stop();
             }
