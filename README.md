@@ -91,7 +91,7 @@ today while allowing other providers or enterprise-hosted models later.
 │   ├── build.gradle
 │   └── src/main/java/io/ballerina/connectortool/ConnectorCmd.java
 ├── connector-core/
-│   └── connector_automator/
+│   └── connector-automator/
 │       ├── Ballerina.toml
 │       ├── main.bal
 │       ├── modules/
@@ -103,19 +103,19 @@ today while allowing other providers or enterprise-hosted models later.
 |------|---------|
 | `connector-tool/` | Ballerina tool package. Registers the tool id as `connector` and points to the Java CLI artifact |
 | `connector-cli/` | Java-based Ballerina CLI tool entry point |
-| `connector-core/connector_automator/` | Ballerina connector automation package for OpenAPI and Java SDK workflows |
-| `connector-core/connector_automator/modules/sanitizor` | OpenAPI sanitization and sanitation tracking |
-| `connector-core/connector_automator/modules/sdkanalyzer` | Java SDK metadata extraction and analysis |
-| `connector-core/connector_automator/modules/api_specification_generator` | SDK metadata to API spec and IR generation |
-| `connector-core/connector_automator/modules/connector_generator` | SDK-backed Ballerina connector generation |
-| `connector-core/connector_automator/modules/client_generator` | OpenAPI-based Ballerina client generation |
-| `connector-core/connector_automator/modules/example_generator` | AI-assisted example generation |
-| `connector-core/connector_automator/modules/test_generator` | OpenAPI mock/live tests and SDK live tests |
-| `connector-core/connector_automator/modules/document_generator` | Connector documentation generation |
-| `connector-core/connector_automator/modules/code_fixer` | AI-assisted compilation-error repair |
-| `connector-core/connector_automator/modules/client_regenerator` | Regeneration support for existing connectors |
+| `connector-core/connector-automator/` | Ballerina connector automation package for OpenAPI and Java SDK workflows |
+| `connector-core/connector-automator/modules/sanitizor` | OpenAPI sanitization and sanitation tracking |
+| `connector-core/connector-automator/modules/sdkanalyzer` | Java SDK metadata extraction and analysis |
+| `connector-core/connector-automator/modules/api_specification_generator` | SDK metadata to API spec and IR generation |
+| `connector-core/connector-automator/modules/connector_generator` | SDK-backed Ballerina connector generation |
+| `connector-core/connector-automator/modules/client_generator` | OpenAPI-based Ballerina client generation |
+| `connector-core/connector-automator/modules/example_generator` | AI-assisted example generation |
+| `connector-core/connector-automator/modules/test_generator` | OpenAPI mock/live tests and SDK live tests |
+| `connector-core/connector-automator/modules/document_generator` | Connector documentation generation |
+| `connector-core/connector-automator/modules/code_fixer` | AI-assisted compilation-error repair |
+| `connector-core/connector-automator/modules/client_regenerator` | Regeneration support for existing connectors |
 
-See [connector-core/connector_automator/README.md](connector-core/connector_automator/README.md) for the
+See [connector-core/connector-automator/README.md](connector-core/connector-automator/README.md) for the
 current direct package commands exposed by the automation pipeline.
 
 ## Current Status
@@ -124,7 +124,7 @@ This repository currently contains three primary layers:
 
 1. A Ballerina tool package under `connector-tool/`.
 2. A Java CLI command implementation under `connector-cli/`.
-3. The combined OpenAPI and SDK connector automation workflow under `connector-core/connector_automator/`.
+3. The combined OpenAPI and SDK connector automation workflow under `connector-core/connector-automator/`.
 
 The Java CLI discovers workflow module mappings through `ServiceLoader` providers
 implementing `io.ballerina.connectortool.spi.ConnectorWorkflow`. The built-in
@@ -156,7 +156,7 @@ export ANTHROPIC_API_KEY="<your-api-key>"
 Build the Ballerina workflow jar consumed by the Java CLI:
 
 ```bash
-cd connector-core/connector_automator/modules/sdkanalyzer/native
+cd connector-core/connector-automator/modules/sdkanalyzer/native
 ./gradlew build
 cd ../../..
 bal build

@@ -1,15 +1,15 @@
 package io.ballerina.connectortool.workflows;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.PrintStream;
+import java.nio.file.Path;
 
 import io.ballerina.connectortool.BaseCmd;
 import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import io.ballerina.cli.BLauncherCmd;
-import io.ballerina.runtime.api.values.BArray;
 import picocli.CommandLine;
-import io.ballerina.connectortool.utils.Utils;
-import io.ballerina.runtime.api.utils.StringUtils;
+import io.ballerina.connectortool.exceptions.CliException;
+import io.ballerina.connectortool.utils.OpenApiPathValidationUtils;
+import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
 
 @CommandLine.Command(
     name = "openapi", 
@@ -20,14 +20,22 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     private final String MODULE = "connector_automator";
     private final String VERSION = "0";
     private final String NAME = "openapi";
+    private PrintStream outStream;
+    private PrintStream errorStream;
 
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
 
-    @CommandLine.Parameters(
-        arity = "0..*", 
-        description = "arguments + flags and options")
-    private final List<String> args = new ArrayList<>();
+    @CommandLine.Option(names = {"-i", "--input"}, description = "input path to openapi specification file.")
+    public String inputPath;
+
+    @CommandLine.Option(names = {"-o", "--output"}, description = "output path for the generated connector.")
+    public String outputPath;
+
+    public OpenApiAutomatorWorkflow() {
+        outStream = System.out;
+        errorStream = System.err;
+    }
 
     @Override
     public String getName() {
@@ -38,11 +46,25 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     public void execute() {
         if (baseCmd.helpFlag) {
             String commandUsageInfo = BLauncherCmd.getCommandUsageInfo("connector-" + NAME, OpenApiAutomatorWorkflow.class.getClassLoader());
-            System.out.println(commandUsageInfo);
+            outStream.println(commandUsageInfo);
             return;
         }
-        BArray balArgs = StringUtils.fromStringArray(args.toArray(new String[0]));
-        Utils.callBallerinaRunteimAPiWithName(ORG, MODULE, VERSION, NAME, balArgs);
+
+        try {
+            Path openApiSpecPath = OpenApiPathValidationUtils.validate(inputPath);
+            Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.validate(outputPath);
+            outStream.println("Validated OpenAPI specification path: " + openApiSpecPath);
+            outStream.println("Validated Ballerina project path: " + ballerinaProjectPath);
+        } catch (CliException e) {
+            errorStream.println(e.getFormattedMessage());
+            System.exit(e.getExitCode());
+        } catch (Exception e) {
+            errorStream.println("bal: fatal: unexpected error: " + e.getMessage());
+            System.exit(1);
+        }
+
+        //BArray balArgs = StringUtils.fromStringArray(args.toArray(new String[0]));
+        //Utils.callBallerinaRunteimAPiWithName(ORG, MODULE, VERSION, NAME, balArgs);
     }
 
     @Override

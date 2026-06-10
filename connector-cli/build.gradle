@@ -36,14 +36,19 @@ repositories {
     mavenCentral()
     flatDir {
         dirs 'libs', 
-                '../connector-core/connector_automator/target/bin',
+                '../connector-core/connector-automator/target/bin',
                 '../connector-core/connector-doc-generator/target/bin',
                 '../connector-core/example-doc-generator/target/bin'
     }
 }
 
 dependencies {
-    compileOnly fileTree(dir: ballerinaLibDir, include: ['ballerina-cli-*.jar', 'ballerina-rt-*.jar', 'picocli-*.jar'])
+    compileOnly fileTree(dir: ballerinaLibDir, include: ['ballerina-cli-*.jar', 'ballerina-lang-*.jar',
+                                                         'ballerina-rt-*.jar', 'picocli-*.jar'])
+    implementation fileTree(dir: ballerinaLibDir, include: ['jackson-annotations-*.jar', 'jackson-core-*.jar',
+                                                            'jackson-databind-*.jar',
+                                                            'jackson-dataformat-yaml-*.jar',
+                                                            'snakeyaml-*.jar'])
     runtimeOnly ':connector_automator'
     runtimeOnly ':connector_doc_generator'
     runtimeOnly ':example_doc_generator'

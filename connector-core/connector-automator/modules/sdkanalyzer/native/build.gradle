@@ -36,15 +36,18 @@ dependencies {
     }
 
     if (ballerinaLibDir == null) {
-        def distRoot = file("/usr/lib/ballerina/distributions")
-        if (distRoot.exists()) {
-            def distDirs = distRoot.listFiles().findAll { it.isDirectory() && it.name.startsWith("ballerina-") }
-            if (!distDirs.isEmpty()) {
-                distDirs.sort { a, b -> a.name <=> b.name }
-                def latest = distDirs.last()
-                def candidate = file("${latest}/bre/lib")
-                if (candidate.exists()) {
-                    ballerinaLibDir = candidate
+        def searchPaths = [file("/Library/Ballerina/distributions"), file("/usr/lib/ballerina/distributions")]
+        for (distRoot in searchPaths) {
+            if (distRoot.exists()) {
+                def distDirs = distRoot.listFiles().findAll { it.isDirectory() && it.name.startsWith("ballerina-") }
+                if (!distDirs.isEmpty()) {
+                    distDirs.sort { a, b -> a.name <=> b.name }
+                    def latest = distDirs.last()
+                    def candidate = file("${latest}/bre/lib")
+                    if (candidate.exists()) {
+                        ballerinaLibDir = candidate
+                        break
+                    }
                 }
             }
         }
