@@ -8,7 +8,7 @@ import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import io.ballerina.cli.BLauncherCmd;
 import io.ballerina.runtime.api.values.BArray;
 import picocli.CommandLine;
-import io.ballerina.connectortool.utils.Utils;
+import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.runtime.api.utils.StringUtils;
 
 @CommandLine.Command(
@@ -42,7 +42,7 @@ public final class SdkAutomatorWorkflow implements ConnectorWorkflow {
             return;
         }
         BArray balArgs = StringUtils.fromStringArray(args.toArray(new String[0]));
-        Utils.callBallerinaRunteimAPiWithName(ORG, MODULE, VERSION, NAME, balArgs);
+        BallerinaRuntimeUtils.callBallerinaRunteimAPiWithName(ORG, MODULE, VERSION, NAME, balArgs);
     }
 
     @Override

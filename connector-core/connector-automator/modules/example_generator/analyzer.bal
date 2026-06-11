@@ -5,6 +5,7 @@ import ballerina/lang.regexp;
 import ballerina/os;
 
 import wso2/connector_automator.code_fixer;
+import wso2/connector_automator.utils as oautils;
 
 // Helper function to check if array contains a value
 function arrayContains(string[] arr, string value) returns boolean {
@@ -17,9 +18,10 @@ function arrayContains(string[] arr, string value) returns boolean {
 }
 
 public function analyzeConnector(string connectorPath) returns ConnectorDetails|error {
-    string clientBalPath = connectorPath + "/ballerina/client.bal";
-    string typesBalPath = connectorPath + "/ballerina/types.bal";
-    string ballerinaTomlPath = connectorPath + "/ballerina/Ballerina.toml";
+    string ballerinaDir = check oautils:resolveBallerinaDir(connectorPath);
+    string clientBalPath = ballerinaDir + "/client.bal";
+    string typesBalPath = ballerinaDir + "/types.bal";
+    string ballerinaTomlPath = ballerinaDir + "/Ballerina.toml";
 
     string clientContent = check io:fileReadString(clientBalPath);
     string typesContent = check io:fileReadString(typesBalPath);
@@ -555,13 +557,7 @@ function extractCompactTypeDefinition(string typesContent, string typeName) retu
 }
 
 function packAndPushConnector(string connectorPath) returns error? {
-    string ballerinaDir = connectorPath + "/ballerina";
-
-    // Check if ballerina directory exists
-    boolean|error ballerinaExists = file:test(ballerinaDir, file:EXISTS);
-    if ballerinaExists is error || !ballerinaExists {
-        return error("Ballerina directory not found at: " + ballerinaDir);
-    }
+    string ballerinaDir = check oautils:resolveBallerinaDir(connectorPath);
 
     check ensureConnectorReadme(ballerinaDir);
 

@@ -35,7 +35,8 @@ function generateTestFile(string connectorPath, string[]? operationIds = (), boo
     string testContent = check generateTestsWithAI(analysis);
 
     // Write test file
-    string testFilePath = connectorPath + "/ballerina/tests/test.bal";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
+    string testFilePath = ballerinaDir + "/tests/test.bal";
     check io:fileWriteString(testFilePath, testContent);
 
     if !quietMode {
