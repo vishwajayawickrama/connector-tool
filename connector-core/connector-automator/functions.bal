@@ -24,7 +24,7 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir) returns er
 
     printOpenApiStepHeader(2, "Generating Ballerina Client", false);
     string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
-    string clientPath = string `${outputDir}/ballerina`;
+    string clientPath = outputDir;
     error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath);
     if clientResult is error {
         io:println(string `Client generation failed: ${clientResult.message()}`);
@@ -41,6 +41,8 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir) returns er
         return error(string `Client build failed: ${buildResult.stderr}`);
     }
     io:println("Client built and validated successfully");
+
+    // TODO: we shoudl call the code fixer in here to fix any compliation errors in the generated client.
 
     printOpenApiStepHeader(4, "Generating Examples", false);
     error? exampleResult = example_generator:executeExampleGen(outputDir);

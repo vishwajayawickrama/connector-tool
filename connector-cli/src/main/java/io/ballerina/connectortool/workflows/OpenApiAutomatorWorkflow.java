@@ -9,8 +9,9 @@ import io.ballerina.cli.BLauncherCmd;
 import picocli.CommandLine;
 import io.ballerina.connectortool.exceptions.CliException;
 import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
+import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.connectortool.utils.OpenApiPathValidationUtils;
-import io.ballerina.connectortool.utils.Utils;
+import io.ballerina.connectortool.utils.ProcessUtils;
 
 @CommandLine.Command(
     name = "openapi", 
@@ -23,6 +24,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     private final String NAME = "openapi";
     private PrintStream outStream;
     private PrintStream errorStream;
+    private boolean exitWhenFinish = true;
 
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
@@ -55,15 +57,18 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             Path openApiSpecPath = OpenApiPathValidationUtils.validate(inputPath);
             Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.validate(outputPath);
 
-            Utils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
+            BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
                     openApiSpecPath.toString(), ballerinaProjectPath.toString());
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
-            System.exit(e.getExitCode());
+            ProcessUtils.exit(e.getExitCode(), exitWhenFinish);
+            return;
         } catch (Exception e) {
             errorStream.println("bal: fatal: unexpected error: " + e.getMessage());
-            System.exit(1);
+            ProcessUtils.exitError(exitWhenFinish);
+            return;
         }
+        ProcessUtils.exitSuccess(exitWhenFinish);
     }
 
     @Override

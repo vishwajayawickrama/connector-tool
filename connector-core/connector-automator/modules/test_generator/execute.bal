@@ -295,8 +295,9 @@ function executeOpenApiTestGen(string... args) returns error? {
 
     io:println("✓ Mock server implementation generated");
 
-    string mockServerPath = connectorPath + "/ballerina/modules/mock.server/mock_server.bal";
-    string typesPath = connectorPath + "/ballerina/modules/mock.server/types.bal";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
+    string mockServerPath = ballerinaDir + "/modules/mock.server/mock_server.bal";
+    string typesPath = ballerinaDir + "/modules/mock.server/types.bal";
 
     // Step 3: Complete mock server template
     printStepHeader(3, "Completing mock server template", quietMode);

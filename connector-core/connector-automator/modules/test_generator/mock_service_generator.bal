@@ -5,7 +5,7 @@ import ballerina/io;
 import ballerina/lang.regexp;
 
 function setupMockServerModule(string connectorPath, boolean quietMode = false) returns error? {
-    string ballerinaDir = connectorPath + "/ballerina";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     // cd into ballerina dir and add mock.server module using bal add cmd
 
     if !quietMode {
@@ -45,12 +45,15 @@ function setupMockServerModule(string connectorPath, boolean quietMode = false) 
 }
 
 function generateMockServer(string connectorPath, string specPath, boolean quietMode = false) returns error? {
-    string ballerinaDir = connectorPath + "/ballerina";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string mockServerDir = ballerinaDir + "/modules/mock.server";
     int operationCount = check countOperationsInSpec(specPath);
     if !quietMode {
         io:println(string `Total operations found in spec: ${operationCount}`);
     }
+
+    string absSpecPath = check file:getAbsolutePath(specPath);
+    string absMockServerDir = check file:getAbsolutePath(mockServerDir);
 
     string command;
 
@@ -58,7 +61,7 @@ function generateMockServer(string connectorPath, string specPath, boolean quiet
         if !quietMode {
             io:println(string `Using all ${operationCount} operations`);
         }
-        command = string `bal openapi -i ${specPath} -o ${mockServerDir}`;
+        command = string `bal openapi -i ${absSpecPath} -o ${absMockServerDir}`;
     } else {
         if !quietMode {
             io:println(string `Filtering from ${operationCount} to ${MAX_OPERATIONS} most useful operations`);
@@ -67,7 +70,7 @@ function generateMockServer(string connectorPath, string specPath, boolean quiet
         if !quietMode {
             io:println(string `Selected operations: ${operationsList}`);
         }
-        command = string `bal openapi -i ${specPath} -o ${mockServerDir} --operations ${operationsList}`;
+        command = string `bal openapi -i ${absSpecPath} -o ${absMockServerDir} --operations ${operationsList}`;
     }
 
     // generate mock service template using openapi tool

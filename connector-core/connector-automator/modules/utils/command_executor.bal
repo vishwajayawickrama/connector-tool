@@ -290,3 +290,16 @@ public function executeBalBuild(string projectPath, boolean quietMode = false) r
 
     return result;
 }
+
+# Resolves the Ballerina project directory within a connector workspace.
+# Returns the nested `ballerina/` subdirectory for SDK-style workspaces,
+# or `connectorPath` itself when the root is already the Ballerina project.
+#
+# + connectorPath - Workspace or project root path
+# + return - Path to the Ballerina project directory, or an error
+public function resolveBallerinaDir(string connectorPath) returns string|error {
+    if check file:test(connectorPath + "/ballerina/Ballerina.toml", file:EXISTS) {
+        return connectorPath + "/ballerina";
+    }
+    return connectorPath;
+}

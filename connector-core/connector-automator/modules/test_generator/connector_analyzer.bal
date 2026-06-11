@@ -2,16 +2,20 @@ import ballerina/io;
 import ballerina/lang.'string as strings;
 import ballerina/lang.regexp;
 
+import wso2/connector_automator.utils as oautils;
+
 function analyzeConnectorForTests(string connectorPath, string[]? operationIds = ()) returns ConnectorAnalysis|error {
+    string ballerinaDir = check oautils:resolveBallerinaDir(connectorPath);
+
     // Read Ballerina.toml to get package name
-    string tomlContent = check io:fileReadString(connectorPath + "/ballerina/Ballerina.toml");
+    string tomlContent = check io:fileReadString(ballerinaDir + "/Ballerina.toml");
     string packageName = extractPackageName(tomlContent);
 
     // Read mock server content
-    string mockServerContent = check io:fileReadString(connectorPath + "/ballerina/modules/mock.server/mock_server.bal");
+    string mockServerContent = check io:fileReadString(ballerinaDir + "/modules/mock.server/mock_server.bal");
 
     // Read client.bal to extract the init method
-    string clientContent = check io:fileReadString(connectorPath + "/ballerina/client.bal");
+    string clientContent = check io:fileReadString(ballerinaDir + "/client.bal");
     string initMethodSignature = extractInitMethodComplete(clientContent);
 
     // Detect method type
@@ -24,7 +28,7 @@ function analyzeConnectorForTests(string connectorPath, string[]? operationIds =
     }
 
     // read types.bal to get type definitions
-    string typesContent = check io:fileReadString(connectorPath + "/ballerina/types.bal");
+    string typesContent = check io:fileReadString(ballerinaDir + "/types.bal");
 
     // extract all types referenced in the init method signatures
     string[] referencedTypes = findTypesInSignatures(initMethodSignature);
@@ -380,10 +384,12 @@ function findRemoteFunctionSignature(string clientContent, string functionName) 
 }
 
 function analyzeConnectorForSdkTests(string connectorPath, string[]? operationIds = ()) returns ConnectorAnalysis|error {
-    string tomlContent = check io:fileReadString(connectorPath + "/ballerina/Ballerina.toml");
+    string ballerinaDir = check oautils:resolveBallerinaDir(connectorPath);
+
+    string tomlContent = check io:fileReadString(ballerinaDir + "/Ballerina.toml");
     string packageName = extractPackageName(tomlContent);
 
-    string clientContent = check io:fileReadString(connectorPath + "/ballerina/client.bal");
+    string clientContent = check io:fileReadString(ballerinaDir + "/client.bal");
     string initMethodSignature = extractInitMethodComplete(clientContent);
 
     "resource"|"remote" methodType = check detectClientMethodType(clientContent);
@@ -397,7 +403,7 @@ function analyzeConnectorForSdkTests(string connectorPath, string[]? operationId
         }
     }
 
-    string typesContent = check io:fileReadString(connectorPath + "/ballerina/types.bal");
+    string typesContent = check io:fileReadString(ballerinaDir + "/types.bal");
     string connectionConfigDefinition = extractCompactTypeDefinition(typesContent, "ConnectionConfig");
     string enumDefinitions = extractEnumDefinitions(typesContent);
 

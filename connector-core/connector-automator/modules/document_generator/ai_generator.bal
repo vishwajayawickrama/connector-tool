@@ -4,8 +4,6 @@ import ballerina/lang.regexp;
 
 import wso2/connector_automator.utils;
 
-const string TEMPLATES_PATH = "./modules/document_generator/templates";
-
 public function initDocumentationGenerator() returns error? {
     return utils:initAIService(quietMode = true);
 }
@@ -31,10 +29,8 @@ public function generateBallerinaReadme(string connectorPath) returns error? {
 
     string content = check processTemplate("ballerina_readme_template.md", data);
 
-    string outputPath = connectorPath + "/ballerina/README.md";
-    if !check file:test(connectorPath + "/ballerina", file:EXISTS) {
-        outputPath = connectorPath + "/README.md";
-    }
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
+    string outputPath = ballerinaDir + "/README.md";
 
     string? parentPath = check file:parentPath(outputPath);
     if parentPath is string {
@@ -54,7 +50,8 @@ public function generateTestsReadme(string connectorPath) returns error? {
 
     string content = check processTemplate("tests_readme_template.md", data);
 
-    string outputPath = connectorPath + "/ballerina/tests/README.md";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
+    string outputPath = ballerinaDir + "/tests/README.md";
 
     string? parentPath = check file:parentPath(outputPath);
     if parentPath is string {
@@ -262,13 +259,10 @@ function ensureDirectoryExists(string dirPath) returns error? {
 
 // Template processing functions
 function processTemplate(string templateName, TemplateData data) returns string|error {
-    string templatePath = TEMPLATES_PATH + "/" + templateName;
-
-    if !check file:test(templatePath, file:EXISTS) {
-        return error("Template not found: " + templatePath);
+    string? template = DOCUMENT_TEMPLATES[templateName];
+    if template is () {
+        return error("Template not found: " + templateName);
     }
-
-    string template = check io:fileReadString(templatePath);
     return substituteVariables(template, data);
 }
 
