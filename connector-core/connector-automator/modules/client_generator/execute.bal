@@ -18,7 +18,6 @@ public function executeClientGen(string specPath, string outputDir, utils:LogLev
     }
 }
 
-# Generate Ballerina client with full config (used from main.bal interactive path).
 public function generateBallerinaClient(string specPath, string outputDir, ClientGeneratorConfig config, utils:LogLevel logLevel = "normal") returns error? {
     if !getUserConfirmation("Proceed with Ballerina client generation?", config.autoYes) {
         utils:logInfo("skipping client generation", logLevel);

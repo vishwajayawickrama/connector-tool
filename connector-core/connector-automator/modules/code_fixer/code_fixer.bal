@@ -363,9 +363,9 @@ public function fixJavaNativeAdaptorErrors(string projectPath, utils:LogLevel lo
         io:fprintln(io:stderr, string `  Starting Java native fixer: ${projectPath} (limit=${iterationLimit})`);
     }
 
-    error? preCleanupError = cleanupFixerBackups(projectPath, quietMode, verboseMode);
-    if preCleanupError is error && !quietMode {
-        io:fprintln(io:stderr, string `  ⚠  Failed to clean stale backup files before Java fixing: ${preCleanupError.message()}`);
+    error? preCleanupError = cleanupFixerBackups(projectPath, logLevel);
+    if preCleanupError is error {
+        utils:logWarn(string `Failed to clean stale backup files: ${preCleanupError.message()}`, logLevel);
     }
 
     int iteration = 1;
@@ -515,9 +515,9 @@ public function fixJavaNativeAdaptorErrors(string projectPath, utils:LogLevel lo
         }
     }
 
-    error? postCleanupError = cleanupFixerBackups(projectPath, quietMode, verboseMode);
-    if postCleanupError is error && !quietMode {
-        io:fprintln(io:stderr, string `  ⚠  Failed to clean backup files after Java fixing: ${postCleanupError.message()}`);
+    error? postCleanupError = cleanupFixerBackups(projectPath, logLevel);
+    if postCleanupError is error {
+        utils:logWarn(string `Failed to clean backup files: ${postCleanupError.message()}`, logLevel);
     }
 
     return result;
@@ -1647,24 +1647,29 @@ function getBackupPath(string fullFilePath) returns string {
     return fullFilePath + "_backup.bak";
 }
 
-function cleanupFixerBackups(string projectPath, boolean quietMode = true, boolean verboseMode = false) returns error? {
-    record {|int exitCode; string stdout; string stderr;|}|error cleanupResult =
-        executeShellCommand(projectPath, "find . -type f -name '*_backup*.bak' -print -delete");
-    if cleanupResult is error {
-        return cleanupResult;
+function cleanupFixerBackups(string projectPath, utils:LogLevel logLevel = "normal") returns error? {
+    boolean exists = check file:test(projectPath, file:EXISTS);
+    if !exists {
+        return;
     }
-
-    if cleanupResult.exitCode != 0 {
-        return error(string `backup cleanup failed: ${cleanupResult.stderr.trim()}`);
+    int count = check removeBackupFilesRecursive(projectPath);
+    if count > 0 {
+        utils:logVerbose(string `Removed ${count} stale backup artifact(s)`, logLevel);
     }
+}
 
-    if verboseMode {
-        string deleted = cleanupResult.stdout.trim();
-        if deleted.length() > 0 {
-            io:fprintln(io:stderr, "  Removed stale backup artifacts:");
-            io:fprintln(io:stderr, deleted);
+function removeBackupFilesRecursive(string dir) returns int|error {
+    file:MetaData[] entries = check file:readDir(dir);
+    int count = 0;
+    foreach file:MetaData entry in entries {
+        if entry.dir {
+            count += check removeBackupFilesRecursive(entry.absPath);
+        } else if isBackupArtifactPath(entry.absPath) {
+            check file:remove(entry.absPath);
+            count += 1;
         }
     }
+    return count;
 }
 
 // Main function to fix all errors in a project
@@ -1692,9 +1697,9 @@ public function fixAllErrors(string projectPath, utils:LogLevel logLevel = "quie
         io:fprintln(io:stderr, string `  Starting Ballerina fixer: ${projectPath}`);
     }
 
-    error? preCleanupError = cleanupFixerBackups(projectPath, quietMode, verboseMode);
-    if preCleanupError is error && !quietMode {
-        io:fprintln(io:stderr, string `  ⚠  Failed to clean stale backup files before Ballerina fixing: ${preCleanupError.message()}`);
+    error? preCleanupError = cleanupFixerBackups(projectPath, logLevel);
+    if preCleanupError is error {
+        utils:logWarn(string `Failed to clean stale backup files: ${preCleanupError.message()}`, logLevel);
     }
 
     int iteration = 1;
@@ -1983,9 +1988,9 @@ public function fixAllErrors(string projectPath, utils:LogLevel logLevel = "quie
         }
     }
 
-    error? postCleanupError = cleanupFixerBackups(projectPath, quietMode, verboseMode);
-    if postCleanupError is error && !quietMode {
-        io:fprintln(io:stderr, string `  ⚠  Failed to clean backup files after Ballerina fixing: ${postCleanupError.message()}`);
+    error? postCleanupError = cleanupFixerBackups(projectPath, logLevel);
+    if postCleanupError is error {
+        utils:logWarn(string `Failed to clean backup files: ${postCleanupError.message()}`, logLevel);
     }
 
     // Print summary
