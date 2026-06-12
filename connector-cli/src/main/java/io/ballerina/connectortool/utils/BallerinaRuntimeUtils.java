@@ -110,7 +110,7 @@ public class BallerinaRuntimeUtils {
     }
 
     public static void callBallerinaFunction(String org, String module, String version,
-            String functionName, String inputPath, String outputPath) {
+            String functionName, String inputPath, String outputPath, String logLevel) {
         Runtime runtime = null;
         boolean runtimeStarted = false;
         try {
@@ -121,7 +121,8 @@ public class BallerinaRuntimeUtils {
             runtimeStarted = true;
 
             Object result = runtime.callFunction(balModule, functionName, null,
-                    StringUtils.fromString(inputPath), StringUtils.fromString(outputPath));
+                    StringUtils.fromString(inputPath), StringUtils.fromString(outputPath),
+                    StringUtils.fromString(logLevel));
             if (result instanceof BError error) {
                 throw new RuntimeException(error.getErrorMessage().toString());
             }

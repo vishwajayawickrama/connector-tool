@@ -110,9 +110,9 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
     boolean truncated = totalChunks > MAX_CHUNKS;
 
     if truncated {
-        io:println(string `Diff has ${totalChunks} chunks — capping at ${MAX_CHUNKS} to stay within model context limit (${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ${gitDiff.length() / 1000}KB analysed)`);
+        io:fprintln(io:stderr, string `Diff has ${totalChunks} chunks — capping at ${MAX_CHUNKS} to stay within model context limit (${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ${gitDiff.length() / 1000}KB analysed)`);
     } else {
-        io:println(string `Diff too large for single turn — splitting into ${chunksToSend} chunks`);
+        io:fprintln(io:stderr, string `Diff too large for single turn — splitting into ${chunksToSend} chunks`);
     }
 
     ai:ChatMessage[] messages = [];
@@ -134,7 +134,7 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
         int safeEnd = endIdx < gitDiff.length() ? endIdx : gitDiff.length();
         string chunk = gitDiff.substring(startIdx, safeEnd);
 
-        io:println(string `Sending chunk ${i + 1}/${chunksToSend} (${chunk.length()} chars)`);
+        io:fprintln(io:stderr, string `Sending chunk ${i + 1}/${chunksToSend} (${chunk.length()} chars)`);
 
         messages.push({role: "user", content: string `Part ${i + 1}/${chunksToSend}:\n\n${chunk}`});
         ai:ChatAssistantMessage chunkAck = check model->chat(messages);
@@ -174,11 +174,11 @@ function analyzeWithAnthropic(string gitDiff) returns AnalysisResult|error {
 // Accepts a file path so the diff is never passed as a shell argument,
 // avoiding the OS ARG_MAX limit for large connectors (e.g. Asana).
 public function main(string diffFilePath) returns error? {
-    io:println(string `Reading diff from file: ${diffFilePath}`);
+    io:fprintln(io:stderr, string `Reading diff from file: ${diffFilePath}`);
     string gitDiffContent = check io:fileReadString(diffFilePath);
 
-    io:println("Analyzing git diff...");
-    io:println(string `Diff size: ${gitDiffContent.length()} chars`);
+    io:fprintln(io:stderr, "Analyzing git diff...");
+    io:fprintln(io:stderr, string `Diff size: ${gitDiffContent.length()} chars`);
 
     if gitDiffContent.length() == 0 {
         return error("Git diff file is empty");
@@ -186,10 +186,10 @@ public function main(string diffFilePath) returns error? {
 
     AnalysisResult analysis = check analyzeWithAnthropic(gitDiffContent);
 
-    io:println(SEPARATOR);
-    io:println("VERSION CHANGE ANALYSIS");
-    io:println(SEPARATOR);
-    io:println(string `
+    io:fprintln(io:stderr, SEPARATOR);
+    io:fprintln(io:stderr, "VERSION CHANGE ANALYSIS");
+    io:fprintln(io:stderr, SEPARATOR);
+    io:fprintln(io:stderr, string `
 Version Bump: ${analysis.changeType}
 Confidence:   ${analysis.confidence}
 
@@ -197,29 +197,29 @@ Summary:
 ${analysis.summary}`);
 
     if analysis.breakingChanges.length() > 0 {
-        io:println("\nBREAKING CHANGES:");
+        io:fprintln(io:stderr, "\nBREAKING CHANGES:");
         foreach string change in analysis.breakingChanges {
-            io:println(string `  - ${change}`);
+            io:fprintln(io:stderr, string `  - ${change}`);
         }
     }
 
     if analysis.newFeatures.length() > 0 {
-        io:println("\nNEW FEATURES:");
+        io:fprintln(io:stderr, "\nNEW FEATURES:");
         foreach string feature in analysis.newFeatures {
-            io:println(string `  - ${feature}`);
+            io:fprintln(io:stderr, string `  - ${feature}`);
         }
     }
 
     if analysis.bugFixes.length() > 0 {
-        io:println("\nIMPROVEMENTS:");
+        io:fprintln(io:stderr, "\nIMPROVEMENTS:");
         foreach string fix in analysis.bugFixes {
-            io:println(string `  - ${fix}`);
+            io:fprintln(io:stderr, string `  - ${fix}`);
         }
     }
 
-    io:println(SEPARATOR);
+    io:fprintln(io:stderr, SEPARATOR);
 
     json resultJson = check analysis.cloneWithType(json);
     check io:fileWriteJson("analysis_result.json", resultJson);
-    io:println("Saved to: analysis_result.json");
+    io:fprintln(io:stderr, "Saved to: analysis_result.json");
 }

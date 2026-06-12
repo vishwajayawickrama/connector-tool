@@ -274,7 +274,7 @@ function sortAndWriteClient(string inputPath, string outputPath) returns error? 
 
     if methodBlocks.length() == 0 {
         check io:fileWriteString(outputPath, content);
-        io:println("No resource methods found, file copied as-is");
+        io:fprintln(io:stderr, "No resource methods found, file copied as-is");
         return;
     }
 
@@ -317,13 +317,13 @@ function sortAndWriteClient(string inputPath, string outputPath) returns error? 
 
     check io:fileWriteString(outputPath, string:'join("\n", ...outputLines));
 
-    io:println(string `Sorted ${methods.length()} client methods (resource + remote)`);
-    io:println(string `Written to: ${outputPath}`);
+    io:fprintln(io:stderr, string `Sorted ${methods.length()} client methods (resource + remote)`);
+    io:fprintln(io:stderr, string `Written to: ${outputPath}`);
 }
 
 public function runSortBallerinaClient(string[] args) returns error? {
     if args.length() != 2 {
-        io:println("Usage: bal run sort_ballerina_client.bal -- <input_file> <output_file>");
+        io:fprintln(io:stderr, "Usage: bal run sort_ballerina_client.bal -- <input_file> <output_file>");
         return error("Invalid arguments");
     }
 
@@ -331,7 +331,7 @@ public function runSortBallerinaClient(string[] args) returns error? {
     string outputFile = args[1];
 
     if !check file:test(inputFile, file:EXISTS) {
-        io:println(string `Input file not found: ${inputFile}`);
+        io:fprintln(io:stderr, string `Input file not found: ${inputFile}`);
         return error("Input file not found");
     }
 

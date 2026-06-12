@@ -1,13 +1,7 @@
 import ballerina/io;
 
 public function repeat() {
-    string sep = "";
-    int i = 0;
-    while i < 80 {
-        sep += "=";
-        i += 1;
-    }
-    io:println(sep);
+    io:fprintln(io:stderr, createSeparator("=", 80));
 }
 
 public function createSeparator(string char, int count) returns string {
@@ -19,4 +13,3 @@ public function createSeparator(string char, int count) returns string {
     }
     return sep;
 }
-

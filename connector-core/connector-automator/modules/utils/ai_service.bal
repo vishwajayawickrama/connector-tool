@@ -1,5 +1,4 @@
 import ballerina/ai;
-import ballerina/log;
 import ballerina/os;
 import ballerina/regex;
 import ballerinax/ai.anthropic;
@@ -7,7 +6,7 @@ import ballerinax/ai.anthropic;
 string cachedApiKey = "";
 ai:ModelProvider? defaultModel = ();
 
-public function initAIService(boolean quietMode = false) returns error? {
+public function initAIService(LogLevel logLevel = "normal") returns error? {
     string apiKey = os:getEnv("ANTHROPIC_API_KEY");
     if apiKey.length() == 0 {
         return error("ANTHROPIC_API_KEY environment variable is not set");
@@ -26,9 +25,7 @@ public function initAIService(boolean quietMode = false) returns error? {
     }
     defaultModel = provider;
 
-    if !quietMode {
-        log:printInfo("LLM service initialized successfully");
-    }
+    logVerbose("AI service initialized successfully", logLevel);
 }
 
 public function callAI(string prompt) returns string|error {

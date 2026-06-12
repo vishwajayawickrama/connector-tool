@@ -1,15 +1,12 @@
 import ballerina/file;
 import ballerina/io;
-import ballerina/log;
 import ballerina/os;
 import ballerina/regex;
 import ballerina/time;
 
-public function executeCommand(string command, string workingDir, boolean quietMode = false) returns CommandResult {
+public function executeCommand(string command, string workingDir, LogLevel logLevel = "normal") returns CommandResult {
     time:Utc startTime = time:utcNow();
-    if !quietMode {
-        log:printInfo("Executing", command = command, workingDirectory = workingDir);
-    }
+    logVerbose(string `executing: ${command}`, logLevel);
 
     string stdout = "";
     string stderr = "";
@@ -20,7 +17,6 @@ public function executeCommand(string command, string workingDir, boolean quietM
         stderr = "Empty command string";
         exitCode = 1;
     } else {
-        // Create working directory if it doesn't exist
         if workingDir.trim().length() > 0 {
             boolean|error dirExists = file:test(workingDir, file:EXISTS);
             if dirExists is error || !dirExists {
@@ -30,27 +26,22 @@ public function executeCommand(string command, string workingDir, boolean quietM
                     exitCode = 1;
                     success = false;
                 } else {
-                    if !quietMode {
-                        log:printInfo("Created working directory", workingDir = workingDir);
-                    }
+                    logVerbose(string `created working directory: ${workingDir}`, logLevel);
                 }
             }
         }
 
-        if stderr == "" { // Only execute if directory creation succeeded
-            // Create temporary files for stdout and stderr
+        if stderr == "" {
             string tempDir = "/tmp";
             int timestamp = <int>time:utcNow()[0];
             string stdoutFile = string `${tempDir}/bal_stdout_${timestamp}.txt`;
             string stderrFile = string `${tempDir}/bal_stderr_${timestamp}.txt`;
 
-            // Parse command into executable and arguments
             string[] commandParts = regex:split(command, " ");
             if commandParts.length() == 0 {
                 stderr = "Empty command";
                 exitCode = 1;
             } else {
-                // Modify command to redirect stdout and stderr to files
                 string redirectedCommand = string `cd "${workingDir}" && ${command} > "${stdoutFile}" 2> "${stderrFile}"`;
 
                 os:Command cmd = {
@@ -60,48 +51,29 @@ public function executeCommand(string command, string workingDir, boolean quietM
 
                 os:Process|error proc = os:exec(cmd);
                 if proc is os:Process {
-                    // Wait for process to finish and get exit code
                     int|error exitResult = proc.waitForExit();
                     if exitResult is int {
                         exitCode = exitResult;
                         success = exitCode == 0;
 
-                        // Read stdout from file
                         string|io:Error stdoutContent = io:fileReadString(stdoutFile);
                         if stdoutContent is string {
                             stdout = stdoutContent;
                         } else {
                             stdout = "";
-                            if !quietMode {
-                                log:printWarn("Failed to read stdout file", 'error = stdoutContent);
-                            }
+                            logVerbose(string `failed to read stdout file: ${stdoutContent.message()}`, logLevel);
                         }
 
-                        // Read stderr from file
                         string|io:Error stderrContent = io:fileReadString(stderrFile);
                         if stderrContent is string {
                             stderr = stderrContent;
                         } else {
                             stderr = "";
-                            if !quietMode {
-                                log:printWarn("Failed to read stderr file", 'error = stderrContent);
-                            }
+                            logVerbose(string `failed to read stderr file: ${stderrContent.message()}`, logLevel);
                         }
 
-                        // Clean up temporary files
-                        file:Error? stdoutDeleteResult = file:remove(stdoutFile);
-                        if stdoutDeleteResult is file:Error {
-                            if !quietMode {
-                                log:printWarn("Failed to delete stdout temp file", path = stdoutFile);
-                            }
-                        }
-
-                        file:Error? stderrDeleteResult = file:remove(stderrFile);
-                        if stderrDeleteResult is file:Error {
-                            if !quietMode {
-                                log:printWarn("Failed to delete stderr temp file", path = stderrFile);
-                            }
-                        }
+                        file:Error? removeStdout = file:remove(stdoutFile);
+                        file:Error? removeStderr = file:remove(stderrFile);
                     } else {
                         stderr = exitResult.toString();
                         exitCode = 1;
@@ -116,13 +88,10 @@ public function executeCommand(string command, string workingDir, boolean quietM
     time:Utc endTime = time:utcNow();
     decimal executionTime = <decimal>(endTime[0] - startTime[0]);
 
-    if (!success) {
-        if !quietMode {
-            log:printWarn("Command failed", exitCode = exitCode, stderr = stderr);
-        }
+    if !success {
+        logVerbose(string `command exited ${exitCode}: ${stderr.trim()}`, logLevel);
     }
 
-    // Parse compilation errors from stderr if it contains error messages
     CmdCompilationError[] compilationErrors = [];
     if stderr.includes("ERROR [") || stderr.includes("WARNING [") {
         compilationErrors = parseCmdCompilationErrors(stderr);
@@ -139,10 +108,6 @@ public function executeCommand(string command, string workingDir, boolean quietM
     };
 }
 
-# Helper function to extract directory path from file path
-#
-# + filePath - Full file path
-# + return - DIrectory path or current directory
 public function getDirectoryPath(string filePath) returns string {
     int? lastSlashIndex = filePath.lastIndexOf("/");
     if lastSlashIndex is int {
@@ -167,7 +132,6 @@ public function parseCmdCompilationErrors(string output) returns CmdCompilationE
             if startBracket is int && endBracket is int {
                 string errorPart = line.substring(startBracket + prefix.length(), endBracket);
 
-                // Find the last occurrence of ":(" to split filename from coordinates
                 int? coordStart = errorPart.lastIndexOf(":(");
 
                 if coordStart is int {
@@ -202,10 +166,6 @@ public function parseCmdCompilationErrors(string output) returns CmdCompilationE
     return errors;
 }
 
-# Check if a command result indicates success
-#
-# + result - CommandResult to check
-# + return - true if command executed successfully, false otherwise
 public function isCommandSuccessfull(CommandResult result) returns boolean {
     return result.exitCode == 0;
 }
@@ -238,52 +198,29 @@ public function getErrorSummary(CmdCompilationError[] errors) returns string {
     }
 
     return string `Found ${errors.length()} total compilation errors: ${string:'join(",", ...summaryParts)}`;
-
 }
 
-# Execute `bal openapi flatten` command
-#
-# + inputPath - Path to input openAPI spec file
-# + outputPath - Path to output directory
-# + return - `CommandResult` with execution details
 public function executeBalFlatten(string inputPath, string outputPath) returns CommandResult {
     string command = string `bal openapi flatten -i ${inputPath} -o ${outputPath}`;
     return executeCommand(command, ".");
 }
 
-# Execute `bal openapi align` command
-#
-# + inputPath - Path to flattened openAPI spec file
-# + outputPath - Path to output directory
-# + return - `CommandResult` with execution details
 public function executeBalAlign(string inputPath, string outputPath) returns CommandResult {
     string command = string `bal openapi align -i ${inputPath} -o ${outputPath}`;
     return executeCommand(command, ".");
 }
 
-# Execute bal openapi client generation command
-#
-# + inputPath - Path to aligned openAPI spec file
-# + outputPath - Path to output directory for generated ballerina client
-# + return - `CommandResult` with execution details
 public function executeBalClientGenerate(string inputPath, string outputPath) returns CommandResult {
     string command = string `bal openapi -i ${inputPath} --mode client -o ${outputPath}`;
     return executeCommand(command, getDirectoryPath(outputPath));
 }
 
-# Execute bal build command
-# + projectPath - Path to Ballerina project directory
-# + quietMode - Enable quiet mode
-# + return - CommandResult with execution details and compilation errors
-public function executeBalBuild(string projectPath, boolean quietMode = false) returns CommandResult {
-    string command = "bal build";
-    CommandResult result = executeCommand(command, projectPath);
+public function executeBalBuild(string projectPath, LogLevel logLevel = "normal") returns CommandResult {
+    CommandResult result = executeCommand("bal build", projectPath, logLevel);
 
-    // Parse compilation errors from output
     string combinedOutput = result.stdout + "\n" + result.stderr;
     result.compilationErrors = parseCmdCompilationErrors(combinedOutput);
 
-    // Override success if there are compilation errors
     if result.compilationErrors.length() > 0 {
         result.success = false;
     }
@@ -291,12 +228,6 @@ public function executeBalBuild(string projectPath, boolean quietMode = false) r
     return result;
 }
 
-# Resolves the Ballerina project directory within a connector workspace.
-# Returns the nested `ballerina/` subdirectory for SDK-style workspaces,
-# or `connectorPath` itself when the root is already the Ballerina project.
-#
-# + connectorPath - Workspace or project root path
-# + return - Path to the Ballerina project directory, or an error
 public function resolveBallerinaDir(string connectorPath) returns string|error {
     if check file:test(connectorPath + "/ballerina/Ballerina.toml", file:EXISTS) {
         return connectorPath + "/ballerina";

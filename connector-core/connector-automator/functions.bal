@@ -1,4 +1,3 @@
-import ballerina/io;
 import wso2/connector_automator.client_generator as client_generator;
 import wso2/connector_automator.document_generator as document_generator;
 import wso2/connector_automator.example_generator as example_generator;
@@ -6,69 +5,65 @@ import wso2/connector_automator.sanitizor as sanitizor;
 import wso2/connector_automator.test_generator as test_generator;
 import wso2/connector_automator.utils as oautils;
 
-function executeOpenApiPipeline(string openApiSpec, string outputDir) returns error? {
-    printOpenApiPipelineHeader(openApiSpec, outputDir, false, false);
+function executeOpenApiPipeline(string openApiSpec, string outputDir, oautils:LogLevel logLevel = "normal") returns error? {
+    oautils:logVerbose(string `spec: ${openApiSpec}`, logLevel);
+    oautils:logVerbose(string `output: ${outputDir}`, logLevel);
 
-    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", false);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir);
+    oautils:logStep(1, 6, "Sanitizing OpenAPI Specification", logLevel);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel, true);
     if sanitizeResult is error {
-        io:println(string `Sanitization failed: ${sanitizeResult.message()}`);
+        oautils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
         return sanitizeResult;
     }
-    io:println("Sanitization completed successfully");
+    oautils:logInfo("✓ sanitization complete", logLevel);
     error? sanitationsDocResult = sanitizor:generateSanitationsDoc(
-        openApiSpec, string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`, outputDir, false);
+        openApiSpec, string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`, outputDir, logLevel);
     if sanitationsDocResult is error {
-        io:println(string `Could not generate sanitations.md: ${sanitationsDocResult.message()}`);
+        oautils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
     }
 
-    printOpenApiStepHeader(2, "Generating Ballerina Client", false);
+    oautils:logStep(2, 6, "Generating Ballerina Client", logLevel);
     string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
     string clientPath = outputDir;
-    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath);
+    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, logLevel);
     if clientResult is error {
-        io:println(string `Client generation failed: ${clientResult.message()}`);
-        io:println("Continuing pipeline...");
+        oautils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`, logLevel);
     } else {
-        io:println("Client generation completed successfully");
+        oautils:logInfo("✓ client generated", logLevel);
     }
 
-    printOpenApiStepHeader(3, "Building and Validating Client", false);
-    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, false);
+    oautils:logStep(3, 6, "Building and Validating Client", logLevel);
+    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, logLevel);
     if oautils:hasCompilationErrors(buildResult) {
-        io:println("Build validation failed: client contains compilation errors");
-        io:println("Run 'bal connector openapi fix-code <connector-path>' to resolve, or fix manually");
-        return error(string `Client build failed: ${buildResult.stderr}`);
+        oautils:logError("build validation failed: client contains compilation errors");
+        oautils:logError("run 'bal connector openapi fix-code <connector-path>' to resolve");
+        return error(string `client build failed: ${buildResult.stderr}`);
     }
-    io:println("Client built and validated successfully");
+    oautils:logInfo("✓ client built and validated", logLevel);
 
-    // TODO: we shoudl call the code fixer in here to fix any compliation errors in the generated client.
-
-    printOpenApiStepHeader(4, "Generating Examples", false);
-    error? exampleResult = example_generator:executeExampleGen(outputDir);
+    oautils:logStep(4, 6, "Generating Examples", logLevel);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel, true);
     if exampleResult is error {
-        io:println(string `Example generation failed: ${exampleResult.message()}`);
-        io:println("Continuing pipeline...");
+        oautils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
     } else {
-        io:println("Example generation completed successfully");
+        oautils:logInfo("✓ examples generated", logLevel);
     }
 
-    printOpenApiStepHeader(5, "Generating Tests", false);
-    error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec);
+    oautils:logStep(5, 6, "Generating Tests", logLevel);
+    error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
     if testResult is error {
-        io:println(string `Test generation failed: ${testResult.message()}`);
-        io:println("Continuing pipeline...");
+        oautils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
     } else {
-        io:println("Test generation completed successfully");
+        oautils:logInfo("✓ tests generated", logLevel);
     }
 
-    printOpenApiStepHeader(6, "Generating Documentation", false);
-    error? docResult = document_generator:executeDocGen("generate-all", outputDir);
+    oautils:logStep(6, 6, "Generating Documentation", logLevel);
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel);
     if docResult is error {
-        io:println(string `Documentation generation failed: ${docResult.message()}`);
+        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
     } else {
-        io:println("Documentation generation completed successfully");
+        oautils:logInfo("✓ documentation generated", logLevel);
     }
 
-    printOpenApiPipelineCompletion(outputDir, false);
+    oautils:logCompletion(outputDir, logLevel);
 }

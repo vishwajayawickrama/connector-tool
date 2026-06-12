@@ -265,7 +265,7 @@ function isSdkVerboseEnabled() returns boolean {
 # + message - The log message to print
 function printConnectionEnrichLog(string message) {
     if isSdkVerboseEnabled() {
-        io:println(string `  [connection-enrich] ${message}`);
+        io:fprintln(io:stderr, string `  [connection-enrich] ${message}`);
     }
 }
 

@@ -29,7 +29,7 @@ public function generateSpecification(GeneratorConfig config) returns GeneratorR
     printGeneratorPlan(config);
 
     // Step 1: Initialize AI service (validates ANTHROPIC_API_KEY)
-    error? aiInit = utils:initAIService(config.quietMode);
+    error? aiInit = utils:initAIService(config.quietMode ? "quiet" : "normal");
     if aiInit is error {
         return error GeneratorError("ANTHROPIC_API_KEY environment variable not set. " +
                                     "LLM is required for IR generation.");
@@ -47,7 +47,7 @@ public function generateSpecification(GeneratorConfig config) returns GeneratorR
     IntermediateRepresentation ir = irResult;
 
     if !config.quietMode {
-        io:println(string `  → ${ir.functions.length()} functions, ` +
+        io:fprintln(io:stderr, string `  → ${ir.functions.length()} functions, ` +
                     string `${ir.structures.length()} structures, ` +
                     string `${ir.enums.length()} enums, ` +
                     string `${ir.collections.length()} collections`);
@@ -65,13 +65,13 @@ public function generateSpecification(GeneratorConfig config) returns GeneratorR
         if irWriteResult is string {
             irPath = irWriteResult;
             if !config.quietMode {
-                io:println(string `  → IR saved to ${irWriteResult}`);
+                io:fprintln(io:stderr, string `  → IR saved to ${irWriteResult}`);
             }
         } else if !config.quietMode {
-            io:println(string `  ⚠ Failed to save IR JSON: ${irWriteResult.message()}`);
+            io:fprintln(io:stderr, string `  ⚠ Failed to save IR JSON: ${irWriteResult.message()}`);
         }
     } else if !config.quietMode {
-        io:println(string `  ⚠ Failed to serialize IR JSON: ${irJson.message()}`);
+        io:fprintln(io:stderr, string `  ⚠ Failed to serialize IR JSON: ${irJson.message()}`);
     }
 
     // Step 4: Build Ballerina specification from IR (manual code generation)
@@ -98,7 +98,7 @@ public function generateSpecification(GeneratorConfig config) returns GeneratorR
     string specPath = writeResult;
 
     if !config.quietMode {
-        io:println(string `  → Specification written to ${specPath}`);
+        io:fprintln(io:stderr, string `  → Specification written to ${specPath}`);
     }
 
     // Step 6: Run bal format
@@ -106,11 +106,11 @@ public function generateSpecification(GeneratorConfig config) returns GeneratorR
     error? fmtResult = runBalFormat(specPath);
     if fmtResult is error {
         if !config.quietMode {
-            io:println(string `  → Formatting warning: ${fmtResult.message()}`);
+            io:fprintln(io:stderr, string `  → Formatting warning: ${fmtResult.message()}`);
         }
     } else {
         if !config.quietMode {
-            io:println("  → Formatted successfully");
+            io:fprintln(io:stderr, "  → Formatted successfully");
         }
     }
 
@@ -136,31 +136,31 @@ function printGeneratorPlan(GeneratorConfig config) {
         return;
     }
     string sep = createGeneratorSeparator("=", 70);
-    io:println(sep);
-    io:println("API Specification Generation Plan");
-    io:println(sep);
-    io:println(string `Metadata: ${config.metadataPath}`);
-    io:println(string `Output Dir: ${config.outputDir}`);
-    io:println("");
-    io:println("Operations:");
-    io:println("  1. Generate Intermediate Representation via LLM");
-    io:println("  2. Build Ballerina specification from IR");
-    io:println("  3. Write and format generated specification");
-    io:println(sep);
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "API Specification Generation Plan");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Metadata: ${config.metadataPath}`);
+    io:fprintln(io:stderr, string `Output Dir: ${config.outputDir}`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Operations:");
+    io:fprintln(io:stderr, "  1. Generate Intermediate Representation via LLM");
+    io:fprintln(io:stderr, "  2. Build Ballerina specification from IR");
+    io:fprintln(io:stderr, "  3. Write and format generated specification");
+    io:fprintln(io:stderr, sep);
 }
 
 function printGeneratorSummary(string specPath, string? irPath, decimal duration) {
     string sep = createGeneratorSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println("✓ API Specification Generation Complete");
-    io:println(sep);
-    io:println(string `  • specification: ${specPath}`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "✓ API Specification Generation Complete");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `  • specification: ${specPath}`);
     if irPath is string {
-        io:println(string `  • ir: ${<string>irPath}`);
+        io:fprintln(io:stderr, string `  • ir: ${<string>irPath}`);
     }
-    io:println(string `  • duration: ${duration}s`);
-    io:println(sep);
+    io:fprintln(io:stderr, string `  • duration: ${duration}s`);
+    io:fprintln(io:stderr, sep);
 }
 
 function printGeneratorStep(int stepNum, string title, boolean quietMode) {
@@ -168,9 +168,9 @@ function printGeneratorStep(int stepNum, string title, boolean quietMode) {
         return;
     }
     string sep = createGeneratorSeparator("-", 50);
-    io:println("");
-    io:println(string `Step ${stepNum}: ${title}`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, string `Step ${stepNum}: ${title}`);
+    io:fprintln(io:stderr, sep);
 }
 
 function createGeneratorSeparator(string char, int length) returns string {

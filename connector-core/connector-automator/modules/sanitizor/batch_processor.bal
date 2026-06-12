@@ -1,12 +1,12 @@
+import wso2/connector_automator.utils;
+
 import ballerina/data.jsondata;
 import ballerina/io;
 import ballerina/lang.runtime;
-import ballerina/log;
 
 configurable RetryConfig retryConfig = {};
 
-// Process multiple description requests with retry and exponential backoff
-public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests, string apiContext, boolean quietMode = false, RetryConfig? config = ()) returns BatchDescriptionResponse[]|LLMServiceError {
+public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests, string apiContext, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns BatchDescriptionResponse[]|LLMServiceError {
     RetryConfig retryConf = config ?: retryConfig;
 
     int attempt = 0;
@@ -14,47 +14,32 @@ public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests
         BatchDescriptionResponse[]|LLMServiceError result = generateDescriptionsBatch(requests, apiContext);
 
         if result is BatchDescriptionResponse[] {
-            if !quietMode && attempt > 0 {
-                log:printInfo("Batch description generation succeeded after retry", attempt = attempt);
+            if attempt > 0 {
+                utils:logVerbose(string `batch description generation succeeded after retry (attempt ${attempt})`, logLevel);
             }
             return result;
         } else {
-            // Check if this is the last attempt
             if attempt == retryConf.maxRetries {
-                if !quietMode {
-                    log:printError("Batch description generation failed after all retries",
-                            finalAttempt = attempt, maxRetries = retryConf.maxRetries, 'error = result);
-                }
+                utils:logError(string `batch description generation failed after all retries (${retryConf.maxRetries}): ${result.message()}`);
                 return result;
             }
 
-            // Check if error is retryable
             if !isRetryableError(result) {
-                if !quietMode {
-                    log:printError("Non-retryable error in batch description generation", 'error = result);
-                }
+                utils:logError(string `non-retryable error in batch description generation: ${result.message()}`);
                 return result;
             }
 
-            // Calculate backoff delay and wait
             decimal delay = calculateBackoffDelay(attempt, retryConf);
-            if !quietMode {
-                log:printWarn("Batch description generation failed, retrying",
-                        attempt = attempt + 1, maxRetries = retryConf.maxRetries,
-                        delaySeconds = delay, 'error = result);
-            }
-
+            utils:logVerbose(string `batch description generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`, logLevel);
             runtime:sleep(delay);
             attempt += 1;
         }
     }
 
-    // This should never be reached, but just in case
     return error LLMServiceError("Unexpected error in retry logic");
 }
 
-// Generate missing operationIds with retry and exponential backoff
-public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests, string apiContext, string[] existingOperationIds, boolean quietMode = false, RetryConfig? config = ()) returns BatchOperationIdResponse[]|LLMServiceError {
+public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests, string apiContext, string[] existingOperationIds, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns BatchOperationIdResponse[]|LLMServiceError {
     RetryConfig retryConf = config ?: retryConfig;
 
     int attempt = 0;
@@ -63,39 +48,31 @@ public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests
 
         if result is BatchOperationIdResponse[] {
             if attempt > 0 {
-                log:printInfo("Batch operationId generation succeeded after retry", attempt = attempt);
+                utils:logVerbose(string `batch operationId generation succeeded after retry (attempt ${attempt})`, logLevel);
             }
             return result;
         } else {
-            // Check if this is the last attempt
             if attempt == retryConf.maxRetries {
-                log:printError("Batch operationId generation failed after all retries",
-                        finalAttempt = attempt, maxRetries = retryConf.maxRetries, 'error = result);
+                utils:logError(string `batch operationId generation failed after all retries (${retryConf.maxRetries}): ${result.message()}`);
                 return result;
             }
 
-            // Check if error is retryable
             if !isRetryableError(result) {
-                log:printError("Non-retryable error in batch operationId generation", 'error = result);
+                utils:logError(string `non-retryable error in batch operationId generation: ${result.message()}`);
                 return result;
             }
 
-            // Calculate backoff delay and wait
             decimal delay = calculateBackoffDelay(attempt, retryConf);
-            log:printWarn("Batch operationId generation failed, retrying",
-                    attempt = attempt + 1, maxRetries = retryConf.maxRetries,
-                    delaySeconds = delay, 'error = result);
-
+            utils:logVerbose(string `batch operationId generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`, logLevel);
             runtime:sleep(delay);
             attempt += 1;
         }
     }
 
-    // This should never be reached, but just in case
     return error LLMServiceError("Unexpected error in retry logic");
 }
 
-public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests, string apiContext, string[] existingNames, boolean quietMode = false, RetryConfig? config = ()) returns BatchRenameResponse[]|LLMServiceError {
+public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests, string apiContext, string[] existingNames, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns BatchRenameResponse[]|LLMServiceError {
     RetryConfig retryConf = config ?: retryConfig;
 
     int attempt = 0;
@@ -104,46 +81,33 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
 
         if result is BatchRenameResponse[] {
             if attempt > 0 {
-                log:printInfo("Batch schema naming succeeded after retry", attempt = attempt);
+                utils:logVerbose(string `batch schema naming succeeded after retry (attempt ${attempt})`, logLevel);
             }
             return result;
         } else {
-            // Check if this is the last attempt
             if attempt == retryConf.maxRetries {
-                log:printError("Batch schema naming failed after all retries",
-                        finalAttempt = attempt, maxRetries = retryConf.maxRetries, 'error = result);
+                utils:logError(string `batch schema naming failed after all retries (${retryConf.maxRetries}): ${result.message()}`);
                 return result;
             }
 
-            // Check if error is retryable
             if !isRetryableError(result) {
-                log:printError("Non-retryable error in batch schema naming", 'error = result);
+                utils:logError(string `non-retryable error in batch schema naming: ${result.message()}`);
                 return result;
             }
 
-            // Calculate backoff delay and wait
             decimal delay = calculateBackoffDelay(attempt, retryConf);
-            log:printWarn("Batch schema naming failed, retrying",
-                    attempt = attempt + 1, maxRetries = retryConf.maxRetries,
-                    delaySeconds = delay, 'error = result);
-
+            utils:logVerbose(string `batch schema naming failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`, logLevel);
             runtime:sleep(delay);
             attempt += 1;
         }
     }
 
-    // This should never be reached, but just in case
     return error LLMServiceError("Unexpected error in retry logic");
 }
 
-// Batch processing to include parameters and operations
-public function addMissingDescriptionsBatchWithRetry(string specFilePath, int batchSize = 20, boolean quietMode = false, RetryConfig? config = ()) returns int|LLMServiceError {
-    if !quietMode {
-        log:printInfo("Processing OpenAPI spec for missing descriptions",
-                specPath = specFilePath, batchSize = batchSize);
-    }
+public function addMissingDescriptionsBatchWithRetry(string specFilePath, int batchSize = 20, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns int|LLMServiceError {
+    utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${batchSize})`, logLevel);
 
-    // Read the OpenAPI spec file
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
         return error LLMServiceError("Failed to read OpenAPI spec file", specResult);
@@ -156,11 +120,9 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
         map<json> specMap = <map<json>>specJson;
         string apiContext = extractApiContext(specJson);
 
-        // Collect all missing description requests
         DescriptionRequest[] allRequests = [];
-        map<string> requestToLocationMap = {}; // Map request ID to location for updating
+        map<string> requestToLocationMap = {};
 
-        // 1. Collect schema and property descriptions (existing logic)
         json|error componentsResult = specMap.get("components");
         if componentsResult is map<json> {
             json|error schemasResult = componentsResult.get("schemas");
@@ -177,17 +139,11 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
             }
         }
 
-        // 2. Collect parameter descriptions (ENHANCED - only processes existing parameters)
         collectParameterDescriptionRequests(specJson, allRequests, requestToLocationMap);
-
-        // 3. Collect operation descriptions for return parameters (ENHANCED - includes response descriptions)
         collectOperationDescriptionRequests(specJson, allRequests, requestToLocationMap);
 
-        // Process requests in batches with retry
         int totalRequests = allRequests.length();
-        if !quietMode {
-            log:printInfo("Collected description requests", totalRequests = totalRequests);
-        }
+        utils:logVerbose(string `collected ${totalRequests} description requests`, logLevel);
 
         int startIdx = 0;
         while startIdx < totalRequests {
@@ -197,44 +153,34 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
             }
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
-            if !quietMode {
-                log:printInfo("Processing batch with retry", batchNumber = (startIdx / batchSize) + 1,
-                        batchSize = batch.length());
-            }
+            int batchNum = (startIdx / batchSize) + 1;
+            utils:logVerbose(string `processing descriptions batch ${batchNum} (${batch.length()} items)`, logLevel);
 
-            BatchDescriptionResponse[]|LLMServiceError batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, quietMode, config);
+            BatchDescriptionResponse[]|LLMServiceError batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, logLevel, config);
             if batchResult is BatchDescriptionResponse[] {
-                if !quietMode {
-                    io:println(string `  ✓ Batch ${(startIdx / batchSize) + 1} processed (${batchResult.length()} descriptions)`);
-                }
+                utils:logVerbose(string `batch ${batchNum} complete (${batchResult.length()} descriptions)`, logLevel);
 
-                // Apply the generated descriptions
                 foreach BatchDescriptionResponse response in batchResult {
                     string? location = requestToLocationMap[response.id];
                     if location is string {
                         error? updateResult = ();
 
-                        // Determine update method based on location type
                         if location.startsWith("paths.") && location.includes("parameters[name=") {
-                            // Parameter description
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
                                 updateResult = updateParameterDescriptionInSpec(<map<json>>pathsResult, location, response.description);
                             }
                         } else if location.startsWith("paths.") && location.includes(".responses.") && location.endsWith(".description") {
-                            // Response description (NEW)
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
                                 updateResult = updateResponseDescriptionInSpec(<map<json>>pathsResult, location, response.description);
                             }
                         } else if location.startsWith("paths.") && !location.includes(".properties.") && !location.includes(".responses.") {
-                            // Operation description
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
                                 updateResult = updateOperationDescriptionInSpec(<map<json>>pathsResult, location, response.description);
                             }
                         } else {
-                            // Schema/property description 
                             json|error componentsResult2 = specMap.get("components");
                             if componentsResult2 is map<json> {
                                 json|error schemasResult2 = componentsResult2.get("schemas");
@@ -246,26 +192,19 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
 
                         if updateResult is () {
                             descriptionsAdded += 1;
-                            if !quietMode {
-                                log:printInfo("Applied batch description", id = response.id, location = location);
-                            }
+                            utils:logVerbose(string `applied description for ${response.id} at ${location}`, logLevel);
                         } else {
-                            log:printError("Failed to apply description", id = response.id, 'error = updateResult);
+                            utils:logError(string `failed to apply description for ${response.id}: ${updateResult.message()}`);
                         }
                     }
                 }
             } else {
-                if !quietMode {
-                    log:printError("Batch processing failed after all retries", batchNumber = (startIdx / batchSize) + 1, 'error = batchResult);
-                    io:println(string `  ✗ Batch ${(startIdx / batchSize) + 1} failed`);
-                }
-                // Continue with next batch instead of failing completely
+                utils:logError(string `descriptions batch ${batchNum} failed after all retries: ${batchResult.message()}`);
             }
             startIdx += batchSize;
         }
     }
 
-    // Save updated spec back to file
     string|error prettifiedResult = jsondata:prettify(specJson);
     if prettifiedResult is error {
         return error LLMServiceError("Failed to prettify JSON", prettifiedResult);
@@ -279,14 +218,9 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
     return descriptionsAdded;
 }
 
-// Batch version of renameInlineResponseSchemas with retry and configurable batch size
-public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, int batchSize = 10, boolean quietMode = false, RetryConfig? config = ()) returns int|LLMServiceError {
-    if !quietMode {
-        log:printInfo("Processing OpenAPI spec to rename InlineResponse schemas (batch mode with retry)",
-                specPath = specFilePath, batchSize = batchSize);
-    }
+public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, int batchSize = 10, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns int|LLMServiceError {
+    utils:logVerbose(string `processing spec to rename InlineResponse schemas: ${specFilePath}`, logLevel);
 
-    // Read the OpenAPI spec file
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
         return error LLMServiceError("Failed to read OpenAPI spec file", specResult);
@@ -300,7 +234,6 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
 
     map<json> specMap = <map<json>>specJson;
 
-    // Get components/schemas
     json|error componentsResult = specMap.get("components");
     if !(componentsResult is map<json>) {
         return error LLMServiceError("No components section found in OpenAPI spec");
@@ -314,7 +247,6 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
 
     map<json> schemas = <map<json>>schemasResult;
 
-    // Collect all existing schema names to ensure global uniqueness
     string[] allExistingNames = [];
     foreach string schemaName in schemas.keys() {
         if (!schemaName.startsWith("InlineResponse")) {
@@ -322,7 +254,6 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
         }
     }
 
-    // Collect all InlineResponse schemas for batch processing
     SchemaRenameRequest[] renameRequests = [];
     string apiContext = extractApiContext(specMap);
 
@@ -343,21 +274,15 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
     }
 
     if renameRequests.length() == 0 {
-        if !quietMode {
-            log:printInfo("No InlineResponse schemas found to rename");
-        }
+        utils:logVerbose("no InlineResponse schemas found to rename", logLevel);
         return 0;
     }
 
     map<string> nameMapping = {};
     int renamedCount = 0;
     int totalRequests = renameRequests.length();
+    utils:logVerbose(string `collected ${totalRequests} schema rename requests`, logLevel);
 
-    if !quietMode {
-        log:printInfo("Collected schema rename requests", totalRequests = totalRequests);
-    }
-
-    // Process requests in batches with retry
     int startIdx = 0;
     while startIdx < totalRequests {
         int endIdx = startIdx + batchSize;
@@ -366,36 +291,24 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
         }
 
         SchemaRenameRequest[] batch = renameRequests.slice(startIdx, endIdx);
-        if !quietMode {
-            log:printInfo("Processing schema rename batch with retry", batchNumber = (startIdx / batchSize) + 1,
-                    batchSize = batch.length());
-        }
+        int batchNum = (startIdx / batchSize) + 1;
+        utils:logVerbose(string `processing schema rename batch ${batchNum} (${batch.length()} schemas)`, logLevel);
 
-        BatchRenameResponse[]|LLMServiceError batchResult = generateSchemaNamesBatchWithRetry(batch, apiContext, allExistingNames, quietMode, config);
+        BatchRenameResponse[]|LLMServiceError batchResult = generateSchemaNamesBatchWithRetry(batch, apiContext, allExistingNames, logLevel, config);
         if batchResult is BatchRenameResponse[] {
-            if !quietMode {
-                io:println(string `  ✓ Batch ${(startIdx / batchSize) + 1} processed (${batchResult.length()} schemas)`);
-            }
+            utils:logVerbose(string `schema rename batch ${batchNum} complete (${batchResult.length()} schemas)`, logLevel);
 
-            // Process the generated names
             foreach BatchRenameResponse response in batchResult {
                 string newName = response.newName;
 
-                // Validate that the generated name is safe for JSON and schema naming
                 if (isValidSchemaName(newName)) {
-                    // Double-check uniqueness (LLM should handle this, but safety first)
                     if (!isNameTaken(newName, allExistingNames, nameMapping)) {
-                        // Add the name to our tracking list to prevent future conflicts
                         allExistingNames.push(newName);
                         nameMapping[response.originalName] = newName;
-                        if !quietMode {
-                            log:printInfo("Generated new name for schema", oldName = response.originalName, newName = newName);
-                        }
+                        utils:logVerbose(string `renamed schema '${response.originalName}' → '${newName}'`, logLevel);
                         renamedCount += 1;
                     } else {
-                        // Fallback if LLM somehow generated a duplicate
-                        log:printWarn("LLM generated duplicate name, using fallback",
-                                schema = response.originalName, duplicateName = newName);
+                        utils:logWarn(string `duplicate schema name generated for '${response.originalName}': '${newName}', using fallback`, logLevel);
                         string fallbackName = newName + "Alt";
                         int counter = 1;
                         while (isNameTaken(fallbackName, allExistingNames, nameMapping)) {
@@ -407,8 +320,7 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
                         renamedCount += 1;
                     }
                 } else {
-                    log:printWarn("Generated name is not valid, using fallback",
-                            schema = response.originalName, invalidName = newName);
+                    utils:logWarn(string `invalid schema name generated for '${response.originalName}': '${newName}', using fallback`, logLevel);
                     string fallbackBaseName = "Schema" + response.originalName.substring(14);
                     string fallbackName = fallbackBaseName;
                     int counter = 1;
@@ -422,20 +334,13 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
                 }
             }
         } else {
-            if !quietMode {
-                log:printError("Schema rename batch processing failed after all retries",
-                        batchNumber = (startIdx / batchSize) + 1, 'error = batchResult);
-                io:println(string `  ✗ Batch ${(startIdx / batchSize) + 1} failed`);
-            }
-            // Continue with next batch instead of failing completely
+            utils:logError(string `schema rename batch ${batchNum} failed after all retries: ${batchResult.message()}`);
         }
 
         startIdx += batchSize;
     }
 
-    // Apply the renaming if we have any mappings
     if (nameMapping.length() > 0) {
-        // First, rename the schema definitions in the schemas map
         map<json> newSchemas = {};
         foreach string oldName in schemas.keys() {
             json|error schemaValue = schemas.get(oldName);
@@ -451,14 +356,11 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
             }
         }
 
-        // Update the schemas in the components section
         components["schemas"] = newSchemas;
         specMap["components"] = components;
 
-        // Update all $ref references throughout the spec
-        json updatedSpecResult = updateSchemaReferences(specMap, nameMapping, quietMode);
+        json updatedSpecResult = updateSchemaReferences(specMap, nameMapping, logLevel);
 
-        // Write the updated spec back to file
         string|error prettifiedResult = jsondata:prettify(updatedSpecResult);
         if prettifiedResult is error {
             return error LLMServiceError("Failed to prettify JSON", prettifiedResult);
@@ -473,14 +375,9 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
     return renamedCount;
 }
 
-// Add missing operationIds to OpenAPI spec operations (batch mode with retry)
-public function addMissingOperationIdsBatchWithRetry(string specFilePath, int batchSize = 15, boolean quietMode = false, RetryConfig? config = ()) returns int|LLMServiceError {
-    if !quietMode {
-        log:printInfo("Processing OpenAPI spec for missing operationIds (batch mode with retry)",
-                specPath = specFilePath, batchSize = batchSize);
-    }
+public function addMissingOperationIdsBatchWithRetry(string specFilePath, int batchSize = 15, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns int|LLMServiceError {
+    utils:logVerbose(string `processing spec for missing operationIds: ${specFilePath}`, logLevel);
 
-    // Read the OpenAPI spec file
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
         return error LLMServiceError("Failed to read OpenAPI spec file", specResult);
@@ -494,7 +391,6 @@ public function addMissingOperationIdsBatchWithRetry(string specFilePath, int ba
 
     map<json> specMap = <map<json>>specJson;
 
-    // Get paths section
     json|error pathsResult = specMap.get("paths");
     if !(pathsResult is map<json>) {
         return error LLMServiceError("No paths section found in OpenAPI spec");
@@ -502,32 +398,25 @@ public function addMissingOperationIdsBatchWithRetry(string specFilePath, int ba
 
     map<json> paths = <map<json>>pathsResult;
 
-    // Collect all existing operationIds to ensure uniqueness
     string[] existingOperationIds = [];
     collectExistingOperationIds(paths, existingOperationIds);
 
-    // Collect all missing operationId requests
     OperationIdRequest[] missingOperationIds = [];
-    map<string> requestToLocationMap = {}; // Map request ID to location for updating
+    map<string> requestToLocationMap = {};
 
     string apiContext = extractApiContext(specMap);
     collectMissingOperationIdRequests(paths, missingOperationIds, requestToLocationMap, apiContext);
 
     int totalRequests = missingOperationIds.length();
     if totalRequests == 0 {
-        if !quietMode {
-            log:printInfo("No missing operationIds found");
-        }
+        utils:logVerbose("no missing operationIds found", logLevel);
         return 0;
     }
 
-    if !quietMode {
-        log:printInfo("Collected missing operationId requests", totalRequests = totalRequests);
-    }
+    utils:logVerbose(string `collected ${totalRequests} missing operationId requests`, logLevel);
 
     int operationIdsAdded = 0;
 
-    // Process requests in batches with retry
     int startIdx = 0;
     while startIdx < totalRequests {
         int endIdx = startIdx + batchSize;
@@ -536,47 +425,32 @@ public function addMissingOperationIdsBatchWithRetry(string specFilePath, int ba
         }
 
         OperationIdRequest[] batch = missingOperationIds.slice(startIdx, endIdx);
-        if !quietMode {
-            log:printInfo("Processing operationId batch with retry", batchNumber = (startIdx / batchSize) + 1,
-                    batchSize = batch.length());
-        }
+        int batchNum = (startIdx / batchSize) + 1;
+        utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`, logLevel);
 
-        BatchOperationIdResponse[]|LLMServiceError batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds, quietMode, config);
+        BatchOperationIdResponse[]|LLMServiceError batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds, logLevel, config);
         if batchResult is BatchOperationIdResponse[] {
-            if !quietMode {
-                io:println(string `  ✓ Batch ${(startIdx / batchSize) + 1} processed (${batchResult.length()} operations)`);
-            }
+            utils:logVerbose(string `operationId batch ${batchNum} complete (${batchResult.length()} operations)`, logLevel);
 
-            // Apply the generated operationIds
             foreach BatchOperationIdResponse response in batchResult {
                 string? location = requestToLocationMap[response.id];
                 if location is string {
                     error? updateResult = updateOperationIdInSpec(paths, location, response.operationId);
                     if updateResult is () {
-                        // Add to existing list to prevent conflicts in next batches
                         existingOperationIds.push(response.operationId);
                         operationIdsAdded += 1;
-                        if !quietMode {
-                            log:printInfo("Applied batch operationId", id = response.id,
-                                    location = location, operationId = response.operationId);
-                        }
+                        utils:logVerbose(string `applied operationId '${response.operationId}' at ${location}`, logLevel);
                     } else {
-                        log:printError("Failed to apply operationId", id = response.id, 'error = updateResult);
+                        utils:logError(string `failed to apply operationId for ${response.id}: ${updateResult.message()}`);
                     }
                 }
             }
         } else {
-            if !quietMode {
-                log:printError("OperationId batch processing failed after all retries",
-                        batchNumber = (startIdx / batchSize) + 1, 'error = batchResult);
-                io:println(string `  ✗ Batch ${(startIdx / batchSize) + 1} failed`);
-            }
-            // Continue with next batch instead of failing completely
+            utils:logError(string `operationId batch ${batchNum} failed after all retries: ${batchResult.message()}`);
         }
         startIdx += batchSize;
     }
 
-    // Save updated spec back to file
     string|error prettifiedResult = jsondata:prettify(specJson);
     if prettifiedResult is error {
         return error LLMServiceError("Failed to prettify JSON", prettifiedResult);

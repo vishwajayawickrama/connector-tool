@@ -5,22 +5,18 @@ import ballerina/lang.regexp;
 import wso2/connector_automator.utils;
 
 public function initDocumentationGenerator() returns error? {
-    return utils:initAIService(quietMode = true);
+    return utils:initAIService("quiet");
 }
 
-public function generateAllDocumentation(string connectorPath) returns error? {
-    io:println("Starting documentation generation...");
-
-    check generateBallerinaReadme(connectorPath);
-    check generateTestsReadme(connectorPath);
-    check generateExamplesReadme(connectorPath);
-    check generateIndividualExampleReadmes(connectorPath);
-    check generateMainReadme(connectorPath);
-
-    io:println("✓ All documentation generated successfully!");
+public function generateAllDocumentation(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+    check generateBallerinaReadme(connectorPath, logLevel);
+    check generateTestsReadme(connectorPath, logLevel);
+    check generateExamplesReadme(connectorPath, logLevel);
+    check generateIndividualExampleReadmes(connectorPath, logLevel);
+    check generateMainReadme(connectorPath, logLevel);
 }
 
-public function generateBallerinaReadme(string connectorPath) returns error? {
+public function generateBallerinaReadme(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
     map<string> aiContent = check generateBallerinaContent(metadata);
 
@@ -37,11 +33,10 @@ public function generateBallerinaReadme(string connectorPath) returns error? {
         check ensureDirectoryExists(parentPath);
     }
     check writeOutput(content, outputPath);
-
-    io:println(string `  ✓ ${outputPath}`);
+    utils:logVerbose(string `written: ${outputPath}`, logLevel);
 }
 
-public function generateTestsReadme(string connectorPath) returns error? {
+public function generateTestsReadme(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
     map<string> aiContent = check generateTestsContent(metadata);
 
@@ -58,22 +53,19 @@ public function generateTestsReadme(string connectorPath) returns error? {
         check ensureDirectoryExists(parentPath);
     }
     check writeOutput(content, outputPath);
-
-    io:println(string `  ✓ ${outputPath}`);
+    utils:logVerbose(string `written: ${outputPath}`, logLevel);
 }
 
-public function generateIndividualExampleReadmes(string connectorPath) returns error? {
+public function generateIndividualExampleReadmes(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
 
     string examplesPath = connectorPath + "/examples";
 
-    // Check if examples directory exists
     if !check file:test(examplesPath, file:EXISTS) {
-        io:println("  ⚠  No examples directory found - skipping individual READMEs");
+        utils:logVerbose("no examples directory found — skipping individual READMEs", logLevel);
         return;
     }
 
-    // Get all example directories
     file:MetaData[] examples = check file:readDir(examplesPath);
     int exampleCount = 0;
     int successCount = 0;
@@ -88,17 +80,17 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
 
             error? result = generateSingleExampleReadme(example.absPath, exampleDirName, metadata);
             if result is error {
-                io:println(string `  ✗ Failed: ${exampleDirName} - ${result.message()}`);
+                utils:logWarn(string `failed to generate README for ${exampleDirName}: ${result.message()}`, logLevel);
             } else {
                 successCount += 1;
-                io:println(string `  ✓ ${exampleDirPath}/README.md`);
+                utils:logVerbose(string `written: ${exampleDirPath}/README.md`, logLevel);
             }
             exampleCount += 1;
         }
     }
 
     if exampleCount > 0 {
-        io:println(string `  Generated ${successCount}/${exampleCount} individual example READMEs`);
+        utils:logVerbose(string `generated ${successCount}/${exampleCount} individual example READMEs`, logLevel);
     }
 }
 
@@ -142,7 +134,7 @@ function generateIndividualExampleContent(ExampleData exampleData, ConnectorMeta
     return content;
 }
 
-public function generateExamplesReadme(string connectorPath) returns error? {
+public function generateExamplesReadme(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
     map<string> aiContent = check generateExamplesContent(metadata);
 
@@ -158,11 +150,10 @@ public function generateExamplesReadme(string connectorPath) returns error? {
         check ensureDirectoryExists(parentPath);
     }
     check writeOutput(content, outputPath);
-
-    io:println(string `  ✓ ${outputPath}`);
+    utils:logVerbose(string `written: ${outputPath}`, logLevel);
 }
 
-public function generateMainReadme(string connectorPath) returns error? {
+public function generateMainReadme(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     ConnectorMetadata metadata = check analyzeConnector(connectorPath);
     map<string> aiContent = check generateMainContent(metadata);
 
@@ -178,8 +169,7 @@ public function generateMainReadme(string connectorPath) returns error? {
         check ensureDirectoryExists(parentPath);
     }
     check writeOutput(content, outputPath);
-
-    io:println(string `  ✓ ${outputPath}`);
+    utils:logVerbose(string `written: ${outputPath}`, logLevel);
 }
 
 function generateBallerinaContent(ConnectorMetadata metadata) returns map<string>|error {

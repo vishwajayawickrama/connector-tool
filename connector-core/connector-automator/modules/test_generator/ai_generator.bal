@@ -9,40 +9,27 @@ import ballerina/lang.regexp;
 const int MAX_OPERATIONS = 30;
 const int SDK_MAX_OPERATIONS = 60;
 
-function completeMockServer(string mockServerPath, string typesPath, boolean quietMode = false) returns error? {
-    // Read the generated mock server template
+function completeMockServer(string mockServerPath, string typesPath, utils:LogLevel logLevel = "normal") returns error? {
     string mockServerContent = check io:fileReadString(mockServerPath);
     string typesContent = check io:fileReadString(typesPath);
 
-    // generate completed mock server using LLM
     string prompt = createMockServerPrompt(mockServerContent, typesContent);
+    string completedMockServer = check utils:callAI(prompt);
+    check io:fileWriteString(mockServerPath, completedMockServer);
 
-    string completeMockServer = check utils:callAI(prompt);
-
-    check io:fileWriteString(mockServerPath, completeMockServer);
-
-    if !quietMode {
-        io:println("✓ Mock server template completed successfully");
-    }
+    utils:logVerbose("✓ mock server template completed", logLevel);
     return;
 }
 
-function generateTestFile(string connectorPath, string[]? operationIds = (), boolean quietMode = false) returns error? {
-    // Simplified analysis - only get package name and mock server content
+function generateTestFile(string connectorPath, string[]? operationIds = (), utils:LogLevel logLevel = "normal") returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForTests(connectorPath, operationIds);
-
-    // Generate test content using AI
     string testContent = check generateTestsWithAI(analysis);
 
-    // Write test file
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string testFilePath = ballerinaDir + "/tests/test.bal";
     check io:fileWriteString(testFilePath, testContent);
 
-    if !quietMode {
-        io:println("✓ Test file generated successfully");
-        io:println(string `  Output: ${testFilePath}`);
-    }
+    utils:logVerbose(string `test file written: ${testFilePath}`, logLevel);
     return;
 }
 
@@ -54,69 +41,32 @@ function generateTestsWithAI(ConnectorAnalysis analysis) returns string|error {
     return result;
 }
 
-function fixTestFileErrors(string connectorPath, boolean quietMode = false) returns error? {
-    if !quietMode {
-        io:println("Fixing compilation errors...");
-    }
+function fixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+    utils:logVerbose("fixing compilation errors", logLevel);
 
     string ballerinaDir = connectorPath + "/ballerina";
 
-    // Use the fixer to fix all compilation errors related to tests
-    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir, autoYes = true, quietMode = quietMode);
+    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir, logLevel, true);
 
     if fixResult is code_fixer:FixResult {
         if fixResult.success {
-            if !quietMode {
-                io:println("✓ All files compile successfully!");
-                if fixResult.errorsFixed > 0 {
-                    io:println(string `  Fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-                    if fixResult.appliedFixes.length() > 0 {
-                        io:println("  Applied fixes:");
-                        foreach string fix in fixResult.appliedFixes {
-                            io:println(string `    • ${fix}`);
-                        }
-                    }
-                }
-            } else {
-                // In quiet mode, still show if we fixed errors
-                if fixResult.errorsFixed > 0 {
-                    io:println(string `✓ Fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-                }
+            if fixResult.errorsFixed > 0 {
+                utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`, logLevel);
             }
         } else {
-            if !quietMode {
-                io:println("⚠  Project partially fixed:");
-                io:println(string `  Fixed: ${fixResult.errorsFixed} error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-                io:println(string `  Remaining: ${fixResult.errorsRemaining} error${fixResult.errorsRemaining == 1 ? "" : "s"}`);
-                if fixResult.appliedFixes.length() > 0 {
-                    io:println("  Applied fixes:");
-                    foreach string fix in fixResult.appliedFixes {
-                        io:println(string `    • ${fix}`);
-                    }
-                }
-                io:println("  Some errors may require manual intervention");
-            } else {
-                io:println(string `⚠  Fixed ${fixResult.errorsFixed}/${fixResult.errorsFixed + fixResult.errorsRemaining} errors (${fixResult.errorsRemaining} remaining)`);
-            }
+            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — manual intervention may be required`, logLevel);
         }
     } else {
-        if !quietMode {
-            io:println(string `✗ Failed to fix project: ${fixResult.message()}`);
-        } else {
-            io:println("✗ Compilation fix failed");
-        }
+        utils:logError(string `compilation fix failed: ${fixResult.message()}`);
         return error("Failed to fix compilation errors in the project", fixResult);
     }
 
     return;
 }
 
-function selectOperationsUsingAI(string specPath, boolean quietMode = false) returns string|error {
+function selectOperationsUsingAI(string specPath, utils:LogLevel logLevel = "normal") returns string|error {
     string[] allOperationIds = check extractOperationIdsFromSpec(specPath);
-
-    if !quietMode {
-        io:println(string `  Found ${allOperationIds.length()} operations, selecting ${MAX_OPERATIONS} for testing`);
-    }
+    utils:logVerbose(string `found ${allOperationIds.length()} operations, selecting ${MAX_OPERATIONS} for testing`, logLevel);
 
     string prompt = createOperationSelectionPrompt(allOperationIds, MAX_OPERATIONS);
 
@@ -137,15 +87,11 @@ function selectOperationsUsingAI(string specPath, boolean quietMode = false) ret
         }
     }
 
-    // Validate that we got a proper comma-separated list
     if !strings:includes(cleanedResponse, ",") {
         return error("AI did not return a proper comma-separated list of operations");
     }
 
-    if !quietMode {
-        io:println("✓ Operations selected using AI");
-    }
-
+    utils:logVerbose("✓ operations selected using AI", logLevel);
     return cleanedResponse;
 }
 
@@ -193,7 +139,7 @@ function extractOperationIdsFromSpec(string specPath) returns string[]|error {
 }
 
 // Generate and write the SDK live test file.
-function sdkGenerateTestFile(string connectorPath, string[]? operationIds = (), boolean quietMode = false) returns error? {
+function sdkGenerateTestFile(string connectorPath, string[]? operationIds = (), utils:LogLevel logLevel = "normal") returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForSdkTests(connectorPath, operationIds);
 
     string testContent = sdkSanitizeGeneratedCode(check sdkGenerateTestsWithAI(analysis));
@@ -204,11 +150,7 @@ function sdkGenerateTestFile(string connectorPath, string[]? operationIds = (), 
 
     string testFilePath = connectorPath + "/ballerina/tests/test.bal";
     check io:fileWriteString(testFilePath, testContent);
-
-    if !quietMode {
-        io:println("✓ Test file generated successfully");
-        io:println(string `  Output: ${testFilePath}`);
-    }
+    utils:logVerbose(string `test file written: ${testFilePath}`, logLevel);
     return;
 }
 
@@ -219,61 +161,29 @@ function sdkGenerateTestsWithAI(ConnectorAnalysis analysis) returns string|error
 }
 
 // Fix compilation errors in the SDK-generated test file.
-function sdkFixTestFileErrors(string connectorPath, boolean quietMode = false) returns error? {
-    if !quietMode {
-        io:println("Fixing compilation errors...");
-    }
+function sdkFixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+    utils:logVerbose("fixing compilation errors", logLevel);
 
     string ballerinaDir = connectorPath + "/ballerina";
 
     code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir,
-            quietMode = quietMode, autoYes = true);
+            logLevel, true);
 
     if fixResult is code_fixer:FixResult {
         if fixResult.success {
-            if !quietMode {
-                io:println("✓ All files compile successfully!");
-                if fixResult.errorsFixed > 0 {
-                    io:println(string `  Fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-                    if fixResult.appliedFixes.length() > 0 {
-                        io:println("  Applied fixes:");
-                        foreach string fix in fixResult.appliedFixes {
-                            io:println(string `    • ${fix}`);
-                        }
-                    }
-                }
-            } else {
-                if fixResult.errorsFixed > 0 {
-                    io:println(string `✓ Fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-                }
+            if fixResult.errorsFixed > 0 {
+                utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`, logLevel);
             }
         } else {
-            if !quietMode {
-                io:println("⚠  Project partially fixed:");
-                io:println(string `  Fixed: ${fixResult.errorsFixed} error${fixResult.errorsFixed == 1 ? "" : "s"}`);
-                io:println(string `  Remaining: ${fixResult.errorsRemaining} error${fixResult.errorsRemaining == 1 ? "" : "s"}`);
-                if fixResult.appliedFixes.length() > 0 {
-                    io:println("  Applied fixes:");
-                    foreach string fix in fixResult.appliedFixes {
-                        io:println(string `    • ${fix}`);
-                    }
-                }
-                io:println("  Some errors may require manual intervention");
-            } else {
-                io:println(string `⚠  Fixed ${fixResult.errorsFixed}/${fixResult.errorsFixed + fixResult.errorsRemaining} errors (${fixResult.errorsRemaining} remaining)`);
-            }
+            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — manual intervention may be required`, logLevel);
             return error(string `Compilation errors remain after auto-fix (${fixResult.errorsRemaining} remaining)`);
         }
     } else {
-        if !quietMode {
-            io:println(string `✗ Failed to fix project: ${fixResult.message()}`);
-        } else {
-            io:println("✗ Compilation fix failed");
-        }
+        utils:logError(string `compilation fix failed: ${fixResult.message()}`);
         return error("Failed to fix compilation errors in the project", fixResult);
     }
 
-    error? testCompilationError = sdkFixBalTestCompilationErrors(ballerinaDir, quietMode);
+    error? testCompilationError = sdkFixBalTestCompilationErrors(ballerinaDir, logLevel);
     if testCompilationError is error {
         return testCompilationError;
     }
@@ -281,12 +191,12 @@ function sdkFixTestFileErrors(string connectorPath, boolean quietMode = false) r
     return;
 }
 
-function sdkFixBalTestCompilationErrors(string ballerinaDir, boolean quietMode = false) returns error? {
+function sdkFixBalTestCompilationErrors(string ballerinaDir, utils:LogLevel logLevel = "normal") returns error? {
     int maxIterations = 2;
     int iteration = 1;
 
     while iteration <= maxIterations {
-        utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir, true);
+        utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir, "quiet");
         if testResult.success {
             return;
         }
@@ -310,19 +220,17 @@ function sdkFixBalTestCompilationErrors(string ballerinaDir, boolean quietMode =
         map<code_fixer:CompilationError[]> errorsByFile = code_fixer:groupErrorsByFile(testErrors);
         boolean anyFixApplied = false;
 
-        if !quietMode {
-            io:println(string `  Attempting test error fixes: ${testErrors.length()} errors (iteration ${iteration}/${maxIterations})`);
-        }
+        utils:logVerbose(string `attempting test error fixes: ${testErrors.length()} errors (iteration ${iteration}/${maxIterations})`, logLevel);
 
         foreach string filePath in errorsByFile.keys() {
             code_fixer:CompilationError[] fileErrors = errorsByFile.get(filePath);
             code_fixer:FixResponse|error fileFix = code_fixer:fixFileWithLLM(ballerinaDir, filePath, fileErrors,
-                quietMode);
+                logLevel);
             if fileFix is error {
                 continue;
             }
 
-            boolean|error applyResult = code_fixer:applyFix(ballerinaDir, filePath, fileFix.fixedCode, quietMode);
+            boolean|error applyResult = code_fixer:applyFix(ballerinaDir, filePath, fileFix.fixedCode, logLevel);
             if applyResult is boolean && applyResult {
                 anyFixApplied = true;
             }
@@ -335,7 +243,7 @@ function sdkFixBalTestCompilationErrors(string ballerinaDir, boolean quietMode =
         iteration += 1;
     }
 
-    utils:CommandResult finalResult = utils:executeCommand("bal test", ballerinaDir, true);
+    utils:CommandResult finalResult = utils:executeCommand("bal test", ballerinaDir, "quiet");
     if finalResult.success {
         return;
     }
@@ -621,7 +529,7 @@ function sdkNormalizeCredentialMissingNotice(string content) returns string {
     enable: !testsEnabled
 }
 function testLiveCredentialSkipNotice() {
-    io:println("LIVE TESTS SKIPPED: required credentials are not set. Configure tests/Config.toml or environment variables and re-run bal test.");
+    io:fprintln(io:stderr, "LIVE TESTS SKIPPED: required credentials are not set. Configure tests/Config.toml or environment variables and re-run bal test.");
     test:assertTrue(true, "Live tests are skipped because required credentials are not set.");
 }
 `;
@@ -673,12 +581,9 @@ function sdkExtractRemoteOperationIdsFromSpec(string specContent) returns string
     return operationIds;
 }
 
-function sdkSelectOperationsUsingAI(string specPath, boolean quietMode = false) returns string|error {
+function sdkSelectOperationsUsingAI(string specPath, utils:LogLevel logLevel = "normal") returns string|error {
     string[] allOperationIds = check sdkExtractOperationIdsFromSpec(specPath);
-
-    if !quietMode {
-        io:println(string `  Found ${allOperationIds.length()} operations, selecting ${SDK_MAX_OPERATIONS} for testing`);
-    }
+    utils:logVerbose(string `found ${allOperationIds.length()} operations, selecting ${SDK_MAX_OPERATIONS} for testing`, logLevel);
 
     string prompt = sdkCreateOperationSelectionPrompt(allOperationIds, SDK_MAX_OPERATIONS);
     string aiResponse = check utils:callAI(prompt);
@@ -700,10 +605,7 @@ function sdkSelectOperationsUsingAI(string specPath, boolean quietMode = false) 
         return error("AI did not return a proper comma-separated list of operations");
     }
 
-    if !quietMode {
-        io:println("✓ Operations selected using AI");
-    }
-
+    utils:logVerbose("✓ operations selected using AI", logLevel);
     return cleanedResponse;
 }
 

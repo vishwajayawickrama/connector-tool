@@ -1,329 +1,143 @@
+import wso2/connector_automator.utils;
+
 import ballerina/io;
 import ballerina/os;
-import ballerina/time;
 
-public function executeDocGen(string... args) returns error? {
-    if args.length() == 0 {
-        printUsage();
-        return;
-    }
-
-    if args.length() < 2 {
-        io:println("✗ Missing connector path");
-        printUsage();
-        return;
-    }
-
-    string command = args[0];
-    string connectorPath = args[1];
-
-    boolean autoYes = false;
-    boolean quietMode = false;
-    foreach string arg in args {
-        if arg == "yes" {
-            autoYes = true;
-        } else if arg == "quiet" {
-            quietMode = true;
-        }
-    }
-
-    if autoYes && !quietMode {
-        io:println("ℹ  Auto-confirm mode enabled");
-    }
-    if quietMode {
-        io:println("ℹ  Quiet mode enabled");
-    }
+public function executeDocGen(string command, string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+    utils:logVerbose(string `command: ${command}, connector: ${connectorPath}`, logLevel);
 
     match command {
         "generate-all" => {
-            check generateAllReadmes(connectorPath, autoYes, quietMode);
+            check generateAllReadmes(connectorPath, true, logLevel);
         }
         "generate-ballerina" => {
-            check genBallerinaReadme(connectorPath, autoYes, quietMode);
+            check genBallerinaReadme(connectorPath, true, logLevel);
         }
         "generate-tests" => {
-            check genTestsReadme(connectorPath, autoYes, quietMode);
+            check genTestsReadme(connectorPath, true, logLevel);
         }
         "generate-examples" => {
-            check genExamplesReadme(connectorPath, autoYes, quietMode);
+            check genExamplesReadme(connectorPath, true, logLevel);
         }
         "generate-individual-examples" => {
-            check genIndividualExampleReadmes(connectorPath, autoYes, quietMode);
+            check genIndividualExampleReadmes(connectorPath, true, logLevel);
         }
         "generate-main" => {
-            check genMainReadme(connectorPath, autoYes, quietMode);
+            check genMainReadme(connectorPath, true, logLevel);
         }
         _ => {
-            io:println(string `✗ Unknown command: '${command}'`);
+            utils:logError(string `unknown doc command: '${command}'`);
             printUsage();
         }
     }
 }
 
-function generateAllReadmes(string connectorPath, boolean autoYes, boolean quietMode) returns error? {
-    printDocumentationPlan(connectorPath, quietMode);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  AI-Generated Content Notice:");
-        io:println("   All documentation is AI-generated and requires review");
-        io:println("   Verify links, credentials, and technical accuracy");
-    }
-
-    if !getUserConfirmation("\nProceed with documentation generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+function generateAllReadmes(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
+    if !getUserConfirmation("Proceed with documentation generation?", autoYes) {
+        utils:logInfo("skipping documentation generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
-
     check validateApiKey();
-
     check initDocumentationGenerator();
-    io:println("✓ AI generator initialized");
+    utils:logVerbose("✓ AI generator initialized", logLevel);
 
-    io:println("");
-    io:println("Generating documentation files...");
+    utils:logVerbose("generating documentation files", logLevel);
+    check generateAllDocumentation(connectorPath, logLevel);
 
-    check generateAllDocumentation(connectorPath);
-
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    printDocCompletionSummary(connectorPath, duration, quietMode);
+    utils:logInfo(string `✓ documentation generated at ${connectorPath}/`, logLevel);
 }
 
-function genBallerinaReadme(string connectorPath, boolean autoYes, boolean quietMode) returns error? {
-    printDocTypeHeader("Ballerina Module README", connectorPath, quietMode);
-
+function genBallerinaReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
     if !getUserConfirmation("Proceed with generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+        utils:logInfo("skipping Ballerina README generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
     check validateApiKey();
     check initDocumentationGenerator();
 
-    io:println("Generating README...");
-    error? result = generateBallerinaReadme(connectorPath);
+    error? result = generateBallerinaReadme(connectorPath, logLevel);
     if result is error {
-        io:println(string `✗ Generation failed: ${result.message()}`);
+        utils:logError(string `README generation failed: ${result.message()}`);
         return result;
     }
-
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    io:println("");
-    io:println("✓ README generated successfully");
-    io:println(string `  Output: ${connectorPath}/ballerina/README.md`);
-    io:println(string `  Duration: ${duration}s`);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  Review required: API URLs, setup steps, code examples");
-    }
+    utils:logInfo(string `✓ README: ${connectorPath}/ballerina/README.md`, logLevel);
 }
 
-function genTestsReadme(string connectorPath, boolean autoYes, boolean quietMode) returns error? {
-    printDocTypeHeader("Tests README", connectorPath, quietMode);
-
+function genTestsReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
     if !getUserConfirmation("Proceed with generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+        utils:logInfo("skipping tests README generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
     check validateApiKey();
     check initDocumentationGenerator();
 
-    io:println("Generating README...");
-    error? result = generateTestsReadme(connectorPath);
+    error? result = generateTestsReadme(connectorPath, logLevel);
     if result is error {
-        io:println(string `✗ Generation failed: ${result.message()}`);
+        utils:logError(string `README generation failed: ${result.message()}`);
         return result;
     }
-
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    io:println("");
-    io:println("✓ README generated successfully");
-    io:println(string `  Output: ${connectorPath}/ballerina/tests/README.md`);
-    io:println(string `  Duration: ${duration}s`);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  Review required: Environment variables, test commands");
-    }
+    utils:logInfo(string `✓ README: ${connectorPath}/ballerina/tests/README.md`, logLevel);
 }
 
-function genExamplesReadme(string connectorPath, boolean autoYes, boolean quietMode) returns error? {
-    printDocTypeHeader("Examples README", connectorPath, quietMode);
-
+function genExamplesReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
     if !getUserConfirmation("Proceed with generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+        utils:logInfo("skipping examples README generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
     check validateApiKey();
     check initDocumentationGenerator();
 
-    io:println("Generating README...");
-    error? result = generateExamplesReadme(connectorPath);
+    error? result = generateExamplesReadme(connectorPath, logLevel);
     if result is error {
-        io:println(string `✗ Generation failed: ${result.message()}`);
+        utils:logError(string `README generation failed: ${result.message()}`);
         return result;
     }
-
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    io:println("");
-    io:println("✓ README generated successfully");
-    io:println(string `  Output: ${connectorPath}/examples/README.md`);
-    io:println(string `  Duration: ${duration}s`);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  Review required: Example descriptions, GitHub links");
-    }
+    utils:logInfo(string `✓ README: ${connectorPath}/examples/README.md`, logLevel);
 }
 
-function genIndividualExampleReadmes(string connectorPath, boolean autoYes, boolean quietMode) returns error? {
-    printDocTypeHeader("Individual Example READMEs", connectorPath, quietMode);
-
+function genIndividualExampleReadmes(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
     if !getUserConfirmation("Proceed with generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+        utils:logInfo("skipping individual example READMEs generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
     check validateApiKey();
     check initDocumentationGenerator();
 
-    io:println("Generating READMEs...");
-    error? result = generateIndividualExampleReadmes(connectorPath);
+    error? result = generateIndividualExampleReadmes(connectorPath, logLevel);
     if result is error {
-        io:println(string `✗ Generation failed: ${result.message()}`);
+        utils:logError(string `README generation failed: ${result.message()}`);
         return result;
     }
-
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    io:println("");
-    io:println("✓ READMEs generated successfully");
-    io:println(string `  Output: ${connectorPath}/examples/*/README.md`);
-    io:println(string `  Duration: ${duration}s`);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  Review required: Config.toml values, curl commands");
-    }
+    utils:logInfo(string `✓ READMEs: ${connectorPath}/examples/*/README.md`, logLevel);
 }
 
-function genMainReadme(string connectorPath, boolean autoYes, boolean quietMode) returns error? {
-    printDocTypeHeader("Root README", connectorPath, quietMode);
-
+function genMainReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
     if !getUserConfirmation("Proceed with generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+        utils:logInfo("skipping root README generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
     check validateApiKey();
     check initDocumentationGenerator();
 
-    io:println("Generating README...");
-    error? result = generateMainReadme(connectorPath);
+    error? result = generateMainReadme(connectorPath, logLevel);
     if result is error {
-        io:println(string `✗ Generation failed: ${result.message()}`);
+        utils:logError(string `README generation failed: ${result.message()}`);
         return result;
     }
-
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    io:println("");
-    io:println("✓ README generated successfully");
-    io:println(string `  Output: ${connectorPath}/README.md`);
-    io:println(string `  Duration: ${duration}s`);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  Review required: CI/CD badges, package links");
-    }
-}
-
-function printDocumentationPlan(string connectorPath, boolean quietMode) {
-    if quietMode {
-        return;
-    }
-
-    string sep = createSeparator("=", 70);
-    io:println(sep);
-    io:println("Documentation Generation");
-    io:println(sep);
-    io:println(string `Connector: ${connectorPath}`);
-    io:println("");
-    io:println("Documentation Files:");
-    io:println("  1. Ballerina module README");
-    io:println("  2. Tests README");
-    io:println("  3. Main examples README");
-    io:println("  4. Individual example READMEs");
-    io:println("  5. Root module README");
-    io:println(sep);
-}
-
-function printDocTypeHeader(string docType, string connectorPath, boolean quietMode) {
-    if quietMode {
-        return;
-    }
-
-    string sep = createSeparator("-", 60);
-    io:println("");
-    io:println(docType);
-    io:println(sep);
-    io:println(string `Connector: ${connectorPath}`);
-    io:println(sep);
-}
-
-function printDocCompletionSummary(string connectorPath, decimal duration, boolean quietMode) {
-    string sep = createSeparator("=", 70);
-
-    io:println("");
-    io:println(sep);
-    io:println("Documentation Generation Complete");
-    io:println(sep);
-    io:println(string `  • duration: ${duration}s`);
-    io:println("");
-    io:println("Generated Files:");
-    io:println(string `  • ${connectorPath}/README.md`);
-    io:println(string `  • ${connectorPath}/ballerina/README.md`);
-    io:println(string `  • ${connectorPath}/ballerina/tests/README.md`);
-    io:println(string `  • ${connectorPath}/examples/README.md`);
-    io:println(string `  • ${connectorPath}/examples/*/README.md`);
-
-    if !quietMode {
-        io:println("");
-        io:println("⚠  Manual Review Required:");
-        io:println("   • API URLs and documentation links");
-        io:println("   • Authentication steps and credentials");
-        io:println("   • Code examples and Config.toml variables");
-        io:println("   • GitHub repository links and CI/CD badges");
-        io:println("   • Example descriptions and functionality");
-    }
-
-    io:println("");
-    io:println("Next Steps:");
-    io:println("  • Review generated READMEs for accuracy");
-    io:println("  • Test example commands and configurations");
-    io:println("  • Update links and badges as needed");
-    io:println(sep);
+    utils:logInfo(string `✓ README: ${connectorPath}/README.md`, logLevel);
 }
 
 function getUserConfirmation(string message, boolean autoYes) returns boolean {
     if autoYes {
         return true;
     }
-    io:print(string `${message} (y/n): `);
+    io:fprint(io:stderr, string `${message} (y/n): `);
     string|io:Error userInput = io:readln();
     if userInput is io:Error {
         return false;
@@ -338,47 +152,20 @@ function validateApiKey() returns error? {
     }
 }
 
-function createSeparator(string char, int length) returns string {
-    string[] chars = [];
-    int i = 0;
-    while i < length {
-        chars.push(char);
-        i += 1;
-    }
-    return string:'join("", ...chars);
-}
-
 function printUsage() {
-    io:println("Documentation Generator");
-    io:println("");
-    io:println("USAGE");
-    io:println("  bal run -- generate-docs <command> <connector-path> [options]");
-    io:println("");
-    io:println("COMMANDS");
-    io:println("  generate-all                 Generate all READMEs");
-    io:println("  generate-ballerina           Generate module README");
-    io:println("  generate-tests               Generate tests README");
-    io:println("  generate-examples            Generate examples README");
-    io:println("  generate-individual-examples Generate example READMEs");
-    io:println("  generate-main                Generate root README");
-    io:println("");
-    io:println("OPTIONS");
-    io:println("  yes      Auto-confirm all prompts");
-    io:println("  quiet    Minimal logging output");
-    io:println("");
-    io:println("EXAMPLES");
-    io:println("  bal run -- generate-docs generate-all ./connector");
-    io:println("  bal run -- generate-docs generate-ballerina ./connector yes");
-    io:println("  bal run -- generate-docs generate-all ./connector yes quiet");
-    io:println("");
-    io:println("ENVIRONMENT");
-    io:println("  ANTHROPIC_API_KEY    Required for AI-powered documentation");
-    io:println("");
-    io:println("FEATURES");
-    io:println("  • AI-generated documentation with templates");
-    io:println("  • Multiple README types for different audiences");
-    io:println("  • Interactive confirmation prompts");
-    io:println("  • CI/CD friendly with auto-confirm mode");
-    io:println("  • Comprehensive review guidelines");
-    io:println("");
+    io:fprintln(io:stderr, "Documentation Generator");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE");
+    io:fprintln(io:stderr, "  bal connector openapi generate-docs generate-all <connector-path> [-q|-v]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "COMMANDS");
+    io:fprintln(io:stderr, "  generate-all                 Generate all READMEs");
+    io:fprintln(io:stderr, "  generate-ballerina           Generate module README");
+    io:fprintln(io:stderr, "  generate-tests               Generate tests README");
+    io:fprintln(io:stderr, "  generate-examples            Generate examples README");
+    io:fprintln(io:stderr, "  generate-individual-examples Generate example READMEs");
+    io:fprintln(io:stderr, "  generate-main                Generate root README");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ENVIRONMENT");
+    io:fprintln(io:stderr, "  ANTHROPIC_API_KEY    Required for AI-powered documentation");
 }

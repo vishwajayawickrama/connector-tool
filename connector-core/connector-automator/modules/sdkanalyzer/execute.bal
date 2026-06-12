@@ -38,7 +38,7 @@ public function executeSdkAnalyzer(string... args) returns error? {
 
     // Validate outputDir to avoid accidental key=value or flag usage
     if outputDir.includes("=") || outputDir.startsWith("-") {
-        io:println("Invalid output-dir argument. It looks like you passed a flag or key=value pair instead of a directory path.");
+        io:fprintln(io:stderr, "Invalid output-dir argument. It looks like you passed a flag or key=value pair instead of a directory path.");
         printUsage();
         return;
     }
@@ -59,7 +59,7 @@ public function executeSdkAnalyzer(string... args) returns error? {
 # + return - Error if analysis fails
 function analyzeSDK(string sdkRef, string outputDir, AnalyzerConfig config) returns error? {
     if !config.quietMode {
-        io:println(string `Analyzing SDK: ${sdkRef}`);
+        io:fprintln(io:stderr, string `Analyzing SDK: ${sdkRef}`);
     }
 
     time:Utc startTime = time:utcNow();
@@ -72,13 +72,13 @@ function analyzeSDK(string sdkRef, string outputDir, AnalyzerConfig config) retu
 
     if result is AnalysisResult {
         if !config.quietMode {
-            io:println(string `Analysis completed in ${duration} seconds`);
-            io:println(string `Metadata file: ${result.metadataPath}`);
+            io:fprintln(io:stderr, string `Analysis completed in ${duration} seconds`);
+            io:fprintln(io:stderr, string `Metadata file: ${result.metadataPath}`);
         }
         return;
     }
 
-    io:println(string `Analysis failed: ${result.message()}`);
+    io:fprintln(io:stderr, string `Analysis failed: ${result.message()}`);
     return result;
 }
 
@@ -179,30 +179,30 @@ function parseCommandLineArgs(string[] args) returns AnalyzerConfig {
 
 # Print usage information.
 function printUsage() {
-    io:println();
-    io:println("SDK Analyzer - Extract metadata/IR from Java SDK JAR files");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal run -- analyze <sdk-jar> <javadoc-jar> <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  sdk-jar               Path to the Java SDK JAR file");
-    io:println("  javadoc-jar           Path to the corresponding javadoc JAR file");
-    io:println("  output-dir            Directory to save generated files");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes                   Auto-confirm all prompts");
-    io:println("  quiet                 Minimal logging output");
-    io:println("  include-deprecated    Include deprecated methods/classes");
-    io:println("  exclude-packages=     Comma-separated packages to exclude");
-    io:println("  methods-to-list=N     Number of top-ranked methods to include (default: 5)");
-    io:println();
-    io:println("EXAMPLES:");
-    io:println("  bal run -- analyze ./s3-2.25.16.jar ./s3-2.25.16-javadoc.jar ./output");
-    io:println("  bal run -- analyze ./sdk.jar ./sdk-javadoc.jar ./output yes quiet");
-    io:println();
-    io:println("OUTPUT:");
-    io:println("  - <client>-metadata.json   Complete SDK metadata for downstream generation");
-    io:println("  - analysis-report.txt      Analysis summary report");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "SDK Analyzer - Extract metadata/IR from Java SDK JAR files");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal run -- analyze <sdk-jar> <javadoc-jar> <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  sdk-jar               Path to the Java SDK JAR file");
+    io:fprintln(io:stderr, "  javadoc-jar           Path to the corresponding javadoc JAR file");
+    io:fprintln(io:stderr, "  output-dir            Directory to save generated files");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes                   Auto-confirm all prompts");
+    io:fprintln(io:stderr, "  quiet                 Minimal logging output");
+    io:fprintln(io:stderr, "  include-deprecated    Include deprecated methods/classes");
+    io:fprintln(io:stderr, "  exclude-packages=     Comma-separated packages to exclude");
+    io:fprintln(io:stderr, "  methods-to-list=N     Number of top-ranked methods to include (default: 5)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLES:");
+    io:fprintln(io:stderr, "  bal run -- analyze ./s3-2.25.16.jar ./s3-2.25.16-javadoc.jar ./output");
+    io:fprintln(io:stderr, "  bal run -- analyze ./sdk.jar ./sdk-javadoc.jar ./output yes quiet");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUT:");
+    io:fprintln(io:stderr, "  - <client>-metadata.json   Complete SDK metadata for downstream generation");
+    io:fprintln(io:stderr, "  - analysis-report.txt      Analysis summary report");
+    io:fprintln(io:stderr, "");
 }

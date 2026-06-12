@@ -218,39 +218,20 @@ repository = "local"
 `;
 }
 
-public function fixExampleCode(string exampleDir, string exampleName) returns error? {
-    //io:println(string `Checking and fixing compilation errors for example: ${exampleName}`);
-
-    // Use the fixer to fix all compilation errors in the example directory
-    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(exampleDir, autoYes = true, quietMode = true);
+public function fixExampleCode(string exampleDir, string exampleName, oautils:LogLevel logLevel = "normal") returns error? {
+    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(exampleDir, "quiet", true);
 
     if fixResult is code_fixer:FixResult {
         if fixResult.success {
-            io:println(string `✓ Example '${exampleName}' compiles successfully!`);
             if fixResult.errorsFixed > 0 {
-                io:println(string `  Fixed ${fixResult.errorsFixed} compilation errors`);
-                if fixResult.appliedFixes.length() > 0 {
-                    io:println("  Applied fixes:");
-                    foreach string fix in fixResult.appliedFixes {
-                        io:println(string `    • ${fix}`);
-                    }
-                }
+                oautils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"} in ${exampleName}`, logLevel);
             }
         } else {
-            io:println(string `⚠ Example '${exampleName}' partially fixed:`);
-            io:println(string `  Fixed ${fixResult.errorsFixed} errors`);
-            io:println(string `  ${fixResult.errorsRemaining} errors remain`);
-            if fixResult.appliedFixes.length() > 0 {
-                io:println("  Applied fixes:");
-                foreach string fix in fixResult.appliedFixes {
-                    io:println(string `    • ${fix}`);
-                }
-            }
-            io:println("  Some errors may require manual intervention");
+            oautils:logWarn(string `example '${exampleName}': ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remain`, logLevel);
             return error(string `Example '${exampleName}' still has ${fixResult.errorsRemaining} unresolved compilation errors`);
         }
     } else {
-        io:println(string `✗ Failed to fix example '${exampleName}': ${fixResult.message()}`);
+        oautils:logError(string `failed to fix example '${exampleName}': ${fixResult.message()}`);
         return error(string `Failed to fix compilation errors in example: ${exampleName}`, fixResult);
     }
 
@@ -556,39 +537,38 @@ function extractCompactTypeDefinition(string typesContent, string typeName) retu
     return typeDef;
 }
 
-function packAndPushConnector(string connectorPath) returns error? {
+function packAndPushConnector(string connectorPath, oautils:LogLevel logLevel = "normal") returns error? {
     string ballerinaDir = check oautils:resolveBallerinaDir(connectorPath);
 
     check ensureConnectorReadme(ballerinaDir);
 
-    error? prepareError = prepareNativeInteropForPack(connectorPath, ballerinaDir);
+    error? prepareError = prepareNativeInteropForPack(connectorPath, ballerinaDir, logLevel);
     if prepareError is error {
         return prepareError;
     }
 
-    // Execute bal pack with working directory specified
-    io:println("Running 'bal pack' in connector directory...");
+    oautils:logVerbose("running 'bal pack'", logLevel);
     int|error packExitCode = runShellInDir(ballerinaDir, "bal pack");
     if packExitCode is error {
         return error("Failed to execute 'bal pack' command", packExitCode);
     }
 
     if packExitCode != 0 {
-        io:println("'bal pack' failed. Attempting automated connector fixes before retry...");
+        oautils:logVerbose("'bal pack' failed — attempting automated fixes before retry", logLevel);
 
         code_fixer:FixResult|code_fixer:BallerinaFixerError javaFixResult =
-            code_fixer:fixJavaNativeAdaptorErrors(connectorPath, quietMode = true, autoYes = true);
+            code_fixer:fixJavaNativeAdaptorErrors(connectorPath, "quiet", true);
         if javaFixResult is code_fixer:BallerinaFixerError {
             return error("'bal pack' failed and Java native auto-fix failed", javaFixResult);
         }
 
         code_fixer:FixResult|code_fixer:BallerinaFixerError balFixResult =
-            code_fixer:fixAllErrors(ballerinaDir, quietMode = true, autoYes = true);
+            code_fixer:fixAllErrors(ballerinaDir, "quiet", true);
         if balFixResult is code_fixer:BallerinaFixerError {
             return error("'bal pack' failed and Ballerina auto-fix failed", balFixResult);
         }
 
-        io:println("Retrying 'bal pack' after automated fixes...");
+        oautils:logVerbose("retrying 'bal pack' after automated fixes", logLevel);
         int|error retryPackExitCode = runShellInDir(ballerinaDir, "bal pack");
         if retryPackExitCode is error {
             return error("Failed to execute retry 'bal pack' command", retryPackExitCode);
@@ -598,7 +578,7 @@ function packAndPushConnector(string connectorPath) returns error? {
         }
     }
 
-    io:println("Running 'bal push --repository=local' in connector directory...");
+    oautils:logVerbose("running 'bal push --repository=local'", logLevel);
     int|error pushExitCode = runShellInDir(ballerinaDir, "bal push --repository=local");
     if pushExitCode is error {
         return error("Failed to execute 'bal push --repository=local' command", pushExitCode);
@@ -639,7 +619,7 @@ function runShellInDir(string workingDir, string shellCommand) returns int|error
     return exitCode;
 }
 
-function prepareNativeInteropForPack(string connectorPath, string ballerinaDir) returns error? {
+function prepareNativeInteropForPack(string connectorPath, string ballerinaDir, oautils:LogLevel logLevel = "normal") returns error? {
     boolean|error hasBuildGradle = file:test(connectorPath + "/build.gradle", file:EXISTS);
     boolean|error hasNativeBuildGradle = file:test(connectorPath + "/native/build.gradle", file:EXISTS);
     boolean nativeRequired = (hasBuildGradle is boolean && hasBuildGradle) ||
@@ -663,25 +643,25 @@ function prepareNativeInteropForPack(string connectorPath, string ballerinaDir) 
     check ensureBuildGradleCompatibility(nativeDir);
     check ensureBuildGradleProducesFatJar(nativeDir);
 
-    io:println("Building native adaptor JAR...");
+    oautils:logVerbose("building native adaptor JAR", logLevel);
     record {|int exitCode; string stdout; string stderr;|}|error gradleRun = runGradleJarInDir(nativeDir);
     if gradleRun is error {
         return error("Failed to execute 'gradle jar'", gradleRun);
     }
     int gradleExit = gradleRun.exitCode;
     if gradleExit != 0 {
-        io:println("'gradle jar' failed; attempting Java native auto-fix...");
+        oautils:logVerbose("'gradle jar' failed — attempting Java native auto-fix", logLevel);
         string firstGradleError = firstNonEmptyLine(gradleRun.stderr);
         if firstGradleError.length() > 0 {
-            io:println(string `  Gradle error: ${firstGradleError}`);
+            oautils:logVerbose(string `gradle error: ${firstGradleError}`, logLevel);
         }
         code_fixer:FixResult|code_fixer:BallerinaFixerError javaFixResult =
-            code_fixer:fixJavaNativeAdaptorErrors(nativeDir, quietMode = true, autoYes = true);
+            code_fixer:fixJavaNativeAdaptorErrors(nativeDir, "quiet", true);
 
         if javaFixResult is code_fixer:BallerinaFixerError {
             string? existingJarPath = findNativeJarRelativePath(nativeDir);
             if existingJarPath is string {
-                io:println("Java native auto-fix failed; using existing native adaptor JAR...");
+                oautils:logVerbose("Java native auto-fix failed — using existing native adaptor JAR", logLevel);
             } else {
                 return error("'gradle jar' command failed and Java native auto-fix failed", javaFixResult);
             }
@@ -694,15 +674,15 @@ function prepareNativeInteropForPack(string connectorPath, string ballerinaDir) 
             if retryGradleExit != 0 {
                 string retryGradleError = firstNonEmptyLine(retryGradleRun.stderr);
                 if retryGradleError.length() > 0 {
-                    io:println(string `  Retry gradle error: ${retryGradleError}`);
+                    oautils:logVerbose(string `retry gradle error: ${retryGradleError}`, logLevel);
                 }
                 boolean fallbackCopied = check tryUseExistingNativeJar(nativeDir);
                 if fallbackCopied {
-                    io:println("Retry 'gradle jar' failed; reused existing native adaptor JAR for this dataset...");
+                    oautils:logVerbose("retry 'gradle jar' failed — reused existing native adaptor JAR", logLevel);
                 }
                 string? existingJarPath = findNativeJarRelativePath(nativeDir);
                 if existingJarPath is string {
-                    io:println("Retry 'gradle jar' failed; using existing native adaptor JAR...");
+                    oautils:logVerbose("retry 'gradle jar' failed — using existing native adaptor JAR", logLevel);
                 } else {
                     return error("'gradle jar' command failed after Java native auto-fix with exit code: " +
                         retryGradleExit.toString());

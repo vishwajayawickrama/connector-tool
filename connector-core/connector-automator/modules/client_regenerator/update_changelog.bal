@@ -41,13 +41,13 @@ function parsePrDescription(string prDescription) returns map<string[]>|error {
 
         if trimmed == "Breaking Changes" || trimmed == "### Breaking Changes" {
             currentSection = "Changed";
-            io:println("Found Breaking Changes section");
+            io:fprintln(io:stderr, "Found Breaking Changes section");
         } else if trimmed == "New Features" || trimmed == "### New Features" {
             currentSection = "Added";
-            io:println("Found New Features section");
+            io:fprintln(io:stderr, "Found New Features section");
         } else if trimmed == "Improvements" || trimmed == "### Improvements" {
             currentSection = "Fixed";
-            io:println("Found Improvements section");
+            io:fprintln(io:stderr, "Found Improvements section");
         } else if trimmed.startsWith("- ") {
             string item = trimmed.substring(2).trim();
 
@@ -60,7 +60,7 @@ function parsePrDescription(string prDescription) returns map<string[]>|error {
                 if item.length() > 50 {
                     preview = preview + "...";
                 }
-                io:println(string `Added to ${currentSection}: ${preview}`);
+                io:fprintln(io:stderr, string `Added to ${currentSection}: ${preview}`);
             }
         }
     }
@@ -114,12 +114,12 @@ function findChangelogFile() returns string|error? {
 }
 
 function updateChangelog(string prDescription) returns error? {
-    io:println("Updating CHANGELOG.md...");
-    io:println(string `PR Description length: ${prDescription.length()} chars`);
-    io:println("First 200 chars of PR description:");
+    io:fprintln(io:stderr, "Updating CHANGELOG.md...");
+    io:fprintln(io:stderr, string `PR Description length: ${prDescription.length()} chars`);
+    io:fprintln(io:stderr, "First 200 chars of PR description:");
 
     string preview = safeSubstring(prDescription, 0, 200);
-    io:println(preview);
+    io:fprintln(io:stderr, preview);
 
     map<string[]> changes = check parsePrDescription(prDescription);
 
@@ -127,25 +127,25 @@ function updateChangelog(string prDescription) returns error? {
                        (changes["Changed"] ?: []).length() +
                        (changes["Fixed"] ?: []).length();
 
-    io:println(string `Total changes found: ${totalChanges}`);
-    io:println(string `Added: ${(changes["Added"] ?: []).length()}`);
-    io:println(string `Changed: ${(changes["Changed"] ?: []).length()}`);
-    io:println(string `Fixed: ${(changes["Fixed"] ?: []).length()}`);
+    io:fprintln(io:stderr, string `Total changes found: ${totalChanges}`);
+    io:fprintln(io:stderr, string `Added: ${(changes["Added"] ?: []).length()}`);
+    io:fprintln(io:stderr, string `Changed: ${(changes["Changed"] ?: []).length()}`);
+    io:fprintln(io:stderr, string `Fixed: ${(changes["Fixed"] ?: []).length()}`);
 
     if totalChanges == 0 {
-        io:println("No changelog entries found in PR description");
+        io:fprintln(io:stderr, "No changelog entries found in PR description");
         return;
     }
 
     string? existingFile = check findChangelogFile();
     string changelogPath = existingFile is string ? existingFile : "CHANGELOG.md";
 
-    io:println(string `Using changelog file: ${changelogPath}`);
+    io:fprintln(io:stderr, string `Using changelog file: ${changelogPath}`);
 
     string newUnreleasedSection = generateUnreleasedSection(changes);
 
     if existingFile is string {
-        io:println("Updating existing CHANGELOG.md");
+        io:fprintln(io:stderr, "Updating existing CHANGELOG.md");
         string content = check io:fileReadString(changelogPath);
         string[] lines = regex:split(content, "\n");
 
@@ -183,7 +183,7 @@ function updateChangelog(string prDescription) returns error? {
 
             string updatedContent = string:'join("\n", ...updatedLines);
             check io:fileWriteString(changelogPath, updatedContent);
-            io:println("Updated existing CHANGELOG.md");
+            io:fprintln(io:stderr, "Updated existing CHANGELOG.md");
         } else {
             int insertIndex = 0;
 
@@ -215,15 +215,15 @@ function updateChangelog(string prDescription) returns error? {
 
             string updatedContent = string:'join("\n", ...updatedLines);
             check io:fileWriteString(changelogPath, updatedContent);
-            io:println("Added [Unreleased] section to existing CHANGELOG.md");
+            io:fprintln(io:stderr, "Added [Unreleased] section to existing CHANGELOG.md");
         }
     } else {
-        io:println("Creating new CHANGELOG.md");
+        io:fprintln(io:stderr, "Creating new CHANGELOG.md");
         check io:fileWriteString(changelogPath, buildNewChangelog(newUnreleasedSection));
-        io:println("Created new CHANGELOG.md");
+        io:fprintln(io:stderr, "Created new CHANGELOG.md");
     }
 
-    io:println(string `Added ${totalChanges} changelog entries`);
+    io:fprintln(io:stderr, string `Added ${totalChanges} changelog entries`);
 }
 
 function buildNewChangelog(string unreleasedSection) returns string {

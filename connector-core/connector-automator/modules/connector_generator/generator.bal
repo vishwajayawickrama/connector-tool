@@ -17,7 +17,7 @@ public function generateConnector(ConnectorGeneratorConfig config)
 
     printConnectorPlan(config);
 
-    error? aiInit = utils:initAIService(config.quietMode);
+    error? aiInit = utils:initAIService(config.quietMode ? "quiet" : "normal");
     if aiInit is error {
         return error ConnectorGeneratorError("ANTHROPIC_API_KEY environment variable not set. " +
             "LLM is mandatory for connector generation.");
@@ -47,7 +47,7 @@ public function generateConnector(ConnectorGeneratorConfig config)
     if validationError is error {
         validationFailures.push(validationError.message());
         if !config.quietMode {
-            io:println("  → Validation reported issues. Artifacts will still be written for inspection.");
+            io:fprintln(io:stderr, "  → Validation reported issues. Artifacts will still be written for inspection.");
         }
     }
 
@@ -97,13 +97,13 @@ Artifacts written for inspection:
     if config.enableCodeFixing {
         codeFixingRan = true;
         if !config.quietMode {
-            io:println("Running post-generation native adaptor code fixing...");
+            io:fprintln(io:stderr, "Running post-generation native adaptor code fixing...");
         }
 
         boolean autoYes = config.fixMode != "report-only";
         string nativeProjectPath = string `${config.outputDir}/native`;
         fixer:FixResult|fixer:BallerinaFixerError fixResult = fixer:fixJavaNativeAdaptorErrors(nativeProjectPath,
-                config.quietMode, autoYes, config.maxFixIterations);
+                config.quietMode ? "quiet" : "normal", autoYes, config.maxFixIterations);
         if fixResult is fixer:BallerinaFixerError {
             return error ConnectorGeneratorError(string `Code fixing failed: ${fixResult.message()}`, fixResult);
         }
@@ -133,38 +133,38 @@ function printConnectorPlan(ConnectorGeneratorConfig config) {
         return;
     }
     string sep = createConnectorSeparator("=", 70);
-    io:println(sep);
-    io:println("Connector Generation Plan");
-    io:println(sep);
-    io:println(string `Metadata: ${config.metadataPath}`);
-    io:println(string `IR: ${config.irPath}`);
-    io:println(string `Spec: ${config.apiSpecPath}`);
-    io:println(string `Output Dir: ${config.outputDir}`);
-    io:println("");
-    io:println("Operations:");
-    io:println("  1. Generate connector bundle via LLM");
-    io:println("  2. Validate generated artifacts");
-    io:println("  3. Write Ballerina and Java outputs");
-    io:println("  4. Optional post-generation code fixing");
-    io:println(sep);
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "Connector Generation Plan");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Metadata: ${config.metadataPath}`);
+    io:fprintln(io:stderr, string `IR: ${config.irPath}`);
+    io:fprintln(io:stderr, string `Spec: ${config.apiSpecPath}`);
+    io:fprintln(io:stderr, string `Output Dir: ${config.outputDir}`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Operations:");
+    io:fprintln(io:stderr, "  1. Generate connector bundle via LLM");
+    io:fprintln(io:stderr, "  2. Validate generated artifacts");
+    io:fprintln(io:stderr, "  3. Write Ballerina and Java outputs");
+    io:fprintln(io:stderr, "  4. Optional post-generation code fixing");
+    io:fprintln(io:stderr, sep);
 }
 
 function printConnectorSummary(string clientPath, string typesPath, string nativePath, int mapped,
         int durationMs, boolean codeFixingRan, boolean codeFixingSuccess) {
     string sep = createConnectorSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println("✓ Connector Generation Complete");
-    io:println(sep);
-    io:println(string `  • client: ${clientPath}`);
-    io:println(string `  • types: ${typesPath}`);
-    io:println(string `  • native: ${nativePath}`);
-    io:println(string `  • mapped methods: ${mapped}`);
-    io:println(string `  • duration: ${durationMs}ms`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "✓ Connector Generation Complete");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `  • client: ${clientPath}`);
+    io:fprintln(io:stderr, string `  • types: ${typesPath}`);
+    io:fprintln(io:stderr, string `  • native: ${nativePath}`);
+    io:fprintln(io:stderr, string `  • mapped methods: ${mapped}`);
+    io:fprintln(io:stderr, string `  • duration: ${durationMs}ms`);
     if codeFixingRan {
-        io:println(string `  • code fixing: ${codeFixingSuccess ? "success" : "partial/failed"}`);
+        io:fprintln(io:stderr, string `  • code fixing: ${codeFixingSuccess ? "success" : "partial/failed"}`);
     }
-    io:println(sep);
+    io:fprintln(io:stderr, sep);
 }
 
 function printConnectorStep(int stepNum, string title, boolean quietMode) {
@@ -172,9 +172,9 @@ function printConnectorStep(int stepNum, string title, boolean quietMode) {
         return;
     }
     string sep = createConnectorSeparator("-", 50);
-    io:println("");
-    io:println(string `Step ${stepNum}: ${title}`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, string `Step ${stepNum}: ${title}`);
+    io:fprintln(io:stderr, sep);
 }
 
 function createConnectorSeparator(string char, int length) returns string {
@@ -234,17 +234,17 @@ public function executeConnectorGenerator(string[] args) returns error? {
 
     ConnectorGeneratorResult|ConnectorGeneratorError result = generateConnector(config);
     if result is ConnectorGeneratorError {
-        io:println(string `Connector generation failed: ${result.message()}`);
+        io:fprintln(io:stderr, string `Connector generation failed: ${result.message()}`);
         return result;
     }
 
-    io:println(string `Connector generated:`);
-    io:println(string `  client: ${result.clientPath}`);
-    io:println(string `  types:  ${result.typesPath}`);
-    io:println(string `  native: ${result.nativeAdaptorPath}`);
-    io:println(string `  mapped methods: ${result.mappedMethodCount}`);
+    io:fprintln(io:stderr, string `Connector generated:`);
+    io:fprintln(io:stderr, string `  client: ${result.clientPath}`);
+    io:fprintln(io:stderr, string `  types:  ${result.typesPath}`);
+    io:fprintln(io:stderr, string `  native: ${result.nativeAdaptorPath}`);
+    io:fprintln(io:stderr, string `  mapped methods: ${result.mappedMethodCount}`);
     if result.codeFixingRan {
-        io:println(string `  code fixing: ${result.codeFixingSuccess ? "success" : "partial/failed"}`);
+        io:fprintln(io:stderr, string `  code fixing: ${result.codeFixingSuccess ? "success" : "partial/failed"}`);
     }
 }
 
@@ -405,7 +405,7 @@ function validateGeneratedBundle(GeneratedConnectorBundle bundle,
         return error("LLM validation indicates signature mismatches");
     }
     if bundle.validation.typeReferenceErrors.length() > 0 {
-        io:println(string `  ⚠  Type reference warnings (non-fatal): ${string:'join(", ", ...bundle.validation.typeReferenceErrors)}`);
+        io:fprintln(io:stderr, string `  ⚠  Type reference warnings (non-fatal): ${string:'join(", ", ...bundle.validation.typeReferenceErrors)}`);
     }
 }
 
@@ -1134,21 +1134,21 @@ function ensureJavaMethodName(string annotationStr, string methodName) returns s
 }
 
 public function printConnectorUsage() {
-    io:println();
-    io:println("Generate connector artifacts from metadata, IR and API spec");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal run -- connector <metadata-json> <ir-json> <api-spec-bal> [output-dir] [options]");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  --fix-code              Enable post-generation code fixing for native adaptor Java");
-    io:println("  --fix-report-only       Run fixer diagnostics but do not apply changes");
-    io:println("  --fix-iterations=<n>    Maximum fixer iterations (default: 3)");
-    io:println("  --quiet, -q             Minimal logging");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal run -- connector path/to/metadata.json " +
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate connector artifacts from metadata, IR and API spec");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal run -- connector <metadata-json> <ir-json> <api-spec-bal> [output-dir] [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  --fix-code              Enable post-generation code fixing for native adaptor Java");
+    io:fprintln(io:stderr, "  --fix-report-only       Run fixer diagnostics but do not apply changes");
+    io:fprintln(io:stderr, "  --fix-iterations=<n>    Maximum fixer iterations (default: 3)");
+    io:fprintln(io:stderr, "  --quiet, -q             Minimal logging");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal run -- connector path/to/metadata.json " +
             "path/to/ir.json " +
             "path/to/api_spec.bal ./output --fix-code");
-    io:println();
+    io:fprintln(io:stderr, "");
 }

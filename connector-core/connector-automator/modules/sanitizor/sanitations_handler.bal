@@ -86,13 +86,13 @@ type SanitationRules record {|
 # + originalSpecPath - path to the raw input OpenAPI spec
 # + alignedSpecPath  - path to the aligned_ballerina_openapi.json produced by sanitizor
 # + outputDir        - connector root directory (sanitations.md goes to outputDir/docs/spec/)
-# + quietMode        - suppress verbose output
+# + logLevel         - controls diagnostic output verbosity
 # + return           - error if writing fails
 public function generateSanitationsDoc(
         string originalSpecPath,
         string alignedSpecPath,
         string outputDir,
-        boolean quietMode = false) returns error? {
+        utils:LogLevel logLevel = "normal") returns error? {
 
     string sanitationsPath = outputDir + "/docs/spec/sanitations.md";
 
@@ -112,24 +112,18 @@ public function generateSanitationsDoc(
 
     string content;
     if existsAlready {
-        if !quietMode {
-            io:println("Updating existing sanitations.md...");
-        }
+        utils:logVerbose("updating existing sanitations.md", logLevel);
         string existing = check io:fileReadString(sanitationsPath);
         content = check mergeWithExistingSanitations(existing, originalSpec, alignedSpec);
     } else {
-        if !quietMode {
-            io:println("Generating sanitations.md documentation...");
-        }
-        content = check buildSanitationsContent(originalSpec, alignedSpec, quietMode);
+        utils:logVerbose("generating sanitations.md documentation", logLevel);
+        content = check buildSanitationsContent(originalSpec, alignedSpec, logLevel);
     }
 
     check io:fileWriteString(sanitationsPath, content);
 
-    if !quietMode {
-        string verb = existsAlready ? "Updated" : "Generated";
-        io:println(string `✓ ${verb} sanitations.md at: ${sanitationsPath}`);
-    }
+    string verb = existsAlready ? "Updated" : "Generated";
+    utils:logInfo(string `✓ ${verb} sanitations.md at: ${sanitationsPath}`, logLevel);
 }
 
 # Read sanitations.md and apply all recorded changes to the new spec.
@@ -145,24 +139,20 @@ public function generateSanitationsDoc(
 #
 # + sanitationsPath - path to the existing sanitations.md
 # + newSpecPath     - path to the newly downloaded OpenAPI spec (modified in-place)
-# + quietMode       - suppress verbose output
+# + logLevel        - controls diagnostic output verbosity
 # + return          - error if reading/writing fails
 public function applySanitations(
         string sanitationsPath,
         string newSpecPath,
-        boolean quietMode = false) returns error? {
+        utils:LogLevel logLevel = "normal") returns error? {
 
     boolean exists = check file:test(sanitationsPath, file:EXISTS);
     if !exists {
-        if !quietMode {
-            io:println("⚠  No sanitations.md found — skipping pre-sanitization step");
-        }
+        utils:logWarn("no sanitations.md found — skipping pre-sanitization step", logLevel);
         return;
     }
 
-    if !quietMode {
-        io:println(string `Reading sanitations from: ${sanitationsPath}`);
-    }
+    utils:logVerbose(string `reading sanitations from: ${sanitationsPath}`, logLevel);
 
     string sanitationsContent = check io:fileReadString(sanitationsPath);
 
@@ -174,40 +164,25 @@ public function applySanitations(
     string specStr = specJson.toJsonString();
 
     if utils:isAIServiceInitialized() {
-        if !quietMode {
-            io:println("  Applying sanitations via AI...");
-            io:println(string `  Spec size: ${specStr.length()} chars`);
-        }
+        utils:logVerbose("applying sanitations via AI", logLevel);
+        utils:logVerbose(string `spec size: ${specStr.length()} chars`, logLevel);
 
-        json|error modifiedSpec = applySanitationsViaLLM(sanitationsContent, specStr, quietMode);
+        json|error modifiedSpec = applySanitationsViaLLM(sanitationsContent, specStr, logLevel);
         if modifiedSpec is json {
             check io:fileWriteString(newSpecPath, modifiedSpec.toJsonString());
-            if !quietMode {
-                io:println("✓ Sanitations applied to new spec (AI-powered)");
-            }
+            utils:logInfo("✓ sanitations applied (AI-powered)", logLevel);
             return;
         }
 
-        if !quietMode {
-            io:println(string `  ⚠  AI rewrite failed (${(<error>modifiedSpec).message()})`);
-            io:println("  Falling back to programmatic parser...");
-        }
+        utils:logWarn(string `AI rewrite failed (${(<error>modifiedSpec).message()}) — falling back to rule-based parser`, logLevel);
     }
 
     // Fallback: rule-based programmatic application
     SanitationRules rules = parseSanitationsMarkdown(sanitationsContent);
-    if !quietMode {
-        io:println(string `  Server URL rules   : ${rules.serverUrlChanges.length()}`);
-        io:println(string `  Path prefix rules  : ${rules.pathPrefixRules.length()}`);
-        io:println(string `  Type change rules  : ${rules.typeChanges.length()}`);
-        io:println(string `  Nullability rules  : ${rules.nullabilityChanges.length()}`);
-        io:println(string `  Format rules       : ${rules.formatChanges.length()}`);
-    }
-    check applyRulesToSpec(newSpecPath, rules, quietMode);
+    utils:logVerbose(string `rules parsed — server: ${rules.serverUrlChanges.length()}, paths: ${rules.pathPrefixRules.length()}, types: ${rules.typeChanges.length()}, nullability: ${rules.nullabilityChanges.length()}, formats: ${rules.formatChanges.length()}`, logLevel);
+    check applyRulesToSpec(newSpecPath, rules, logLevel);
 
-    if !quietMode {
-        io:println("✓ Sanitations applied to new spec (rule-based)");
-    }
+    utils:logInfo("✓ sanitations applied (rule-based)", logLevel);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -218,20 +193,16 @@ public function applySanitations(
 function applySanitationsViaLLM(
         string sanitationsContent,
         string specStr,
-        boolean quietMode) returns json|error {
+        utils:LogLevel logLevel) returns json|error {
 
     if specStr.length() <= SPEC_SINGLE_TURN_THRESHOLD {
-        if !quietMode {
-            io:println("  Single-pass AI rewrite...");
-        }
+        utils:logVerbose("single-pass AI rewrite", logLevel);
         return rewriteSpecSingleTurn(sanitationsContent, specStr);
     }
 
-    if !quietMode {
-        int chunks = (specStr.length() + SPEC_CHUNK_SIZE - 1) / SPEC_CHUNK_SIZE;
-        io:println(string `  Large spec — splitting into ${chunks} chunks for AI rewrite...`);
-    }
-    return rewriteSpecChunked(sanitationsContent, specStr, quietMode);
+    int chunks = (specStr.length() + SPEC_CHUNK_SIZE - 1) / SPEC_CHUNK_SIZE;
+    utils:logVerbose(string `large spec — splitting into ${chunks} chunks for AI rewrite`, logLevel);
+    return rewriteSpecChunked(sanitationsContent, specStr, logLevel);
 }
 
 function rewriteSpecSingleTurn(string sanitationsContent, string specStr) returns json|error {
@@ -251,7 +222,7 @@ function rewriteSpecSingleTurn(string sanitationsContent, string specStr) return
 function rewriteSpecChunked(
         string sanitationsContent,
         string specStr,
-        boolean quietMode) returns json|error {
+        utils:LogLevel logLevel) returns json|error {
 
     int totalChunks = (specStr.length() + SPEC_CHUNK_SIZE - 1) / SPEC_CHUNK_SIZE;
 
@@ -276,9 +247,7 @@ ${sanitationsContent}`;
         int safeEnd = endIdx < specStr.length() ? endIdx : specStr.length();
         string chunk = specStr.substring(startIdx, safeEnd);
 
-        if !quietMode {
-            io:println(string `  Sending spec chunk ${i + 1}/${totalChunks} (${chunk.length()} chars)...`);
-        }
+        utils:logVerbose(string `sending spec chunk ${i + 1}/${totalChunks} (${chunk.length()} chars)`, logLevel);
 
         messages.push({role: "user", content: string `OpenAPI spec part ${i + 1}/${totalChunks}:\n\n${chunk}`});
         string|error chunkReply = utils:callAIWithMessages(messages);
@@ -351,7 +320,7 @@ function parseModifiedSpec(string raw) returns json|error {
 // MARKDOWN GENERATION — fresh (no existing file)
 // ─────────────────────────────────────────────────────────────
 
-function buildSanitationsContent(json originalSpec, json alignedSpec, boolean quietMode) returns string|error {
+function buildSanitationsContent(json originalSpec, json alignedSpec, utils:LogLevel logLevel) returns string|error {
     string[] sectionBlocks = buildAutoDetectedSections(originalSpec, alignedSpec, 1);
     string[] lines = [];
 
@@ -950,7 +919,7 @@ function parseTypeChangeBlock(string[] lines) returns TypeChange? {
 // APPLY RULES TO SPEC (fallback — used when LLM unavailable)
 // ─────────────────────────────────────────────────────────────
 
-function applyRulesToSpec(string specPath, SanitationRules rules, boolean quietMode) returns error? {
+function applyRulesToSpec(string specPath, SanitationRules rules, utils:LogLevel logLevel) returns error? {
     json|error specResult = io:fileReadJson(specPath);
     if specResult is error {
         return error("Failed to read spec at " + specPath + ": " + specResult.message());
@@ -964,30 +933,30 @@ function applyRulesToSpec(string specPath, SanitationRules rules, boolean quietM
     map<json> spec = <map<json>>specJson;
 
     foreach ServerUrlChange sc in rules.serverUrlChanges {
-        applyServerUrlChange(spec, sc, quietMode);
+        applyServerUrlChange(spec, sc, logLevel);
     }
 
     foreach PathPrefixRule pr in rules.pathPrefixRules {
-        applyPathPrefixRemoval(spec, pr, quietMode);
+        applyPathPrefixRemoval(spec, pr, logLevel);
     }
 
     foreach FormatChange fc in rules.formatChanges {
-        applyFormatChange(spec, fc, quietMode);
+        applyFormatChange(spec, fc, logLevel);
     }
 
     foreach NullabilityChange nc in rules.nullabilityChanges {
-        applyNullabilityChange(spec, nc, quietMode);
+        applyNullabilityChange(spec, nc, logLevel);
     }
 
     foreach TypeChange tc in rules.typeChanges {
-        applyTypeChange(spec, tc, quietMode);
+        applyTypeChange(spec, tc, logLevel);
     }
 
     string updatedContent = spec.toJsonString();
     check io:fileWriteString(specPath, updatedContent);
 }
 
-function applyServerUrlChange(map<json> spec, ServerUrlChange sc, boolean quietMode) {
+function applyServerUrlChange(map<json> spec, ServerUrlChange sc, utils:LogLevel logLevel) {
     json serversResult = spec["servers"];
     if serversResult is json[] {
         json[] servers = <json[]>serversResult;
@@ -997,16 +966,14 @@ function applyServerUrlChange(map<json> spec, ServerUrlChange sc, boolean quietM
                 json urlResult = serverMap["url"];
                 if urlResult is string && <string>urlResult == sc.original {
                     serverMap["url"] = sc.updated;
-                    if !quietMode {
-                        io:println(string `  ✓ Server URL: ${sc.original} → ${sc.updated}`);
-                    }
+                    utils:logVerbose(string `server URL: ${sc.original} → ${sc.updated}`, logLevel);
                 }
             }
         }
     }
 }
 
-function applyPathPrefixRemoval(map<json> spec, PathPrefixRule pr, boolean quietMode) {
+function applyPathPrefixRemoval(map<json> spec, PathPrefixRule pr, utils:LogLevel logLevel) {
     json pathsResult = spec["paths"];
     if pathsResult is map<json> {
         map<json> paths = <map<json>>pathsResult;
@@ -1030,17 +997,17 @@ function applyPathPrefixRemoval(map<json> spec, PathPrefixRule pr, boolean quiet
         }
 
         spec["paths"] = newPaths;
-        if !quietMode && modified > 0 {
-            io:println(string `  ✓ Removed path prefix '${pr.prefixRemoved}' from ${modified} paths`);
+        if modified > 0 {
+            utils:logVerbose(string `removed path prefix '${pr.prefixRemoved}' from ${modified} paths`, logLevel);
         }
     }
 }
 
-function applyFormatChange(map<json> spec, FormatChange fc, boolean quietMode) {
+function applyFormatChange(map<json> spec, FormatChange fc, utils:LogLevel logLevel) {
     int count = countFormatOccurrences(spec, fc.originalFormat);
     replaceFormatValues(spec, fc.originalFormat, fc.updatedFormat);
-    if !quietMode && count > 0 {
-        io:println(string `  ✓ Format '${fc.originalFormat}' → '${fc.updatedFormat}' (${count} occurrences)`);
+    if count > 0 {
+        utils:logVerbose(string `format '${fc.originalFormat}' → '${fc.updatedFormat}' (${count} occurrences)`, logLevel);
     }
 }
 
@@ -1084,7 +1051,7 @@ function countFormatOccurrences(json data, string formatValue) returns int {
     return count;
 }
 
-function applyNullabilityChange(map<json> spec, NullabilityChange nc, boolean quietMode) {
+function applyNullabilityChange(map<json> spec, NullabilityChange nc, utils:LogLevel logLevel) {
     map<json> schemas = extractSchemas(spec);
     string[] targets = nc.schemaName != "" ? [nc.schemaName] : schemas.keys();
 
@@ -1092,8 +1059,8 @@ function applyNullabilityChange(map<json> spec, NullabilityChange nc, boolean qu
         json schemaResult = schemas[schemaName];
         if schemaResult is map<json> {
             boolean changed = applyNullabilityToSchema(<map<json>>schemaResult, nc.fieldName, nc.nullable);
-            if changed && !quietMode {
-                io:println(string `  ✓ ${schemaName}.${nc.fieldName} → nullable=${nc.nullable}`);
+            if changed {
+                utils:logVerbose(string `${schemaName}.${nc.fieldName} → nullable=${nc.nullable}`, logLevel);
             }
         }
     }
@@ -1116,7 +1083,7 @@ function applyNullabilityToSchema(map<json> schemaMap, string fieldName, boolean
     return false;
 }
 
-function applyTypeChange(map<json> spec, TypeChange tc, boolean quietMode) {
+function applyTypeChange(map<json> spec, TypeChange tc, utils:LogLevel logLevel) {
     map<json> schemas = extractSchemas(spec);
     string[] targets = tc.schemaName != "" ? [tc.schemaName] : schemas.keys();
 
@@ -1124,8 +1091,8 @@ function applyTypeChange(map<json> spec, TypeChange tc, boolean quietMode) {
         json schemaResult = schemas[schemaName];
         if schemaResult is map<json> {
             boolean changed = applyTypeChangeToSchema(<map<json>>schemaResult, tc.fieldName, tc.originalType, tc.updatedType);
-            if changed && !quietMode {
-                io:println(string `  ✓ ${schemaName}.${tc.fieldName}: ${tc.originalType} → ${tc.updatedType}`);
+            if changed {
+                utils:logVerbose(string `${schemaName}.${tc.fieldName}: ${tc.originalType} → ${tc.updatedType}`, logLevel);
             }
         }
     }
