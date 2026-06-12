@@ -97,8 +97,8 @@ function resolveIrOutputDir(string outputDir) returns string {
 # + return - Error if formatting fails (non-fatal)
 public function runBalFormat(string filePath) returns error? {
     utils:CommandResult result = utils:executeCommand(string `bal format ${filePath}`,
-            utils:getDirectoryPath(filePath), true);
+            utils:getDirectoryPath(filePath), "quiet");
     if !result.success {
-        io:println(string `Warning: bal format exited with code ${result.exitCode} for ${filePath}`);
+        io:fprintln(io:stderr, string `Warning: bal format exited with code ${result.exitCode} for ${filePath}`);
     }
 }

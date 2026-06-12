@@ -87,7 +87,7 @@ public function identifyClientClassWithLLM(ClassInfo[] classes, int maxCandidate
             scored.push([cls, score]);
         } else {
             error e = <error>score;
-            io:println(string `LLM scoring failed for ${cls.className}: ${e.message()}`);
+            io:fprintln(io:stderr, string `LLM scoring failed for ${cls.className}: ${e.message()}`);
         }
     }
 
@@ -1495,7 +1495,7 @@ function detectInitPatternWithLLM(
                 return llmPattern;
             }
         } else {
-            io:println(string `LLM init pattern detection failed: ${responseResult.message()}`);
+            io:fprintln(io:stderr, string `LLM init pattern detection failed: ${responseResult.message()}`);
         }
     }
 

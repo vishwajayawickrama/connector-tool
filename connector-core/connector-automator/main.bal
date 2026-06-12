@@ -202,7 +202,7 @@ function executeAnalyze(string[] args) returns error? {
     AnalyzerFlags flags = parseAnalyzerFlags(flagArgs);
 
     if isMavenCoordinate(sdkRef) {
-        analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, "", flags.quietMode);
+        analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, "", flags.logLevel);
 
         analyzer:AnalysisResult|analyzer:AnalyzerError analysisResult = analyzer:analyzeJavaSDK(
                 sdkRef,
@@ -211,7 +211,7 @@ function executeAnalyze(string[] args) returns error? {
         );
 
         if analysisResult is analyzer:AnalyzerError {
-            io:println(string `Analysis failed: ${analysisResult.message()}`);
+            oautils:logError(string `Analysis failed: ${analysisResult.message()}`);
             return analysisResult;
         }
 
@@ -225,7 +225,7 @@ function executeAnalyze(string[] args) returns error? {
     check ensureFileExists(sdkJarPath, "SDK JAR");
     check ensureFileExists(javadocJarPath, "Javadoc JAR");
 
-        analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, javadocJarPath, flags.quietMode);
+    analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, javadocJarPath, flags.logLevel);
 
     analyzer:AnalysisResult|analyzer:AnalyzerError analysisResult = analyzer:analyzeJavaSDK(
             sdkJarPath,
@@ -234,7 +234,7 @@ function executeAnalyze(string[] args) returns error? {
     );
 
     if analysisResult is analyzer:AnalyzerError {
-        io:println(string `Analysis failed: ${analysisResult.message()}`);
+        oautils:logError(string `Analysis failed: ${analysisResult.message()}`);
         return analysisResult;
     }
 
@@ -273,13 +273,16 @@ function executeGenerate(string[] args) returns error? {
     }
 
     string[] flagArgs = args.slice(1);
-    boolean quietMode = false;
+    oautils:LogLevel logLevel = "normal";
     boolean enableExtendedThinking = true;
 
     foreach string arg in flagArgs {
         match arg {
             "quiet"|"--quiet"|"-q" => {
-                quietMode = true;
+                logLevel = "quiet";
+            }
+            "verbose"|"--verbose"|"-v" => {
+                logLevel = "verbose";
             }
             "no-thinking"|"--no-thinking" => {
                 enableExtendedThinking = false;
@@ -299,13 +302,13 @@ function executeGenerate(string[] args) returns error? {
             metadataPath: metadataPath,
             outputDir: apiSpecOutputRoot,
             datasetKey: datasetKey,
-            quietMode: quietMode,
+            quietMode: logLevel == "quiet",
             enableExtendedThinking: enableExtendedThinking
         };
 
         generator:GeneratorResult|generator:GeneratorError result = generator:generateSpecification(config);
         if result is generator:GeneratorError {
-            io:println(string `Generation failed for ${datasetKey}: ${result.message()}`);
+            oautils:logError(string `Generation failed for ${datasetKey}: ${result.message()}`);
             return result;
         }
     }
@@ -364,15 +367,12 @@ function executeConnector(string[] args) returns error? {
         sdkVersionHint: extractSdkVersionFromDatasetKey(datasetKey)
     };
 
-    foreach string arg in args.slice(flagsStartIndex) {
-        if arg == "quiet" || arg == "--quiet" || arg == "-q" {
-            config.quietMode = true;
-        }
-    }
+    oautils:LogLevel connectorLogLevel = parseOpenApiLogLevel(args.slice(flagsStartIndex));
+    config.quietMode = connectorLogLevel == "quiet";
 
     connector:ConnectorGeneratorResult|connector:ConnectorGeneratorError result = connector:generateConnector(config);
     if result is connector:ConnectorGeneratorError {
-        io:println(string `Connector generation failed: ${result.message()}`);
+        oautils:logError(string `Connector generation failed: ${result.message()}`);
         return result;
     }
 
@@ -427,8 +427,9 @@ function executeGenerateTests(string[] args) returns error? {
     string connectorBallerinaToml = string `${connectorOutputPath}/ballerina/Ballerina.toml`;
     check ensureFileExists(connectorBallerinaToml, "Generated connector output");
 
-    string[] forwardedArgs = [connectorOutputPath, specPath, ...args.slice(flagsStartIndex)];
-    error? genResult = test_generator:executeTestGen("sdk", ...forwardedArgs);
+    string[] testFlagArgs = args.slice(flagsStartIndex);
+    oautils:LogLevel testLogLevel = parseOpenApiLogLevel(testFlagArgs);
+    error? genResult = test_generator:executeTestGen("sdk", connectorOutputPath, specPath, testLogLevel);
 
     return genResult;
 }
@@ -473,8 +474,10 @@ function executeGenerateExamples(string[] args) returns error? {
     string connectorBallerinaToml = string `${connectorOutputPath}/ballerina/Ballerina.toml`;
     check ensureFileExists(connectorBallerinaToml, "Generated connector output");
 
-    string[] forwardedArgs = [connectorOutputPath, ...args.slice(flagsStartIndex)];
-    error? exResult = example_generator:executeExampleGen(...forwardedArgs);
+    string[] flagArgs = args.slice(flagsStartIndex);
+    oautils:LogLevel exLogLevel = parseOpenApiLogLevel(flagArgs);
+    boolean exAutoYes = parseOpenApiAutoYes(flagArgs);
+    error? exResult = example_generator:executeExampleGen(connectorOutputPath, exLogLevel, exAutoYes);
 
     return exResult;
 }
@@ -521,76 +524,77 @@ function executeGenerateDocs(string[] args) returns error? {
     string connectorBallerinaToml = string `${connectorOutputPath}/ballerina/Ballerina.toml`;
     check ensureFileExists(connectorBallerinaToml, "Generated connector output");
 
-    string[] forwardedArgs = [docCommand, connectorOutputPath, ...args.slice(flagsStartIndex)];
-    error? docResult = document_generator:executeDocGen(...forwardedArgs);
+    string[] docFlagArgs = args.slice(flagsStartIndex);
+    oautils:LogLevel docLogLevel = parseOpenApiLogLevel(docFlagArgs);
+    error? docResult = document_generator:executeDocGen(docCommand, connectorOutputPath, docLogLevel);
 
     return docResult;
 }
 
 function printGenerateTestsUsage() {
-    io:println();
-    io:println("Generate live tests for an SDK-generated connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk generate-tests <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <output-dir>  Root directory containing a single SDK-generated connector workspace");
-    io:println();
-    io:println("INPUT:");
-    io:println("  <output-dir>/docs/spec/<dataset-key>_spec.bal");
-    io:println("  <output-dir>/ballerina/... (generated connector)");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk generate-tests /home/user/SDK-auto-generated-connectors yes quiet");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate live tests for an SDK-generated connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-tests <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory containing a single SDK-generated connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "INPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>_spec.bal");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/... (generated connector)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-tests /home/user/SDK-auto-generated-connectors yes quiet");
+    io:fprintln(io:stderr, "");
 }
 
 function printGenerateExamplesUsage() {
-    io:println();
-    io:println("Generate examples for an SDK-generated connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk generate-examples <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <output-dir>  Root directory containing a single SDK-generated connector workspace");
-    io:println();
-    io:println("INPUT:");
-    io:println("  <output-dir>/ballerina/... (generated connector)");
-    io:println();
-    io:println("OUTPUT:");
-    io:println("  <output-dir>/examples/");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk generate-examples /home/user/SDK-auto-generated-connectors yes quiet");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate examples for an SDK-generated connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-examples <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory containing a single SDK-generated connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "INPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/... (generated connector)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/examples/");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-examples /home/user/SDK-auto-generated-connectors yes quiet");
+    io:fprintln(io:stderr, "");
 }
 
 function printGenerateDocsUsage() {
-    io:println();
-    io:println("Generate README documentation for an SDK-generated connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk generate-docs <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <output-dir>  Root directory containing a single SDK-generated connector workspace");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk generate-docs /home/user/SDK-auto-generated-connectors quiet");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate README documentation for an SDK-generated connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-docs <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory containing a single SDK-generated connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-docs /home/user/SDK-auto-generated-connectors quiet");
+    io:fprintln(io:stderr, "");
 }
 
 function executeFixReportOnly(string[] args) returns error? {
@@ -641,7 +645,7 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
     check ensureFileExists(irPath, "IR JSON");
     check ensureFileExists(specPath, "API specification");
 
-    boolean quietMode = false;
+    oautils:LogLevel fixLogLevel = "normal";
     int maxFixIterations = 3;
     boolean autoYes = fixMode != "report-only";
     string connectorOutputPath = resolveConnectorOutputPath(datasetKey, outputRoot);
@@ -652,7 +656,9 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
 
     foreach string arg in args.slice(flagsStartIndex) {
         if arg == "quiet" || arg == "--quiet" || arg == "-q" {
-            quietMode = true;
+            fixLogLevel = "quiet";
+        } else if arg == "verbose" || arg == "--verbose" || arg == "-v" {
+            fixLogLevel = "verbose";
         } else if arg.startsWith("--fix-iterations=") {
             string val = arg.substring(17);
             int|error parsed = int:fromString(val);
@@ -675,17 +681,17 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
         ];
 
     printCommandPlan(fixMode == "report-only" ? "Fix Report" : "Fix Code", datasetKey,
-        planOperations, quietMode);
+        planOperations, fixLogLevel);
 
     fixer:FixResult|fixer:BallerinaFixerError javaFixResultOrError = fixer:fixJavaNativeAdaptorErrors(
             nativeOutputPath,
-            quietMode,
+            fixLogLevel,
             autoYes,
             maxFixIterations
     );
 
     if javaFixResultOrError is fixer:BallerinaFixerError {
-        io:println(string `Code fix failed (Java native): ${javaFixResultOrError.message()}`);
+        oautils:logError(string `Code fix failed (Java native): ${javaFixResultOrError.message()}`);
         return javaFixResultOrError;
     }
 
@@ -703,12 +709,12 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
         check ensureFileExists(string `${ballerinaOutputPath}/Ballerina.toml`, "Generated connector Ballerina.toml");
         fixer:FixResult|fixer:BallerinaFixerError ballerinaFixResultOrError = fixer:fixAllErrors(
                 ballerinaOutputPath,
-                quietMode,
+                fixLogLevel,
                 autoYes
         );
 
         if ballerinaFixResultOrError is fixer:BallerinaFixerError {
-            io:println(string `Code fix failed (Ballerina client): ${ballerinaFixResultOrError.message()}`);
+            oautils:logError(string `Code fix failed (Ballerina client): ${ballerinaFixResultOrError.message()}`);
             return ballerinaFixResultOrError;
         }
         ballerinaFixResult = ballerinaFixResultOrError;
@@ -740,41 +746,42 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
             details.push(string `issue: ${issue}`);
         }
     }
-    printCommandSummary(fixMode == "report-only" ? "Fix Report" : "Fix Code", overallSuccess, details, quietMode);
+    printCommandSummary(fixMode == "report-only" ? "Fix Report" : "Fix Code", overallSuccess, details, fixLogLevel);
 }
 
-function printCommandPlan(string title, string target, string[] operations, boolean quietMode) {
-    if quietMode {
+function printCommandPlan(string title, string target, string[] operations, oautils:LogLevel logLevel) {
+    if logLevel == "quiet" {
         return;
     }
 
     string sep = createMainSeparator("=", 70);
-    io:println(sep);
-    io:println(string `${title} Plan`);
-    io:println(sep);
-    io:println(string `Target: ${target}`);
-    io:println("");
-    io:println("Operations:");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `${title} Plan`);
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Target: ${target}`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Operations:");
     int i = 0;
     while i < operations.length() {
-        io:println(string `  ${i + 1}. ${operations[i]}`);
+        io:fprintln(io:stderr, string `  ${i + 1}. ${operations[i]}`);
         i += 1;
     }
-    io:println(sep);
+    io:fprintln(io:stderr, sep);
 }
 
-function printCommandSummary(string title, boolean success, string[] details, boolean quietMode) {
+function printCommandSummary(string title, boolean success, string[] details, oautils:LogLevel logLevel) {
+    if logLevel == "quiet" {
+        return;
+    }
     string sep = createMainSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println(string `${success ? "✓" : "⚠"} ${title} Complete`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `${success ? "✓" : "⚠"} ${title} Complete`);
+    io:fprintln(io:stderr, sep);
     foreach string detail in details {
-        io:println(string `  • ${detail}`);
+        io:fprintln(io:stderr, string `  • ${detail}`);
     }
-    if !quietMode {
-        io:println(sep);
-    }
+    io:fprintln(io:stderr, sep);
 }
 
 function createMainSeparator(string char, int length) returns string {
@@ -788,55 +795,55 @@ function createMainSeparator(string char, int length) returns string {
 }
 
 function printConnectorUsage() {
-    io:println();
-    io:println("Generate Ballerina connector artifacts from SDK metadata, IR, and API spec");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk connector <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <output-dir>  Root directory containing generated SDK metadata, IR, and API spec");
-    io:println();
-    io:println("OUTPUT:");
-    io:println("  <output-dir>/ballerina/client.bal");
-    io:println("  <output-dir>/ballerina/types.bal");
-    io:println("  <output-dir>/native/... (native adaptor)");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk connector /home/user/SDK-auto-generated-connectors");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate Ballerina connector artifacts from SDK metadata, IR, and API spec");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk connector <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory containing generated SDK metadata, IR, and API spec");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/client.bal");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/types.bal");
+    io:fprintln(io:stderr, "  <output-dir>/native/... (native adaptor)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk connector /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "");
 }
 
 function printFixUsage(string fixMode) {
-    io:println();
-    io:println("Run code fixer on generated connector output (Java native + Ballerina client)");
-    io:println();
-    io:println("USAGE:");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Run code fixer on generated connector output (Java native + Ballerina client)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
     if fixMode == "report-only" {
-        io:println("  bal tool-id sdk fix-report-only <output-dir> [options]");
+        io:fprintln(io:stderr, "  bal tool-id sdk fix-report-only <output-dir> [options]");
     } else {
-        io:println("  bal tool-id sdk fix-code <output-dir> [options]");
+        io:fprintln(io:stderr, "  bal tool-id sdk fix-code <output-dir> [options]");
     }
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <output-dir>  Root directory containing a single SDK-generated connector workspace");
-    io:println();
-    io:println("OUTPUT:");
-    io:println("  <output-dir>/ballerina/client.bal");
-    io:println("  <output-dir>/ballerina/types.bal");
-    io:println("  <output-dir>/native/... (native adaptor)");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  --fix-iterations=<n>    Maximum fixer iterations (default: 3)");
-    io:println("  quiet, --quiet, -q      Reduce log output");
-    io:println();
-    io:println("EXAMPLES:");
-    io:println("  bal tool-id sdk fix-code /home/user/SDK-auto-generated-connectors");
-    io:println("  bal tool-id sdk fix-report-only /home/user/SDK-auto-generated-connectors");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory containing a single SDK-generated connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/client.bal");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/types.bal");
+    io:fprintln(io:stderr, "  <output-dir>/native/... (native adaptor)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  --fix-iterations=<n>    Maximum fixer iterations (default: 3)");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q      Reduce log output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLES:");
+    io:fprintln(io:stderr, "  bal tool-id sdk fix-code /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "  bal tool-id sdk fix-report-only /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "");
 }
 
 function executePipeline(string[] args) returns error? {
@@ -861,7 +868,7 @@ function executePipeline(string[] args) returns error? {
     check ensureFileExists(sdkJarPath, "SDK JAR");
     check ensureFileExists(javadocJarPath, "Javadoc JAR");
 
-    boolean quietMode = false;
+    oautils:LogLevel pipelineLogLevel = "normal";
     boolean autoYes = false;
     boolean runFixCode = true;
     boolean runGenerateTests = true;
@@ -871,7 +878,9 @@ function executePipeline(string[] args) returns error? {
     int maxFixIterations = 3;
     foreach string arg in args.slice(2) {
         if arg == "quiet" || arg == "--quiet" || arg == "-q" {
-            quietMode = true;
+            pipelineLogLevel = "quiet";
+        } else if arg == "verbose" || arg == "--verbose" || arg == "-v" {
+            pipelineLogLevel = "verbose";
         } else if arg == "yes" || arg == "--yes" || arg == "-y" {
             autoYes = true;
         } else if arg == "--fix-code" {
@@ -900,52 +909,52 @@ function executePipeline(string[] args) returns error? {
         }
     }
 
-    printPipelineModuleHeader("SDK Analyzer", quietMode);
-    if !quietMode {
-        io:println(string `  → SDK JAR: ${sdkJarPath}`);
-        io:println(string `  → Javadoc JAR: ${javadocJarPath}`);
+    printPipelineModuleHeader("SDK Analyzer", pipelineLogLevel);
+    if pipelineLogLevel != "quiet" {
+        io:fprintln(io:stderr, string `  → SDK JAR: ${sdkJarPath}`);
+        io:fprintln(io:stderr, string `  → Javadoc JAR: ${javadocJarPath}`);
     }
 
-        analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(args.slice(2), javadocJarPath, quietMode);
+    analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(args.slice(2), javadocJarPath, pipelineLogLevel);
     analyzer:AnalysisResult|analyzer:AnalyzerError analysisResult = analyzer:analyzeJavaSDK(
             sdkJarPath,
             resolveAnalyzerOutputDir(outputRoot),
             analyzerConfig
     );
     if analysisResult is analyzer:AnalyzerError {
-        io:println(string `Analysis failed: ${analysisResult.message()}`);
+        oautils:logError(string `Analysis failed: ${analysisResult.message()}`);
         return analysisResult;
     }
 
     string metadataPath = resolveMetadataPath(datasetKey, outputRoot);
     check ensureFileExists(metadataPath, "Metadata JSON");
 
-    check runPipelineStagesForDataset(datasetKey, outputRoot, analysisResult.methodsExtracted, autoYes, quietMode,
+    check runPipelineStagesForDataset(datasetKey, outputRoot, analysisResult.methodsExtracted, autoYes, pipelineLogLevel,
         runFixCode, runGenerateTests, runGenerateExamples, runGenerateDocs, fixMode, maxFixIterations);
 }
 
 function runPipelineStagesForDataset(string datasetKey, string outputRoot, int extractedMethods,
-        boolean autoYes, boolean quietMode,
+        boolean autoYes, oautils:LogLevel logLevel,
         boolean runFixCode, boolean runGenerateTests, boolean runGenerateExamples, boolean runGenerateDocs,
         string fixMode, int maxFixIterations) returns error? {
     string metadataPath = resolveMetadataPath(datasetKey, outputRoot);
     check ensureFileExists(metadataPath, "Metadata JSON");
 
-    printPipelineModuleHeader("API Specification Generator", quietMode);
-    if !quietMode {
-        io:println(string `  → Metadata: ${metadataPath}`);
+    printPipelineModuleHeader("API Specification Generator", logLevel);
+    if logLevel != "quiet" {
+        io:fprintln(io:stderr, string `  → Metadata: ${metadataPath}`);
     }
 
     generator:GeneratorConfig genConfig = {
         metadataPath: metadataPath,
         outputDir: resolveApiSpecOutputRoot(outputRoot),
-        quietMode: quietMode,
+        quietMode: logLevel == "quiet",
         datasetKey: datasetKey
     };
 
     generator:GeneratorResult|generator:GeneratorError genResult = generator:generateSpecification(genConfig);
     if genResult is generator:GeneratorError {
-        io:println(string `Specification generation failed: ${genResult.message()}`);
+        oautils:logError(string `Specification generation failed: ${genResult.message()}`);
         return genResult;
     }
 
@@ -954,14 +963,14 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
     check ensureFileExists(irPath, "IR JSON");
     check ensureFileExists(specPath, "API specification");
 
-    if !confirmPipelineAfterSpec(datasetKey, metadataPath, irPath, specPath, autoYes, quietMode) {
+    if !confirmPipelineAfterSpec(datasetKey, metadataPath, irPath, specPath, autoYes, logLevel) {
         return error("Pipeline cancelled by user after API specification generation.");
     }
 
-    printPipelineModuleHeader("Connector Generator", quietMode);
-    if !quietMode {
-        io:println(string `  → IR: ${irPath}`);
-        io:println(string `  → API Spec: ${specPath}`);
+    printPipelineModuleHeader("Connector Generator", logLevel);
+    if logLevel != "quiet" {
+        io:fprintln(io:stderr, string `  → IR: ${irPath}`);
+        io:fprintln(io:stderr, string `  → API Spec: ${specPath}`);
     }
 
     connector:ConnectorGeneratorConfig connectorConfig = {
@@ -969,7 +978,7 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
         irPath: irPath,
         apiSpecPath: specPath,
         outputDir: resolveConnectorOutputPath(datasetKey, outputRoot),
-        quietMode: quietMode,
+        quietMode: logLevel == "quiet",
         enableCodeFixing: false,
         fixMode: fixMode,
         maxFixIterations: maxFixIterations,
@@ -980,18 +989,17 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
         connector:generateConnector(connectorConfig);
 
     if connectorResult is connector:ConnectorGeneratorError {
-        io:println(string `Connector generation failed: ${connectorResult.message()}`);
+        oautils:logError(string `Connector generation failed: ${connectorResult.message()}`);
         return connectorResult;
     }
 
     boolean fixCompleted = false;
     if runFixCode {
-        printPipelineModuleHeader("Code Fixer", quietMode);
+        printPipelineModuleHeader("Code Fixer", logLevel);
 
         string[] fixArgs = [datasetKey, outputRoot];
-        if quietMode {
-            fixArgs.push("quiet");
-        }
+        if logLevel == "quiet" { fixArgs.push("quiet"); }
+        else if logLevel == "verbose" { fixArgs.push("verbose"); }
         if autoYes {
             fixArgs.push("yes");
         }
@@ -1004,15 +1012,12 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean examplesCompleted = false;
     if runGenerateExamples {
-        printPipelineModuleHeader("Example Generator", quietMode);
+        printPipelineModuleHeader("Example Generator", logLevel);
 
         string[] exampleArgs = [datasetKey, outputRoot];
-        if autoYes {
-            exampleArgs.push("yes");
-        }
-        if quietMode {
-            exampleArgs.push("quiet");
-        }
+        if autoYes { exampleArgs.push("yes"); }
+        if logLevel == "quiet" { exampleArgs.push("quiet"); }
+        else if logLevel == "verbose" { exampleArgs.push("verbose"); }
 
         error? exampleError = executeGenerateExamples(exampleArgs);
         if exampleError is error {
@@ -1023,12 +1028,11 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean testsCompleted = false;
     if runGenerateTests {
-        printPipelineModuleHeader("Test Generator", quietMode);
+        printPipelineModuleHeader("Test Generator", logLevel);
 
         string[] testArgs = [datasetKey, outputRoot, "yes"];
-        if quietMode {
-            testArgs.push("quiet");
-        }
+        if logLevel == "quiet" { testArgs.push("quiet"); }
+        else if logLevel == "verbose" { testArgs.push("verbose"); }
         error? testError = executeGenerateTests(testArgs);
         if testError is error {
             return testError;
@@ -1038,15 +1042,12 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean docsCompleted = false;
     if runGenerateDocs {
-        printPipelineModuleHeader("Document Generator", quietMode);
+        printPipelineModuleHeader("Document Generator", logLevel);
 
         string[] docArgs = ["generate-all", datasetKey, outputRoot];
-        if autoYes {
-            docArgs.push("yes");
-        }
-        if quietMode {
-            docArgs.push("quiet");
-        }
+        if autoYes { docArgs.push("yes"); }
+        if logLevel == "quiet" { docArgs.push("quiet"); }
+        else if logLevel == "verbose" { docArgs.push("verbose"); }
 
         error? docsError = executeGenerateDocs(docArgs);
         if docsError is error {
@@ -1060,43 +1061,43 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
         extractedMethods, connectorResult.mappedMethodCount,
         runFixCode, fixCompleted, runGenerateTests, testsCompleted, runGenerateExamples, examplesCompleted,
         runGenerateDocs, docsCompleted,
-        connectorResult.codeFixingRan, connectorResult.codeFixingSuccess, quietMode);
+        connectorResult.codeFixingRan, connectorResult.codeFixingSuccess, logLevel);
 }
 
-function printPipelineModuleHeader(string moduleName, boolean quietMode) {
-    if quietMode {
+function printPipelineModuleHeader(string moduleName, oautils:LogLevel logLevel) {
+    if logLevel == "quiet" {
         return;
     }
 
     string sep = createMainSeparator("-", 60);
-    io:println("");
-    io:println(sep);
-    io:println(string `Executing module: ${moduleName}`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Executing module: ${moduleName}`);
+    io:fprintln(io:stderr, sep);
 }
 
 function confirmPipelineAfterSpec(string datasetKey, string metadataPath, string irPath, string specPath,
-        boolean autoYes, boolean quietMode) returns boolean {
-    if quietMode || autoYes {
+        boolean autoYes, oautils:LogLevel logLevel) returns boolean {
+    if logLevel == "quiet" || autoYes {
         return true;
     }
 
     string sep = createMainSeparator("-", 60);
-    io:println("");
-    io:println(sep);
-    io:println("Generated artifacts after API specification generation");
-    io:println(sep);
-    io:println(string `Dataset: ${datasetKey}`);
-    io:println(string `Metadata: ${metadataPath}`);
-    io:println(string `IR: ${irPath}`);
-    io:println(string `Specification: ${specPath}`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "Generated artifacts after API specification generation");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Dataset: ${datasetKey}`);
+    io:fprintln(io:stderr, string `Metadata: ${metadataPath}`);
+    io:fprintln(io:stderr, string `IR: ${irPath}`);
+    io:fprintln(io:stderr, string `Specification: ${specPath}`);
+    io:fprintln(io:stderr, sep);
 
     return getPipelineUserConfirmation("Continue pipeline with these generated artifacts?");
 }
 
 function getPipelineUserConfirmation(string message) returns boolean {
-    io:print(string `${message} (y/n): `);
+    io:fprint(io:stderr, string `${message} (y/n): `);
     string|io:Error userInput = io:readln();
     if userInput is io:Error {
         return false;
@@ -1109,55 +1110,57 @@ function printPipelineFinalSummary(string datasetKey, string metadataPath, strin
     boolean runFixCode, boolean fixCompleted, boolean runGenerateTests, boolean testsCompleted,
     boolean runGenerateExamples, boolean examplesCompleted,
     boolean runGenerateDocs, boolean docsCompleted,
-        boolean connectorInternalFixRan, boolean connectorInternalFixSuccess, boolean quietMode) {
+        boolean connectorInternalFixRan, boolean connectorInternalFixSuccess, oautils:LogLevel logLevel) {
+    if logLevel == "quiet" {
+        return;
+    }
     string sep = createMainSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println("Pipeline Summary");
-    io:println(sep);
-    io:println(string `Dataset: ${datasetKey}`);
-    io:println(string `Metadata: ${metadataPath}`);
-    io:println(string `IR: ${irPath}`);
-    io:println(string `Specification: ${specPath}`);
-    io:println(string `Connector client: ${clientPath}`);
-    io:println(string `Connector types: ${typesPath}`);
-    io:println(string `Native adaptor: ${nativePath}`);
-    io:println(string `Methods extracted: ${extractedMethods}`);
-    io:println(string `Methods mapped: ${mappedMethods}`);
-    io:println(string `Code fixing: ${runFixCode ? (fixCompleted ? "completed" : "failed") : "skipped"}`);
-    io:println(string `Example generation: ${runGenerateExamples ? (examplesCompleted ? "completed" : "failed") : "skipped"}`);
-    io:println(string `Test generation: ${runGenerateTests ? (testsCompleted ? "completed" : "failed") : "skipped"}`);
-    io:println(string `Documentation generation: ${runGenerateDocs ? (docsCompleted ? "completed" : "failed") : "skipped"}`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "Pipeline Summary");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Dataset: ${datasetKey}`);
+    io:fprintln(io:stderr, string `Metadata: ${metadataPath}`);
+    io:fprintln(io:stderr, string `IR: ${irPath}`);
+    io:fprintln(io:stderr, string `Specification: ${specPath}`);
+    io:fprintln(io:stderr, string `Connector client: ${clientPath}`);
+    io:fprintln(io:stderr, string `Connector types: ${typesPath}`);
+    io:fprintln(io:stderr, string `Native adaptor: ${nativePath}`);
+    io:fprintln(io:stderr, string `Methods extracted: ${extractedMethods}`);
+    io:fprintln(io:stderr, string `Methods mapped: ${mappedMethods}`);
+    io:fprintln(io:stderr, string `Code fixing: ${runFixCode ? (fixCompleted ? "completed" : "failed") : "skipped"}`);
+    io:fprintln(io:stderr, string `Example generation: ${runGenerateExamples ? (examplesCompleted ? "completed" : "failed") : "skipped"}`);
+    io:fprintln(io:stderr, string `Test generation: ${runGenerateTests ? (testsCompleted ? "completed" : "failed") : "skipped"}`);
+    io:fprintln(io:stderr, string `Documentation generation: ${runGenerateDocs ? (docsCompleted ? "completed" : "failed") : "skipped"}`);
     if connectorInternalFixRan {
-        io:println(string `Connector-internal code fixing: ${connectorInternalFixSuccess ? "success" : "partial/failed"}`);
+        io:fprintln(io:stderr, string `Connector-internal code fixing: ${connectorInternalFixSuccess ? "success" : "partial/failed"}`);
     }
-
-    if !quietMode {
-        io:println(sep);
-    }
+    io:fprintln(io:stderr, sep);
 }
 
 type AnalyzerFlags record {|
-    boolean quietMode;
+    oautils:LogLevel logLevel;
 |};
 
 function parseAnalyzerFlags(string[] args) returns AnalyzerFlags {
     AnalyzerFlags flags = {
-        quietMode: false
+        logLevel: "normal"
     };
 
     foreach string arg in args {
         if arg == "quiet" || arg == "--quiet" || arg == "-q" {
-            flags.quietMode = true;
+            flags.logLevel = "quiet";
+        } else if arg == "verbose" || arg == "--verbose" || arg == "-v" {
+            flags.logLevel = "verbose";
         }
     }
 
     return flags;
 }
 
-function buildAnalyzerConfig(string[] args, string javadocJar, boolean quietMode) returns analyzer:AnalyzerConfig {
+function buildAnalyzerConfig(string[] args, string javadocJar, oautils:LogLevel logLevel) returns analyzer:AnalyzerConfig {
     analyzer:AnalyzerConfig config = {
-        quietMode: quietMode
+        quietMode: logLevel == "quiet"
     };
 
     if javadocJar.trim().length() > 0 {
@@ -1472,7 +1475,7 @@ function printSdkSubCommandUsage(string subCommand) {
             printGenerateDocsUsage();
         }
         _ => {
-            io:println(string `Unknown SDK command: ${subCommand}`);
+            oautils:logError(string `Unknown SDK command: ${subCommand}`);
             printSdkUsage();
         }
     }
@@ -1480,7 +1483,7 @@ function printSdkSubCommandUsage(string subCommand) {
 
 function executeSdkGenerateDocs(string[] args) returns error? {
     if args.length() < 1 {
-        io:println("Usage: bal tool-id sdk generate-docs <output-dir> [options]");
+        io:fprintln(io:stderr, "Usage: bal tool-id sdk generate-docs <output-dir> [options]");
         return;
     }
 
@@ -1502,7 +1505,7 @@ function executeSdkGenerateDocs(string[] args) returns error? {
 
 function executeSdkGenerateAll(string[] args) returns error? {
     if args.length() < 1 {
-        io:println("Usage: bal tool-id sdk generate-docs <output-dir> [options]");
+        io:fprintln(io:stderr, "Usage: bal tool-id sdk generate-docs <output-dir> [options]");
         return;
     }
 
@@ -1523,39 +1526,39 @@ function executeSdkGenerateAll(string[] args) returns error? {
 }
 
 function printSdkUsage() {
-    io:println();
-    io:println("SDK Workflow - Java SDK -> Ballerina Connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk analyze <sdk-ref> <output-dir> [options]");
-    io:println("  bal tool-id sdk pipeline <sdk-ref> <output-dir> [options]");
-    io:println("  bal tool-id sdk generate <output-dir> [options]");
-    io:println("  bal tool-id sdk connector <output-dir> [options]");
-    io:println("  bal tool-id sdk fix-code <output-dir> [options]");
-    io:println("  bal tool-id sdk fix-report-only <output-dir> [options]");
-    io:println("  bal tool-id sdk generate-tests <output-dir> [options]");
-    io:println("  bal tool-id sdk generate-examples <output-dir> [options]");
-    io:println("  bal tool-id sdk generate-docs <output-dir> [options]");
-    io:println();
-    io:println("COMMANDS:");
-    io:println("  analyze          Analyze a Java SDK reference and write metadata");
-    io:println("  pipeline         Run analyze, spec/IR, connector, fix, tests, examples, and docs");
-    io:println("  generate         Generate API spec + IR from metadata");
-    io:println("  connector        Generate Ballerina connector artifacts");
-    io:println("  fix-code         Fix Java native + Ballerina compilation errors");
-    io:println("  fix-report-only  Run fixer diagnostics without applying fixes");
-    io:println("  generate-tests   Generate live integration tests");
-    io:println("  generate-examples Generate code examples");
-    io:println("  generate-docs    Generate all documentation");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk analyze s3-2.4.0 /home/user/SDK-auto-generated-connectors");
-    io:println("  bal tool-id sdk pipeline s3-2.4.0 /home/user/SDK-auto-generated-connectors");
-    io:println("  bal tool-id sdk generate-tests /home/user/SDK-auto-generated-connectors/module-s3");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "SDK Workflow - Java SDK -> Ballerina Connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk analyze <sdk-ref> <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk pipeline <sdk-ref> <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk connector <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk fix-code <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk fix-report-only <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-tests <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-examples <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-docs <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "COMMANDS:");
+    io:fprintln(io:stderr, "  analyze          Analyze a Java SDK reference and write metadata");
+    io:fprintln(io:stderr, "  pipeline         Run analyze, spec/IR, connector, fix, tests, examples, and docs");
+    io:fprintln(io:stderr, "  generate         Generate API spec + IR from metadata");
+    io:fprintln(io:stderr, "  connector        Generate Ballerina connector artifacts");
+    io:fprintln(io:stderr, "  fix-code         Fix Java native + Ballerina compilation errors");
+    io:fprintln(io:stderr, "  fix-report-only  Run fixer diagnostics without applying fixes");
+    io:fprintln(io:stderr, "  generate-tests   Generate live integration tests");
+    io:fprintln(io:stderr, "  generate-examples Generate code examples");
+    io:fprintln(io:stderr, "  generate-docs    Generate all documentation");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk analyze s3-2.4.0 /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "  bal tool-id sdk pipeline s3-2.4.0 /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-tests /home/user/SDK-auto-generated-connectors/module-s3");
+    io:fprintln(io:stderr, "");
 }
 
 function executeOpenApiCommand(string[] args) returns error? {
@@ -1579,34 +1582,64 @@ function executeOpenApiCommand(string[] args) returns error? {
     }
 
     if os:getEnv("ANTHROPIC_API_KEY").length() == 0 {
-        io:println("WARNING: ANTHROPIC_API_KEY is not set. AI-powered steps (sanitize, generate-tests, generate-examples, generate-docs) will fail.");
+        oautils:logWarn("ANTHROPIC_API_KEY is not set — AI-powered steps (sanitize, generate-tests, generate-examples, generate-docs) will fail", "normal");
     }
 
     string subCommand = args[0];
     string[] subArgs = args.slice(1);
+    oautils:LogLevel logLevel = parseOpenApiLogLevel(subArgs);
+    boolean autoYes = parseOpenApiAutoYes(subArgs);
+    string[] positional = parseOpenApiPositionalArgs(subArgs);
 
     match subCommand {
         "sanitize" => {
-            return sanitizor:executeSanitizor(...subArgs);
+            if positional.length() < 2 {
+                io:fprintln(io:stderr, "sanitize: requires <spec-path> <output-dir>");
+                return;
+            }
+            return sanitizor:executeSanitizor(positional[0], positional[1], logLevel, autoYes);
         }
         "generate-client" => {
-            return client_generator:executeClientGen(...subArgs);
+            if positional.length() < 2 {
+                io:fprintln(io:stderr, "generate-client: requires <spec-path> <output-dir>");
+                return;
+            }
+            return client_generator:executeClientGen(positional[0], positional[1], logLevel);
         }
         "generate-tests" => {
-            return test_generator:executeTestGen("openapi", ...subArgs);
+            if positional.length() < 2 {
+                io:fprintln(io:stderr, "generate-tests: requires <connector-path> <spec-path>");
+                return;
+            }
+            return test_generator:executeTestGen("openapi", positional[0], positional[1], logLevel);
         }
         "generate-examples" => {
-            return example_generator:executeExampleGen(...subArgs);
+            if positional.length() < 1 {
+                io:fprintln(io:stderr, "generate-examples: requires <connector-path>");
+                return;
+            }
+            return example_generator:executeExampleGen(positional[0], logLevel, autoYes);
         }
         "generate-docs" => {
-            return document_generator:executeDocGen(...subArgs);
+            if positional.length() < 2 {
+                io:fprintln(io:stderr, "generate-docs: requires <doc-command> <connector-path>");
+                return;
+            }
+            return document_generator:executeDocGen(positional[0], positional[1], logLevel);
         }
         "generate-all" => {
-            string[] docArgs = ["generate-all", ...subArgs];
-            return document_generator:executeDocGen(...docArgs);
-        } // Should we have fix code before the generate-test and others?
+            if positional.length() < 1 {
+                io:fprintln(io:stderr, "generate-all: requires <connector-path>");
+                return;
+            }
+            return document_generator:executeDocGen("generate-all", positional[0], logLevel);
+        }
         "fix-code" => {
-            return fixer:executeCodeFixer(...subArgs);
+            if positional.length() < 1 {
+                io:fprintln(io:stderr, "fix-code: requires <connector-path>");
+                return;
+            }
+            return fixer:executeCodeFixer(positional[0], logLevel);
         }
         "pipeline" => {
             return runOpenApiPipeline(subArgs);
@@ -1619,6 +1652,47 @@ function executeOpenApiCommand(string[] args) returns error? {
             return error(string `Unknown OpenAPI command: ${subCommand}`);
         }
     }
+}
+
+function parseOpenApiLogLevel(string[] args) returns oautils:LogLevel {
+    foreach string arg in args {
+        if arg == "-q" || arg == "--quiet" || arg == "quiet" {
+            return "quiet";
+        }
+        if arg == "-v" || arg == "--verbose" || arg == "verbose" {
+            return "verbose";
+        }
+    }
+    return "normal";
+}
+
+function parseOpenApiAutoYes(string[] args) returns boolean {
+    foreach string arg in args {
+        if arg == "-y" || arg == "--yes" || arg == "yes" {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Extract positional args (non-flag values). Also resolves -i/-o flag values.
+function parseOpenApiPositionalArgs(string[] args) returns string[] {
+    string[] positional = [];
+    int i = 0;
+    while i < args.length() {
+        string arg = args[i];
+        if arg == "-i" || arg == "-o" || arg == "--input" || arg == "--output" {
+            if i + 1 < args.length() {
+                positional.push(args[i + 1]);
+                i += 2;
+                continue;
+            }
+        } else if !arg.startsWith("-") && arg != "quiet" && arg != "verbose" && arg != "yes" && arg != "regenerate" {
+            positional.push(arg);
+        }
+        i += 1;
+    }
+    return positional;
 }
 
 function printOpenApiSubCommandUsage(string subCommand) {
@@ -1648,7 +1722,7 @@ function printOpenApiSubCommandUsage(string subCommand) {
             printOpenApiGenerateDocsUsage();
         }
         _ => {
-            io:println(string `Unknown OpenAPI command: ${subCommand}`);
+            oautils:logError(string `Unknown OpenAPI command: ${subCommand}`);
             printOpenApiUsage();
         }
     }
@@ -1656,7 +1730,7 @@ function printOpenApiSubCommandUsage(string subCommand) {
 
 function runOpenApiPipeline(string[] args) returns error? {
     if args.length() < 2 {
-        io:println("Usage: bal tool-id openapi pipeline <openapi-spec> <output-dir> [options]");
+        io:fprintln(io:stderr, "Usage: bal connector openapi pipeline <openapi-spec> <output-dir> [-q|-v] [--yes]");
         return;
     }
 
@@ -1664,570 +1738,496 @@ function runOpenApiPipeline(string[] args) returns error? {
     string outputDir = args[1];
     string[] pipelineOptions = args.slice(2);
 
-    boolean quietMode = false;
-    boolean autoYes = false;
+    oautils:LogLevel logLevel = parseOpenApiLogLevel(pipelineOptions);
+    boolean autoYes = parseOpenApiAutoYes(pipelineOptions);
     boolean regenerate = false;
 
     foreach string option in pipelineOptions {
-        if option == "quiet" || option == "--quiet" || option == "-q" {
-            quietMode = true;
-        } else if option == "yes" || option == "--yes" || option == "-y" {
-            autoYes = true;
-        } else if option == "regenerate" {
+        if option == "regenerate" {
             regenerate = true;
         }
     }
 
     if regenerate {
-        return runOpenApiRegenerationPipeline(openApiSpec, outputDir, pipelineOptions, quietMode, autoYes);
+        return runOpenApiRegenerationPipeline(openApiSpec, outputDir, logLevel, autoYes);
     }
 
-    printOpenApiPipelineHeader(openApiSpec, outputDir, quietMode, false);
+    printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, false);
 
-    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", quietMode);
-    string[] sanitizeArgs = [openApiSpec, outputDir, ...pipelineOptions];
-    error? sanitizeResult = sanitizor:executeSanitizor(...sanitizeArgs);
+    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel, autoYes);
     if sanitizeResult is error {
-        io:println(string `Sanitization failed: ${sanitizeResult.message()}`);
+        oautils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
         return sanitizeResult;
     }
-    if !quietMode {
-        io:println("Sanitization completed successfully");
-    }
+    oautils:logInfo("✓ sanitization complete", logLevel);
     error? sanitationsDocResult = sanitizor:generateSanitationsDoc(
-        openApiSpec, string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`, outputDir, quietMode);
-    if sanitationsDocResult is error && !quietMode {
-        io:println(string `Could not generate sanitations.md: ${sanitationsDocResult.message()}`);
+        openApiSpec, string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`, outputDir, logLevel);
+    if sanitationsDocResult is error {
+        oautils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
     }
 
-    printOpenApiStepHeader(2, "Generating Ballerina Client", quietMode);
+    printOpenApiStepHeader(2, "Generating Ballerina Client", logLevel);
     string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
     string clientPath = string `${outputDir}/ballerina`;
-    string[] clientArgs = [sanitizedSpec, clientPath, ...pipelineOptions];
-    error? clientResult = client_generator:executeClientGen(...clientArgs);
+    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, logLevel);
     if clientResult is error {
-        io:println(string `Client generation failed: ${clientResult.message()}`);
-        io:println("Continuing pipeline...");
-    } else if !quietMode {
-        io:println("Client generation completed successfully");
+        oautils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`, logLevel);
+    } else {
+        oautils:logInfo("✓ client generated", logLevel);
     }
 
-    printOpenApiStepHeader(3, "Building and Validating Client", quietMode);
-    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, quietMode);
+    printOpenApiStepHeader(3, "Building and Validating Client", logLevel);
+    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, logLevel);
     if oautils:hasCompilationErrors(buildResult) {
-        io:println("Build validation failed: client contains compilation errors");
-        io:println("Run 'bal tool-id openapi fix-code <connector-path>' to resolve, or fix manually");
-        return error(string `Client build failed: ${buildResult.stderr}`);
+        oautils:logError("build validation failed: client contains compilation errors");
+        oautils:logError("run 'bal connector openapi fix-code <connector-path>' to resolve");
+        return error(string `client build failed: ${buildResult.stderr}`);
     }
-    if !quietMode {
-        io:println("Client built and validated successfully");
-    }
+    oautils:logInfo("✓ client built and validated", logLevel);
 
-    printOpenApiStepHeader(4, "Generating Examples", quietMode);
-    string[] exampleArgs = [outputDir, ...pipelineOptions];
-    error? exampleResult = example_generator:executeExampleGen(...exampleArgs);
+    printOpenApiStepHeader(4, "Generating Examples", logLevel);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel, autoYes);
     if exampleResult is error {
-        io:println(string `Example generation failed: ${exampleResult.message()}`);
-        io:println("Continuing pipeline...");
-    } else if !quietMode {
-        io:println("Example generation completed successfully");
+        oautils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
+    } else {
+        oautils:logInfo("✓ examples generated", logLevel);
     }
 
-    printOpenApiStepHeader(5, "Generating Tests", quietMode);
-    string[] testArgs = [outputDir, sanitizedSpec, ...pipelineOptions];
-    error? testResult = test_generator:executeTestGen("openapi", ...testArgs);
+    printOpenApiStepHeader(5, "Generating Tests", logLevel);
+    error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
     if testResult is error {
-        io:println(string `Test generation failed: ${testResult.message()}`);
-        io:println("Continuing pipeline...");
-    } else if !quietMode {
-        io:println("Test generation completed successfully");
+        oautils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
+    } else {
+        oautils:logInfo("✓ tests generated", logLevel);
     }
 
-    printOpenApiStepHeader(6, "Generating Documentation", quietMode);
-    string[] docArgs = ["generate-all", outputDir, ...pipelineOptions];
-    error? docResult = document_generator:executeDocGen(...docArgs);
+    printOpenApiStepHeader(6, "Generating Documentation", logLevel);
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel);
     if docResult is error {
-        io:println(string `Documentation generation failed: ${docResult.message()}`);
-    } else if !quietMode {
-        io:println("Documentation generation completed successfully");
+        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
+    } else {
+        oautils:logInfo("✓ documentation generated", logLevel);
     }
 
-    printOpenApiPipelineCompletion(outputDir, quietMode);
+    printOpenApiPipelineCompletion(outputDir, logLevel);
 }
 
-function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, string[] pipelineOptions,
-        boolean quietMode, boolean autoYes) returns error? {
-    printOpenApiPipelineHeader(openApiSpec, outputDir, quietMode, true);
+function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oautils:LogLevel logLevel, boolean autoYes) returns error? {
+    printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, true);
 
-    error? initResult = oautils:initAIService(quietMode);
-    if initResult is error && !quietMode {
-        io:println("AI service unavailable before sanitations; continuing with available parsing.");
+    error? initResult = oautils:initAIService(logLevel);
+    if initResult is error {
+        oautils:logWarn("AI service unavailable before sanitations — continuing with available parsing", logLevel);
     }
 
     string sanitationsPath = string `${outputDir}/docs/spec/sanitations.md`;
-    error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, quietMode);
+    error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, logLevel);
     if applyResult is error {
-        io:println(string `Could not apply recorded sanitations: ${applyResult.message()}`);
-        io:println("Continuing without pre-applied sanitations...");
-    } else if !quietMode {
-        io:println("Recorded sanitations applied to the new specification");
+        oautils:logWarn(string `could not apply recorded sanitations: ${applyResult.message()} — continuing`, logLevel);
+    } else {
+        oautils:logInfo("✓ recorded sanitations applied", logLevel);
     }
 
-    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", quietMode);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, ...pipelineOptions);
+    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel, autoYes);
     if sanitizeResult is error {
         return sanitizeResult;
     }
 
     string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
-    error? sanitationsDocResult = sanitizor:generateSanitationsDoc(
-        openApiSpec, sanitizedSpec, outputDir, quietMode);
-    if sanitationsDocResult is error && !quietMode {
-        io:println(string `Could not refresh sanitations.md: ${sanitationsDocResult.message()}`);
+    error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, outputDir, logLevel);
+    if sanitationsDocResult is error {
+        oautils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
     }
 
-    printOpenApiStepHeader(2, "Regenerating Ballerina Client", quietMode);
+    printOpenApiStepHeader(2, "Regenerating Ballerina Client", logLevel);
     string clientPath = string `${outputDir}/ballerina`;
-    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, ...pipelineOptions);
+    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, logLevel);
     if clientResult is error {
-        io:println(string `Client regeneration failed: ${clientResult.message()}`);
-        io:println("Continuing pipeline...");
+        oautils:logWarn(string `client regeneration failed: ${clientResult.message()} — continuing`, logLevel);
     }
 
-    printOpenApiStepHeader(3, "Building and Validating Client", quietMode);
-    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, quietMode);
+    printOpenApiStepHeader(3, "Building and Validating Client", logLevel);
+    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, logLevel);
     if oautils:hasCompilationErrors(buildResult) {
-        string[] fixerArgs = [clientPath];
-        if autoYes {
-            fixerArgs.push("yes");
-        }
-        if quietMode {
-            fixerArgs.push("quiet");
-        }
-        error? fixResult = fixer:executeCodeFixer(...fixerArgs);
-        if fixResult is error && !quietMode {
-            io:println(string `Initial recovery fix failed: ${fixResult.message()}`);
+        error? fixResult = fixer:executeCodeFixer(clientPath, logLevel);
+        if fixResult is error {
+            oautils:logWarn(string `initial recovery fix failed: ${fixResult.message()}`, logLevel);
         }
 
-        oautils:CommandResult retryBuild = oautils:executeBalBuild(clientPath, quietMode);
+        oautils:CommandResult retryBuild = oautils:executeBalBuild(clientPath, logLevel);
         if oautils:hasCompilationErrors(retryBuild) {
             error? removeTests = file:remove(clientPath + "/tests", file:RECURSIVE);
             error? removeMock = file:remove(clientPath + "/modules/mock.server", file:RECURSIVE);
-            if removeTests is error && !quietMode {
-                io:println(string `Could not remove old tests: ${removeTests.message()}`);
+            if removeTests is error {
+                oautils:logWarn(string `could not remove old tests: ${removeTests.message()}`, logLevel);
             }
-            if removeMock is error && !quietMode {
-                io:println(string `Could not remove old mock module: ${removeMock.message()}`);
+            if removeMock is error {
+                oautils:logWarn(string `could not remove old mock module: ${removeMock.message()}`, logLevel);
             }
 
-            printOpenApiStepHeader(4, "Regenerating Tests for New API Version", quietMode);
-            error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec,
-                ...pipelineOptions);
+            printOpenApiStepHeader(4, "Regenerating Tests for New API Version", logLevel);
+            error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
             if testResult is error {
                 return testResult;
             }
-            retryBuild = oautils:executeBalBuild(clientPath, quietMode);
+            retryBuild = oautils:executeBalBuild(clientPath, logLevel);
             if oautils:hasCompilationErrors(retryBuild) {
-                error? finalFix = fixer:executeCodeFixer(...fixerArgs);
+                error? finalFix = fixer:executeCodeFixer(clientPath, logLevel);
                 if finalFix is error {
                     return finalFix;
                 }
             }
         }
     } else {
-        printOpenApiStepHeader(4, "Regenerating Tests", quietMode);
-        error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec,
-            ...pipelineOptions);
+        printOpenApiStepHeader(4, "Regenerating Tests", logLevel);
+        error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
         if testResult is error {
-            io:println(string `Test regeneration failed: ${testResult.message()}`);
+            oautils:logWarn(string `test regeneration failed: ${testResult.message()}`, logLevel);
         }
     }
 
-    printOpenApiStepHeader(5, "Regenerating Examples", quietMode);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, ...pipelineOptions);
+    printOpenApiStepHeader(5, "Regenerating Examples", logLevel);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel, autoYes);
     if exampleResult is error {
-        io:println(string `Example regeneration failed: ${exampleResult.message()}`);
+        oautils:logWarn(string `example regeneration failed: ${exampleResult.message()}`, logLevel);
     }
 
-    printOpenApiStepHeader(6, "Generating Documentation", quietMode);
-    error? docResult = document_generator:executeDocGen("generate-all", outputDir, ...pipelineOptions);
+    printOpenApiStepHeader(6, "Generating Documentation", logLevel);
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel);
     if docResult is error {
-        io:println(string `Documentation generation failed: ${docResult.message()}`);
+        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
     }
 
-    printOpenApiRegenerationCompletion(outputDir, quietMode);
+    printOpenApiPipelineCompletion(outputDir, logLevel);
 }
 
-function printOpenApiPipelineHeader(string openApiSpec, string outputDir, boolean quietMode, boolean regenerate) {
-    if quietMode {
+function printOpenApiPipelineHeader(string openApiSpec, string outputDir, oautils:LogLevel logLevel, boolean regenerate) {
+    if logLevel == "quiet" {
         return;
     }
-    string sep = createMainSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println(regenerate ? "OpenAPI Connector Regeneration Pipeline" : "OpenAPI Connector Automation Pipeline");
-    io:println(sep);
-    io:println(string `Input : ${openApiSpec}`);
-    io:println(string `Output: ${outputDir}`);
-    io:println("");
-    io:println("Pipeline Steps:");
-    io:println("  1. Sanitize OpenAPI specification");
-    io:println("  2. Generate Ballerina client");
-    io:println("  3. Build and validate client");
-    io:println("  4. Generate examples");
-    io:println("  5. Generate tests");
-    io:println("  6. Generate documentation");
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, regenerate ? "OpenAPI Connector Regeneration Pipeline" : "OpenAPI Connector Automation Pipeline");
+    io:fprintln(io:stderr, string `  spec  : ${openApiSpec}`);
+    io:fprintln(io:stderr, string `  output: ${outputDir}`);
 }
 
-function printOpenApiStepHeader(int stepNum, string title, boolean quietMode) {
-    if quietMode {
-        return;
-    }
-    string sep = createMainSeparator("-", 60);
-    io:println("");
-    io:println(string `[${stepNum}/6] ${title}`);
-    io:println(sep);
+function printOpenApiStepHeader(int stepNum, string title, oautils:LogLevel logLevel) {
+    oautils:logStep(stepNum, 6, title, logLevel);
 }
 
-function printOpenApiPipelineCompletion(string outputDir, boolean quietMode) {
-    string sep = createMainSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println("OpenAPI Pipeline Completed");
-    io:println(sep);
-    io:println(string `  Sanitized specification : ${outputDir}/docs/spec/`);
-    io:println(string `  Ballerina client        : ${outputDir}/ballerina/`);
-    io:println(string `  Usage examples          : ${outputDir}/examples/`);
-    io:println(string `  Test suite              : ${outputDir}/ballerina/tests/`);
-    io:println(string `  Documentation           : ${outputDir}`);
-    if !quietMode {
-        io:println(sep);
-    }
-}
-
-function printOpenApiRegenerationCompletion(string outputDir, boolean quietMode) {
-    string sep = createMainSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println("OpenAPI Regeneration Pipeline Completed");
-    io:println(sep);
-    io:println(string `  Updated specification : ${outputDir}/docs/spec/`);
-    io:println(string `  Regenerated client    : ${outputDir}/ballerina/`);
-    io:println(string `  Refreshed examples    : ${outputDir}/examples/`);
-    io:println(string `  Updated documentation : ${outputDir}`);
-    if !quietMode {
-        io:println(sep);
-    }
+function printOpenApiPipelineCompletion(string outputDir, oautils:LogLevel logLevel) {
+    oautils:logCompletion(outputDir, logLevel);
 }
 
 function printOpenApiUsage() {
-    io:println();
-    io:println("OpenAPI Workflow - OpenAPI Spec → Ballerina Connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi pipeline <spec> <output-dir> [options]");
-    io:println("  bal tool-id openapi sanitize <spec> <output-dir> [options]");
-    io:println("  bal tool-id openapi generate-client <spec> <output-dir> [options]");
-    io:println("  bal tool-id openapi fix-code <connector-path> [options]");
-    io:println("  bal tool-id openapi generate-tests <connector-path> <spec-path> [options]");
-    io:println("  bal tool-id openapi generate-examples <connector-path> [options]");
-    io:println("  bal tool-id openapi generate-docs <doc-command> <connector-path> [options]");
-    io:println();
-    io:println("COMMANDS:");
-    io:println("  pipeline          Run full OpenAPI pipeline end-to-end");
-    io:println("  sanitize          Sanitize and enhance the OpenAPI specification");
-    io:println("  generate-client   Generate Ballerina client from sanitized spec");
-    io:println("  fix-code          Fix compilation errors in generated client");
-    io:println("  generate-tests    Generate mock server + live integration tests");
-    io:println("  generate-examples Generate code examples for the connector");
-    io:println("  generate-docs     Generate documentation (specify doc-command)");
-    io:println();
-    io:println("DOC COMMANDS (for generate-docs):");
-    io:println("  generate-all");
-    io:println("  generate-ballerina");
-    io:println("  generate-tests");
-    io:println("  generate-examples");
-    io:println("  generate-individual-examples");
-    io:println("  generate-main");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes      Auto-confirm all prompts");
-    io:println("  quiet    Reduce log output");
-    io:println("  regenerate  Reapply recorded sanitations and recover tests/examples for an updated spec");
-    io:println();
-    io:println("EXAMPLES:");
-    io:println("  bal tool-id openapi pipeline /home/user/spec.yaml /home/user/my-connector");
-    io:println("  bal tool-id openapi pipeline /home/user/spec.yaml /home/user/my-connector yes regenerate");
-    io:println("  bal tool-id openapi sanitize /home/user/spec.yaml /home/user/my-connector");
-    io:println("  bal tool-id openapi generate-client /home/user/spec.yaml /home/user/my-connector");
-    io:println("  bal tool-id openapi fix-code /home/user/my-connector/ballerina");
-    io:println("  bal tool-id openapi generate-tests /home/user/my-connector /home/user/spec.yaml");
-    io:println("  bal tool-id openapi generate-docs generate-all /home/user/my-connector");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OpenAPI Workflow - OpenAPI Spec → Ballerina Connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi pipeline <spec> <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id openapi sanitize <spec> <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-client <spec> <output-dir> [options]");
+    io:fprintln(io:stderr, "  bal tool-id openapi fix-code <connector-path> [options]");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-tests <connector-path> <spec-path> [options]");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-examples <connector-path> [options]");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-docs <doc-command> <connector-path> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "COMMANDS:");
+    io:fprintln(io:stderr, "  pipeline          Run full OpenAPI pipeline end-to-end");
+    io:fprintln(io:stderr, "  sanitize          Sanitize and enhance the OpenAPI specification");
+    io:fprintln(io:stderr, "  generate-client   Generate Ballerina client from sanitized spec");
+    io:fprintln(io:stderr, "  fix-code          Fix compilation errors in generated client");
+    io:fprintln(io:stderr, "  generate-tests    Generate mock server + live integration tests");
+    io:fprintln(io:stderr, "  generate-examples Generate code examples for the connector");
+    io:fprintln(io:stderr, "  generate-docs     Generate documentation (specify doc-command)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "DOC COMMANDS (for generate-docs):");
+    io:fprintln(io:stderr, "  generate-all");
+    io:fprintln(io:stderr, "  generate-ballerina");
+    io:fprintln(io:stderr, "  generate-tests");
+    io:fprintln(io:stderr, "  generate-examples");
+    io:fprintln(io:stderr, "  generate-individual-examples");
+    io:fprintln(io:stderr, "  generate-main");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes      Auto-confirm all prompts");
+    io:fprintln(io:stderr, "  quiet    Reduce log output");
+    io:fprintln(io:stderr, "  regenerate  Reapply recorded sanitations and recover tests/examples for an updated spec");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLES:");
+    io:fprintln(io:stderr, "  bal tool-id openapi pipeline /home/user/spec.yaml /home/user/my-connector");
+    io:fprintln(io:stderr, "  bal tool-id openapi pipeline /home/user/spec.yaml /home/user/my-connector yes regenerate");
+    io:fprintln(io:stderr, "  bal tool-id openapi sanitize /home/user/spec.yaml /home/user/my-connector");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-client /home/user/spec.yaml /home/user/my-connector");
+    io:fprintln(io:stderr, "  bal tool-id openapi fix-code /home/user/my-connector/ballerina");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-tests /home/user/my-connector /home/user/spec.yaml");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-docs generate-all /home/user/my-connector");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiPipelineUsage() {
-    io:println();
-    io:println("Run the full OpenAPI connector automation pipeline");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi pipeline <spec> <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <spec>        Path to the source OpenAPI specification");
-    io:println("  <output-dir>  Directory for the generated connector workspace");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println("  regenerate           Reapply recorded sanitations and refresh generated assets");
-    io:println("  remote-methods       Generate client APIs as remote methods");
-    io:println("  resource-methods     Generate client APIs as resource methods");
-    io:println("  license=<path>       License file path for generated source headers");
-    io:println("  tags=<tag1,tag2>     Include only operations from the given OpenAPI tags");
-    io:println("  operations=<op1,op2> Include only the given operation IDs");
-    io:println("  client-method=<resource|remote>");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Run the full OpenAPI connector automation pipeline");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi pipeline <spec> <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <spec>        Path to the source OpenAPI specification");
+    io:fprintln(io:stderr, "  <output-dir>  Directory for the generated connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "  regenerate           Reapply recorded sanitations and refresh generated assets");
+    io:fprintln(io:stderr, "  remote-methods       Generate client APIs as remote methods");
+    io:fprintln(io:stderr, "  resource-methods     Generate client APIs as resource methods");
+    io:fprintln(io:stderr, "  license=<path>       License file path for generated source headers");
+    io:fprintln(io:stderr, "  tags=<tag1,tag2>     Include only operations from the given OpenAPI tags");
+    io:fprintln(io:stderr, "  operations=<op1,op2> Include only the given operation IDs");
+    io:fprintln(io:stderr, "  client-method=<resource|remote>");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiSanitizeUsage() {
-    io:println();
-    io:println("Sanitize and enhance an OpenAPI specification");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi sanitize <spec> <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <spec>        Path to the source OpenAPI specification");
-    io:println("  <output-dir>  Directory for sanitized specification files and sanitation records");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Sanitize and enhance an OpenAPI specification");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi sanitize <spec> <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <spec>        Path to the source OpenAPI specification");
+    io:fprintln(io:stderr, "  <output-dir>  Directory for sanitized specification files and sanitation records");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiGenerateClientUsage() {
-    io:println();
-    io:println("Generate a Ballerina client project from an OpenAPI specification");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi generate-client <spec> <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <spec>        Path to the OpenAPI specification");
-    io:println("  <output-dir>  Directory where the generated Ballerina client is written");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println("  remote-methods       Generate client APIs as remote methods");
-    io:println("  resource-methods     Generate client APIs as resource methods");
-    io:println("  license=<path>       License file path for generated source headers");
-    io:println("  tags=<tag1,tag2>     Include only operations from the given OpenAPI tags");
-    io:println("  operations=<op1,op2> Include only the given operation IDs");
-    io:println("  client-method=<resource|remote>");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate a Ballerina client project from an OpenAPI specification");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-client <spec> <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <spec>        Path to the OpenAPI specification");
+    io:fprintln(io:stderr, "  <output-dir>  Directory where the generated Ballerina client is written");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "  remote-methods       Generate client APIs as remote methods");
+    io:fprintln(io:stderr, "  resource-methods     Generate client APIs as resource methods");
+    io:fprintln(io:stderr, "  license=<path>       License file path for generated source headers");
+    io:fprintln(io:stderr, "  tags=<tag1,tag2>     Include only operations from the given OpenAPI tags");
+    io:fprintln(io:stderr, "  operations=<op1,op2> Include only the given operation IDs");
+    io:fprintln(io:stderr, "  client-method=<resource|remote>");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiFixCodeUsage() {
-    io:println();
-    io:println("Fix Ballerina compilation errors in a generated connector project");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi fix-code <connector-path> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <connector-path>  Path to the generated Ballerina connector project");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Fix Ballerina compilation errors in a generated connector project");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi fix-code <connector-path> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <connector-path>  Path to the generated Ballerina connector project");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiGenerateTestsUsage() {
-    io:println();
-    io:println("Generate OpenAPI connector tests and mock server module");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi generate-tests <connector-path> <spec-path> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <connector-path>  Path to the connector workspace");
-    io:println("  <spec-path>       Path to the OpenAPI specification");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate OpenAPI connector tests and mock server module");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-tests <connector-path> <spec-path> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <connector-path>  Path to the connector workspace");
+    io:fprintln(io:stderr, "  <spec-path>       Path to the OpenAPI specification");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiGenerateExamplesUsage() {
-    io:println();
-    io:println("Generate AI-assisted Ballerina examples for a connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi generate-examples <connector-path> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <connector-path>  Path to the connector workspace");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println("  regenerate           Try recovering existing examples before fresh generation");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate AI-assisted Ballerina examples for a connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-examples <connector-path> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <connector-path>  Path to the connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "  regenerate           Try recovering existing examples before fresh generation");
+    io:fprintln(io:stderr, "");
 }
 
 function printOpenApiGenerateDocsUsage() {
-    io:println();
-    io:println("Generate README documentation for an OpenAPI-generated connector");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id openapi generate-docs <doc-command> <connector-path> [options]");
-    io:println();
-    io:println("DOC COMMANDS:");
-    io:println("  generate-all");
-    io:println("  generate-ballerina");
-    io:println("  generate-tests");
-    io:println("  generate-examples");
-    io:println("  generate-individual-examples");
-    io:println("  generate-main");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <doc-command>     Documentation mode to run");
-    io:println("  <connector-path>  Path to the connector workspace");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate README documentation for an OpenAPI-generated connector");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-docs <doc-command> <connector-path> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "DOC COMMANDS:");
+    io:fprintln(io:stderr, "  generate-all");
+    io:fprintln(io:stderr, "  generate-ballerina");
+    io:fprintln(io:stderr, "  generate-tests");
+    io:fprintln(io:stderr, "  generate-examples");
+    io:fprintln(io:stderr, "  generate-individual-examples");
+    io:fprintln(io:stderr, "  generate-main");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <doc-command>     Documentation mode to run");
+    io:fprintln(io:stderr, "  <connector-path>  Path to the connector workspace");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "");
 }
 
 function printMainUsage() {
-    io:println();
-    io:println("Connector Automator");
-    io:println();
-    io:println("USAGE:");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Connector Automator");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
     foreach WorkflowCommand workflow in getWorkflowRegistry() {
-        io:println(string `  bal tool-id ${workflow.name} <command> [args...]      ${workflow.description}`);
+        io:fprintln(io:stderr, string `  bal tool-id ${workflow.name} <command> [args...]      ${workflow.description}`);
     }
-    io:println();
-    io:println("SDK COMMANDS:");
-    io:println("  sdk analyze <sdk-ref> <output-dir>         Analyze Java SDK");
-    io:println("  sdk pipeline <sdk-ref> <output-dir>        Run full SDK pipeline");
-    io:println("  sdk generate <output-dir>                  Generate API spec + IR");
-    io:println("  sdk connector <output-dir>                 Generate connector");
-    io:println("  sdk fix-code <output-dir>                  Fix compilation errors");
-    io:println("  sdk generate-tests <output-dir>            Generate live tests");
-    io:println("  sdk generate-examples <output-dir>         Generate examples");
-    io:println("  sdk generate-docs <output-dir>             Generate documentation");
-    io:println();
-    io:println("OPENAPI COMMANDS:");
-    io:println("  openapi pipeline <spec> <output-dir>       Run full OpenAPI pipeline");
-    io:println("  openapi sanitize <spec> <output-dir>       Sanitize OpenAPI specification");
-    io:println("  openapi generate-client <spec> <output>    Generate Ballerina client");
-    io:println("  openapi fix-code <connector-path>          Fix compilation errors");
-    io:println("  openapi generate-tests <path> <spec>       Generate mock + live tests");
-    io:println("  openapi generate-examples <path>           Generate examples");
-    io:println("  openapi generate-docs <cmd> <path>         Generate documentation");
-    io:println();
-    io:println("EXAMPLES:");
-    io:println("  bal tool-id sdk analyze s3-2.4.0 /home/user/SDK-auto-generated-connectors");
-    io:println("  bal tool-id sdk pipeline s3-2.4.0 /home/user/SDK-auto-generated-connectors");
-    io:println("  bal tool-id sdk generate-tests /home/user/SDK-auto-generated-connectors/module-s3");
-    io:println("  bal tool-id openapi generate-tests /home/user/my-connector /home/user/spec.yaml");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "SDK COMMANDS:");
+    io:fprintln(io:stderr, "  sdk analyze <sdk-ref> <output-dir>         Analyze Java SDK");
+    io:fprintln(io:stderr, "  sdk pipeline <sdk-ref> <output-dir>        Run full SDK pipeline");
+    io:fprintln(io:stderr, "  sdk generate <output-dir>                  Generate API spec + IR");
+    io:fprintln(io:stderr, "  sdk connector <output-dir>                 Generate connector");
+    io:fprintln(io:stderr, "  sdk fix-code <output-dir>                  Fix compilation errors");
+    io:fprintln(io:stderr, "  sdk generate-tests <output-dir>            Generate live tests");
+    io:fprintln(io:stderr, "  sdk generate-examples <output-dir>         Generate examples");
+    io:fprintln(io:stderr, "  sdk generate-docs <output-dir>             Generate documentation");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPENAPI COMMANDS:");
+    io:fprintln(io:stderr, "  openapi pipeline <spec> <output-dir>       Run full OpenAPI pipeline");
+    io:fprintln(io:stderr, "  openapi sanitize <spec> <output-dir>       Sanitize OpenAPI specification");
+    io:fprintln(io:stderr, "  openapi generate-client <spec> <output>    Generate Ballerina client");
+    io:fprintln(io:stderr, "  openapi fix-code <connector-path>          Fix compilation errors");
+    io:fprintln(io:stderr, "  openapi generate-tests <path> <spec>       Generate mock + live tests");
+    io:fprintln(io:stderr, "  openapi generate-examples <path>           Generate examples");
+    io:fprintln(io:stderr, "  openapi generate-docs <cmd> <path>         Generate documentation");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLES:");
+    io:fprintln(io:stderr, "  bal tool-id sdk analyze s3-2.4.0 /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "  bal tool-id sdk pipeline s3-2.4.0 /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate-tests /home/user/SDK-auto-generated-connectors/module-s3");
+    io:fprintln(io:stderr, "  bal tool-id openapi generate-tests /home/user/my-connector /home/user/spec.yaml");
+    io:fprintln(io:stderr, "");
 }
 
 function printAnalyzeUsage() {
-    io:println();
-    io:println("Analyze a Java SDK reference and write metadata under the output root");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk analyze <sdk-ref> <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <sdk-ref>     Dataset key or Maven coordinate for the Java SDK");
-    io:println("  <output-dir>  Root directory for generated connector artifacts");
-    io:println();
-    io:println("OUTPUT:");
-    io:println("  <output-dir>/docs/spec/<dataset-key>-metadata.json");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y       Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println("  include-deprecated   Include deprecated SDK APIs");
-    io:println("  include-internal     Include APIs normally filtered as internal");
-    io:println("  include-non-public   Include non-public APIs where available");
-    io:println("  include-packages=<packages>");
-    io:println("  exclude-packages=<packages>");
-    io:println("  max-depth=<n>");
-    io:println("  methods-to-list=<n>");
-    io:println("  sources=<path>");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk analyze s3-2.4.0 /home/user/SDK-auto-generated-connectors quiet");
-    io:println("  bal tool-id sdk analyze org.apache.kafka:kafka-clients:3.9.1 /home/user/SDK-auto-generated-connectors");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Analyze a Java SDK reference and write metadata under the output root");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk analyze <sdk-ref> <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <sdk-ref>     Dataset key or Maven coordinate for the Java SDK");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory for generated connector artifacts");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>-metadata.json");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y       Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "  include-deprecated   Include deprecated SDK APIs");
+    io:fprintln(io:stderr, "  include-internal     Include APIs normally filtered as internal");
+    io:fprintln(io:stderr, "  include-non-public   Include non-public APIs where available");
+    io:fprintln(io:stderr, "  include-packages=<packages>");
+    io:fprintln(io:stderr, "  exclude-packages=<packages>");
+    io:fprintln(io:stderr, "  max-depth=<n>");
+    io:fprintln(io:stderr, "  methods-to-list=<n>");
+    io:fprintln(io:stderr, "  sources=<path>");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk analyze s3-2.4.0 /home/user/SDK-auto-generated-connectors quiet");
+    io:fprintln(io:stderr, "  bal tool-id sdk analyze org.apache.kafka:kafka-clients:3.9.1 /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "");
 }
 
 function printGenerateUsage() {
-    io:println();
-    io:println("Generate Ballerina API specification from fixed metadata output");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk generate <output-dir> [options]");
-    io:println();
-    io:println("INPUT:");
-    io:println("  <output-dir>/docs/spec/*-metadata.json");
-    io:println();
-    io:println("OUTPUT:");
-    io:println("  <output-dir>/docs/spec/<dataset-key>-ir.json");
-    io:println("  <output-dir>/docs/spec/<dataset-key>_spec.bal");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  quiet, --quiet, -q   Reduce log output");
-    io:println("  no-thinking          Disable LLM extended thinking");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk generate /home/user/SDK-auto-generated-connectors");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Generate Ballerina API specification from fixed metadata output");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "INPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/*-metadata.json");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUT:");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>-ir.json");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>_spec.bal");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q   Reduce log output");
+    io:fprintln(io:stderr, "  no-thinking          Disable LLM extended thinking");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk generate /home/user/SDK-auto-generated-connectors");
+    io:fprintln(io:stderr, "");
 }
 
 function printPipelineUsage() {
-    io:println();
-    io:println("Run the full SDK connector generation pipeline");
-    io:println();
-    io:println("USAGE:");
-    io:println("  bal tool-id sdk pipeline <sdk-ref> <output-dir> [options]");
-    io:println();
-    io:println("ARGUMENTS:");
-    io:println("  <sdk-ref>     Dataset key or Maven coordinate for the Java SDK");
-    io:println("  <output-dir>  Root directory for generated connector artifacts");
-    io:println();
-    io:println("OUTPUTS:");
-    io:println("  <output-dir>/docs/spec/<dataset-key>-metadata.json");
-    io:println("  <output-dir>/docs/spec/<dataset-key>-ir.json");
-    io:println("  <output-dir>/docs/spec/<dataset-key>_spec.bal");
-    io:println("  <output-dir>/ballerina/... and <output-dir>/native/...");
-    io:println();
-    io:println("OPTIONS:");
-    io:println("  yes, --yes, -y          Auto-confirm prompts");
-    io:println("  quiet, --quiet, -q      Reduce log output");
-    io:println("  --fix-code              Run full code fixer phase (default: enabled)");
-    io:println("  --fix-report-only       Run fixer in diagnostics mode");
-    io:println("  --skip-fix              Skip code fixing phase");
-    io:println("  --skip-tests            Skip test generation phase");
-    io:println("  --generate-examples     Run example generation phase");
-    io:println("  --skip-examples         Skip example generation phase");
-    io:println("  --generate-docs         Run documentation generation phase");
-    io:println("  --skip-docs             Skip documentation generation phase");
-    io:println("  --fix-iterations=<n>    Maximum fixer iterations (default: 3)");
-    io:println();
-    io:println("EXAMPLE:");
-    io:println("  bal tool-id sdk pipeline s3-2.4.0 /home/user/SDK-auto-generated-connectors --fix-code");
-    io:println();
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Run the full SDK connector generation pipeline");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "USAGE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk pipeline <sdk-ref> <output-dir> [options]");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "ARGUMENTS:");
+    io:fprintln(io:stderr, "  <sdk-ref>     Dataset key or Maven coordinate for the Java SDK");
+    io:fprintln(io:stderr, "  <output-dir>  Root directory for generated connector artifacts");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OUTPUTS:");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>-metadata.json");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>-ir.json");
+    io:fprintln(io:stderr, "  <output-dir>/docs/spec/<dataset-key>_spec.bal");
+    io:fprintln(io:stderr, "  <output-dir>/ballerina/... and <output-dir>/native/...");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "OPTIONS:");
+    io:fprintln(io:stderr, "  yes, --yes, -y          Auto-confirm prompts");
+    io:fprintln(io:stderr, "  quiet, --quiet, -q      Reduce log output");
+    io:fprintln(io:stderr, "  --fix-code              Run full code fixer phase (default: enabled)");
+    io:fprintln(io:stderr, "  --fix-report-only       Run fixer in diagnostics mode");
+    io:fprintln(io:stderr, "  --skip-fix              Skip code fixing phase");
+    io:fprintln(io:stderr, "  --skip-tests            Skip test generation phase");
+    io:fprintln(io:stderr, "  --generate-examples     Run example generation phase");
+    io:fprintln(io:stderr, "  --skip-examples         Skip example generation phase");
+    io:fprintln(io:stderr, "  --generate-docs         Run documentation generation phase");
+    io:fprintln(io:stderr, "  --skip-docs             Skip documentation generation phase");
+    io:fprintln(io:stderr, "  --fix-iterations=<n>    Maximum fixer iterations (default: 3)");
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "EXAMPLE:");
+    io:fprintln(io:stderr, "  bal tool-id sdk pipeline s3-2.4.0 /home/user/SDK-auto-generated-connectors --fix-code");
+    io:fprintln(io:stderr, "");
 }

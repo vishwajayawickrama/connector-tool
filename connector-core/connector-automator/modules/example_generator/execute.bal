@@ -3,141 +3,51 @@ import connector_automator.utils;
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.runtime;
-import ballerina/time;
 
-public function executeExampleGen(string... args) returns error? {
-    if args.length() < 1 {
-        printUsage();
-        return;
-    }
-
-    string connectorPath = args[0];
-
-    // Parse options
-    boolean quietMode = false;
-    boolean autoYes = false;
-    boolean regenerate = false;
-    foreach string arg in args {
-        if arg == "quiet" {
-            quietMode = true;
-        } else if arg == "yes" {
-            autoYes = true;
-        } else if arg == "regenerate" {
-            regenerate = true;
-        }
-    }
-
-    if autoYes && !quietMode {
-        io:println("ℹ  Auto-confirm mode enabled");
-    }
-    if quietMode {
-        io:println("ℹ  Quiet mode enabled");
-    }
-    if regenerate && !quietMode {
-        io:println("ℹ  Regeneration mode: Smart example recovery enabled");
-    }
-
-    printExampleGenerationPlan(connectorPath, quietMode);
+public function executeExampleGen(string connectorPath, utils:LogLevel logLevel = "normal", boolean autoYes = false) returns error? {
+    utils:logVerbose(string `connector: ${connectorPath}`, logLevel);
 
     if !getUserConfirmation("Proceed with example generation?", autoYes) {
-        io:println("✗ Operation cancelled");
+        utils:logInfo("skipping example generation", logLevel);
         return;
     }
 
-    time:Utc startTime = time:utcNow();
-
-    io:println("");
-    io:println("Analyzing connector...");
-
-    // 1. Analyze the connector
+    utils:logVerbose("analyzing connector", logLevel);
     ConnectorDetails|error details = analyzeConnector(connectorPath);
     if details is error {
-        io:println(string `✗ Connector analysis failed: ${details.message()}`);
+        utils:logError(string `connector analysis failed: ${details.message()}`);
         return details;
     }
+    utils:logInfo(string `✓ connector: ${details.connectorName} (${details.apiCount} operations)`, logLevel);
 
-    if !quietMode {
-        io:println(string `✓ Analyzed connector: ${details.connectorName}`);
-        io:println(string `  Found ${details.apiCount} API operations`);
-    }
-
-    // Initialize AI generator
-    io:println("Initializing AI generator...");
+    utils:logVerbose("initializing AI generator", logLevel);
     error? initResult = initExampleGenerator();
     if initResult is error {
-        io:println(string `✗ AI initialization failed: ${initResult.message()}`);
+        utils:logError(string `AI initialization failed: ${initResult.message()}`);
         return error("AI generator initialization failed: " + initResult.message());
     }
+    utils:logVerbose("✓ AI generator initialized", logLevel);
 
-    if !quietMode {
-        io:println("✓ AI generator initialized");
-    }
-
-    // 2. Pack and push connector to local repository
-    io:println("Preparing connector for examples...");
-    error? packResult = packAndPushConnector(connectorPath);
+    utils:logVerbose("packing connector to local repo", logLevel);
+    error? packResult = packAndPushConnector(connectorPath, logLevel);
     if packResult is error {
-        io:println(string `✗ Failed to prepare connector: ${packResult.message()}`);
-        io:println("  This is required for examples to resolve dependencies");
+        utils:logError(string `failed to prepare connector: ${packResult.message()}`);
         return packResult;
     }
-    io:println("✓ Connector prepared successfully");
+    utils:logVerbose("✓ connector packed", logLevel);
 
-    // 3. In regeneration mode, first try to modify/fix existing examples
-    if regenerate {
-        ExistingExampleRecoveryResult|error recoveryResult = tryRecoverExistingExamples(connectorPath, quietMode);
-
-        if recoveryResult is ExistingExampleRecoveryResult {
-            if recoveryResult.existingCount > 0 && recoveryResult.success {
-                io:println("✓ Existing examples recovered successfully");
-                decimal duration = time:utcDiffSeconds(time:utcNow(), startTime);
-                printExampleSummary(connectorPath, recoveryResult.existingCount, recoveryResult.existingCount,
-                    duration, quietMode);
-                return;
-            }
-
-            if recoveryResult.existingCount > 0 {
-                io:println("⚠ Existing examples could not be fully recovered");
-                io:println("  Removing existing examples and regenerating from scratch...");
-                error? cleanupResult = cleanupExistingExamples(connectorPath);
-                if cleanupResult is error {
-                    io:println(string `✗ Failed to clean existing examples: ${cleanupResult.message()}`);
-                    return cleanupResult;
-                }
-                io:println("✓ Existing examples cleaned up");
-            }
-        } else {
-            io:println(string `⚠ Existing example recovery failed: ${recoveryResult.message()}`);
-            io:println("  Removing existing examples and regenerating from scratch...");
-            error? cleanupResult = cleanupExistingExamples(connectorPath);
-            if cleanupResult is error {
-                io:println(string `✗ Failed to clean existing examples: ${cleanupResult.message()}`);
-                return cleanupResult;
-            }
-            io:println("✓ Existing examples cleaned up");
-        }
-    }
-
-    // 4. Determine the number of examples
     int numExamples = numberOfExamples(details.apiCount);
+    utils:logVerbose(string `generating ${numExamples} example${numExamples == 1 ? "" : "s"}`, logLevel);
 
-    io:println("");
-    io:println(string `Generating ${numExamples} example${numExamples == 1 ? "" : "s"}...`);
-
-    // Array to track used functions
     string[] usedFunctionNames = [];
     int successCount = 0;
 
-    // 5. Generate each example
     foreach int i in 1 ... numExamples {
-        if !quietMode {
-            io:println("");
-            io:println(string `[Example ${i}/${numExamples}] Generating use case...`);
-        }
+        utils:logVerbose(string `[example ${i}/${numExamples}] generating use case`, logLevel);
 
         json|error useCaseResponse = generateUseCaseAndFunctions(details, usedFunctionNames);
         if useCaseResponse is error {
-            io:println(string `  ✗ Failed to generate use case: ${useCaseResponse.message()}`);
+            utils:logWarn(string `failed to generate use case for example ${i}: ${useCaseResponse.message()}`, logLevel);
             continue;
         }
 
@@ -145,7 +55,6 @@ public function executeExampleGen(string... args) returns error? {
         json functionNamesJson = check useCaseResponse.requiredFunctions.ensureType();
         string[] functionNames = [];
 
-        // Convert json array to string array
         if functionNamesJson is json[] {
             foreach json item in functionNamesJson {
                 if item is string {
@@ -153,266 +62,72 @@ public function executeExampleGen(string... args) returns error? {
                 }
             }
         } else {
-            io:println(string `  ✗ Invalid function list for example ${i}`);
+            utils:logWarn(string `invalid function list for example ${i} — skipping`, logLevel);
             continue;
         }
 
-        // Track used functions
         usedFunctionNames.push(...functionNames);
+        utils:logVerbose(string `  use case selected (${functionNames.length()} operations)`, logLevel);
 
-        if !quietMode {
-            io:println(string `  ✓ Generated use case (${functionNames.length()} operation${functionNames.length() == 1 ? "" : "s"})`);
-        }
-
-        // Extract targeted context based on required functions
         string|error targetedContext = extractTargetedContext(details, functionNames);
         if targetedContext is error {
-            io:println(string `  ✗ Failed to extract context: ${targetedContext.message()}`);
+            utils:logWarn(string `failed to extract context for example ${i}: ${targetedContext.message()}`, logLevel);
             continue;
         }
 
-        if !quietMode {
-            io:println("  ✓ Extracted context");
-        }
-
-        // Generate example code
         string|error generatedCode = generateExampleCode(details, useCase, targetedContext);
         if generatedCode is error {
-            io:println(string `  ✗ Failed to generate code: ${generatedCode.message()}`);
+            utils:logWarn(string `failed to generate code for example ${i}: ${generatedCode.message()}`, logLevel);
             continue;
         }
 
-        if !quietMode {
-            io:println("  ✓ Generated code");
-        }
-
-        // Generate example name
         string|error exampleNameResult = generateExampleName(useCase);
         string exampleName;
         if exampleNameResult is error {
-            if !quietMode {
-                io:println(string `  ⚠  Failed to generate name, using fallback: ${exampleNameResult.message()}`);
-            }
+            utils:logVerbose(string `  name generation failed, using fallback: ${exampleNameResult.message()}`, logLevel);
             exampleName = "example_" + i.toString();
         } else {
             exampleName = exampleNameResult;
         }
 
-        if !quietMode {
-            io:println(string `  ✓ Example name: ${exampleName}`);
-        }
-
-        // Write example to file
         error? writeResult = writeExampleToFile(connectorPath, exampleName, useCase, generatedCode,
             details.connectorOrg, details.connectorName, details.connectorVersion, details.connectorDistribution);
         if writeResult is error {
-            io:println(string `  ✗ Failed to write example: ${writeResult.message()}`);
+            utils:logWarn(string `failed to write example ${i}: ${writeResult.message()}`, logLevel);
             continue;
-        }
-
-        if !quietMode {
-            io:println("  ✓ Written to file system");
         }
 
         runtime:sleep(10);
 
-        // Fix compilation errors in the generated example
         string exampleDir = connectorPath + "/examples/" + exampleName;
-        error? fixResult = fixExampleCode(exampleDir, exampleName);
+        error? fixResult = fixExampleCode(exampleDir, exampleName, logLevel);
         if fixResult is error {
-            io:println(string `  ⚠  Failed to fix compilation errors: ${fixResult.message()}`);
-            io:println("     Example may require manual intervention");
-            continue;
-        } else if !quietMode {
-            io:println("  ✓ Fixed compilation issues");
+            utils:logWarn(string `compilation fix failed for ${exampleName}: ${fixResult.message()} — may need manual review`, logLevel);
+        } else {
+            utils:logVerbose(string `  ✓ compilation errors fixed`, logLevel);
         }
 
         successCount += 1;
-        io:println(string `✓ Example ${i} (${exampleName}) completed`);
+        utils:logInfo(string `✓ example ${i}/${numExamples}: ${exampleName}`, logLevel);
     }
 
-    // Print final summary
-    time:Utc endTime = time:utcNow();
-    decimal duration = time:utcDiffSeconds(endTime, startTime);
-    printExampleSummary(connectorPath, numExamples, successCount, duration, quietMode);
-}
-
-function printExampleGenerationPlan(string connectorPath, boolean quietMode) {
-    if quietMode {
-        return;
-    }
-
-    string sep = createSeparator("=", 70);
-    io:println(sep);
-    io:println("Example Generation");
-    io:println(sep);
-    io:println(string `Connector: ${connectorPath}`);
-    io:println("");
-    io:println("Operations:");
-    io:println("  1. Analyze connector APIs");
-    io:println("  2. Pack connector to local repo");
-    io:println("  3. Generate AI-powered examples");
-    io:println("  4. Fix compilation errors");
-    io:println("  5. Create example projects");
-    io:println(sep);
-}
-
-function printExampleSummary(string connectorPath, int totalExamples, int successCount, decimal duration, boolean quietMode) {
-    string sep = createSeparator("=", 70);
-
-    io:println("");
-    io:println(sep);
-
-    if successCount == totalExamples {
-        io:println("✓ Example Generation Complete");
+    if successCount < numExamples {
+        utils:logWarn(string `${successCount}/${numExamples} examples succeeded`, logLevel);
     } else {
-        io:println("⚠  Example Generation Partial Success");
+        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${connectorPath}/examples/`, logLevel);
     }
-
-    io:println(sep);
-    io:println("");
-    io:println(string `Generated: ${successCount}/${totalExamples} example${totalExamples == 1 ? "" : "s"}`);
-    io:println(string `Duration : ${duration}s`);
-
-    if successCount > 0 {
-        io:println(string `Output   : ${connectorPath}/examples/`);
-    }
-
-    if successCount < totalExamples {
-        io:println("");
-        io:println("⚠  Some examples failed to generate");
-        io:println("   Manual review may be required");
-    }
-
-    if !quietMode && successCount > 0 {
-        io:println("");
-        io:println("Generated Examples:");
-        // Note: In a real implementation, you'd track example names and list them here
-        io:println(string `  • Check ${connectorPath}/examples/ for all generated examples`);
-    }
-
-    io:println("");
-    io:println("Next Steps:");
-    if successCount > 0 {
-        io:println("  • Review generated examples for accuracy");
-        io:println("  • Test examples with your API credentials");
-        io:println("  • Update Config.toml files as needed");
-        io:println("  • Generate documentation: bal run -- generate-docs generate-examples <path>");
-    } else {
-        io:println("  • Check connector analysis results");
-        io:println("  • Verify AI service configuration");
-        io:println("  • Review error messages above");
-    }
-
-    io:println(sep);
 }
 
 function getUserConfirmation(string message, boolean autoYes) returns boolean {
     if autoYes {
         return true;
     }
-    io:print(string `${message} (y/n): `);
+    io:fprint(io:stderr, string `${message} (y/n): `);
     string|io:Error userInput = io:readln();
     if userInput is io:Error {
         return false;
     }
     return userInput.trim().toLowerAscii() is "y"|"yes";
-}
-
-function createSeparator(string char, int length) returns string {
-    string[] chars = [];
-    int i = 0;
-    while i < length {
-        chars.push(char);
-        i += 1;
-    }
-    return string:'join("", ...chars);
-}
-
-function printUsage() {
-    io:println("Example Generator");
-    io:println("");
-    io:println("USAGE");
-    io:println("  bal run -- generate-examples <connector-path> [options]");
-    io:println("");
-    io:println("OPTIONS");
-    io:println("  yes      Auto-confirm all prompts");
-    io:println("  quiet    Minimal logging output");
-    io:println("  regenerate   Try fixing existing examples first, then fallback to fresh generation");
-    io:println("");
-    io:println("EXAMPLES");
-    io:println("  bal run -- generate-examples ./connector");
-    io:println("  bal run -- generate-examples ./connector yes");
-    io:println("  bal run -- generate-examples ./connector yes quiet");
-    io:println("");
-    io:println("ENVIRONMENT");
-    io:println("  ANTHROPIC_API_KEY    Required for AI-powered generation");
-    io:println("");
-    io:println("FEATURES");
-    io:println("  • AI-generated use cases and code");
-    io:println("  • Automatic compilation error fixing");
-    io:println("  • Smart function usage tracking");
-    io:println("  • Ballerina project structure creation");
-    io:println("  • CI/CD friendly with auto-confirm mode");
-    io:println("");
-}
-
-type ExistingExampleRecoveryResult record {|
-    int existingCount;
-    int recoveredCount;
-    boolean success;
-|};
-
-function tryRecoverExistingExamples(string connectorPath, boolean quietMode) returns ExistingExampleRecoveryResult|error {
-    string[] existingExamples = check getExistingExampleDirectories(connectorPath);
-
-    if existingExamples.length() == 0 {
-        if !quietMode {
-            io:println("No existing examples found. Proceeding with fresh generation...");
-        }
-        return {
-            existingCount: 0,
-            recoveredCount: 0,
-            success: false
-        };
-    }
-
-    io:println("");
-    io:println(string `Found ${existingExamples.length()} existing example${existingExamples.length() == 1 ? "" : "s"}`);
-    io:println("Attempting to fix/update existing examples first...");
-
-    int recoveredCount = 0;
-    foreach string exampleName in existingExamples {
-        string exampleDir = connectorPath + "/examples/" + exampleName;
-
-        if !quietMode {
-            io:println(string `  • Updating existing example: ${exampleName}`);
-        }
-
-        error? fixResult = fixExampleCode(exampleDir, exampleName);
-        if fixResult is error {
-            if !quietMode {
-                io:println(string `    ⚠ Fix attempt failed: ${fixResult.message()}`);
-            }
-            continue;
-        }
-
-        utils:CommandResult buildResult = utils:executeBalBuild(exampleDir, true);
-        if !utils:hasCompilationErrors(buildResult) {
-            recoveredCount += 1;
-            if !quietMode {
-                io:println("    ✓ Example compiles after update");
-            }
-        } else if !quietMode {
-            io:println("    ⚠ Example still has compilation errors");
-        }
-    }
-
-    return {
-        existingCount: existingExamples.length(),
-        recoveredCount,
-        success: recoveredCount == existingExamples.length()
-    };
 }
 
 function getExistingExampleDirectories(string connectorPath) returns string[]|error {
@@ -428,7 +143,6 @@ function getExistingExampleDirectories(string connectorPath) returns string[]|er
 
     foreach file:MetaData entry in exampleEntries {
         if entry.dir {
-            // Derive basename from the absolute path to avoid relative/absolute mismatch
             int? lastSlash = entry.absPath.lastIndexOf("/");
             string exampleName = lastSlash is int ? entry.absPath.substring(lastSlash + 1) : entry.absPath;
 

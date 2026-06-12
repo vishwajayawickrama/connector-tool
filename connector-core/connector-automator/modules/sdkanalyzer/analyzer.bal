@@ -30,7 +30,7 @@ import wso2/connector_automator.utils;
 public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig config)
         returns AnalysisResult|AnalyzerError {
 
-    error? aiInitErr = utils:initAIService(config.quietMode);
+    error? aiInitErr = utils:initAIService(config.quietMode ? "quiet" : "normal");
     if aiInitErr is error {
         return error AnalyzerError(aiInitErr.message(), aiInitErr);
     }
@@ -70,9 +70,9 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     string[] dependencyJarPaths = analysisResult.dependencyJarPaths;
 
     if !config.quietMode {
-        io:println(string `  → Found ${rawClasses.length()} classes`);
+        io:fprintln(io:stderr, string `  → Found ${rawClasses.length()} classes`);
         if dependencyJarPaths.length() > 1 {
-            io:println(string `  → ${dependencyJarPaths.length()} dependency JARs available for class resolution`);
+            io:fprintln(io:stderr, string `  → ${dependencyJarPaths.length()} dependency JARs available for class resolution`);
         }
     }
 
@@ -88,7 +88,7 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     }
 
     if !config.quietMode {
-        io:println(string `  → ${filteredClasses.length()} relevant client classes`);
+        io:fprintln(io:stderr, string `  → ${filteredClasses.length()} relevant client classes`);
     }
 
     if filteredClasses.length() == 0 {
@@ -116,7 +116,7 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     ClassInfo rootClient = selectRootClientCandidate(topCandidates);
 
     if !config.quietMode {
-        io:println(string `  → Root client: ${rootClient.simpleName}`);
+        io:fprintln(io:stderr, string `  → Root client: ${rootClient.simpleName}`);
     }
 
     // Step 6: Detect client initialization pattern (LLM-only)
@@ -136,7 +136,7 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     int totalPublicMethods = publicMethods.length();
 
     if !config.quietMode {
-        io:println(string `  → ${totalPublicMethods} methods`);
+        io:fprintln(io:stderr, string `  → ${totalPublicMethods} methods`);
     }
 
     // Step 8: Rank methods by usage using LLM
@@ -147,7 +147,7 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     MethodInfo[] selectedMethods = rankedResult;
 
     if !config.quietMode {
-        io:println(string `  → ${selectedMethods.length()} methods selected`);
+        io:fprintln(io:stderr, string `  → ${selectedMethods.length()} methods selected`);
     }
 
     // Step 9: Generate structured metadata
@@ -174,7 +174,7 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     string metadataPath = string `${outputDir}/${sdkSimpleName}-metadata.json`;
 
     if !config.quietMode {
-        io:println(string `  → Output: ${metadataPath}`);
+        io:fprintln(io:stderr, string `  → Output: ${metadataPath}`);
     }
 
     // Clean up intermediate class listing files
@@ -269,29 +269,29 @@ function printAnalyzerPlan(string jarPath, string outputDir, boolean quietMode) 
     }
 
     string sep = createAnalyzerSeparator("=", 70);
-    io:println(sep);
-    io:println("SDK Analysis Plan");
-    io:println(sep);
-    io:println(string `Source: ${jarPath}`);
-    io:println(string `Output Dir: ${outputDir}`);
-    io:println("");
-    io:println("Operations:");
-    io:println("  1. Extract and filter SDK classes");
-    io:println("  2. Identify root client and init pattern");
-    io:println("  3. Rank methods and generate metadata");
-    io:println(sep);
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "SDK Analysis Plan");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `Source: ${jarPath}`);
+    io:fprintln(io:stderr, string `Output Dir: ${outputDir}`);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, "Operations:");
+    io:fprintln(io:stderr, "  1. Extract and filter SDK classes");
+    io:fprintln(io:stderr, "  2. Identify root client and init pattern");
+    io:fprintln(io:stderr, "  3. Rank methods and generate metadata");
+    io:fprintln(io:stderr, sep);
 }
 
 function printAnalyzerSummary(string metadataPath, int methods, decimal duration) {
     string sep = createAnalyzerSeparator("=", 70);
-    io:println("");
-    io:println(sep);
-    io:println("✓ SDK Analysis Complete");
-    io:println(sep);
-    io:println(string `  • metadata: ${metadataPath}`);
-    io:println(string `  • methods extracted: ${methods}`);
-    io:println(string `  • duration: ${duration}s`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, "✓ SDK Analysis Complete");
+    io:fprintln(io:stderr, sep);
+    io:fprintln(io:stderr, string `  • metadata: ${metadataPath}`);
+    io:fprintln(io:stderr, string `  • methods extracted: ${methods}`);
+    io:fprintln(io:stderr, string `  • duration: ${duration}s`);
+    io:fprintln(io:stderr, sep);
 }
 
 function printAnalyzerStep(int stepNum, string title, boolean quietMode) {
@@ -299,9 +299,9 @@ function printAnalyzerStep(int stepNum, string title, boolean quietMode) {
         return;
     }
     string sep = createAnalyzerSeparator("-", 50);
-    io:println("");
-    io:println(string `Step ${stepNum}: ${title}`);
-    io:println(sep);
+    io:fprintln(io:stderr, "");
+    io:fprintln(io:stderr, string `Step ${stepNum}: ${title}`);
+    io:fprintln(io:stderr, sep);
 }
 
 function createAnalyzerSeparator(string char, int length) returns string {

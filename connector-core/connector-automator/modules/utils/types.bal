@@ -34,3 +34,9 @@ public type CmdCompilationError record {|
 |};
 
 public type CommandExecutorError distinct error;
+
+# Logging verbosity level for the connector generation pipeline.
+# quiet  — errors only (stderr)
+# normal — step banners + key outcomes + warnings (stderr)
+# verbose — full diagnostics including subprocess output (stderr)
+public type LogLevel "quiet"|"normal"|"verbose";

@@ -35,6 +35,12 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"-o", "--output"}, description = "output path for the generated connector.")
     public String outputPath;
 
+    @CommandLine.Option(names = {"-q", "--quiet"}, description = "Suppress all output except errors.")
+    public boolean quietFlag;
+
+    @CommandLine.Option(names = {"-v", "--verbose"}, description = "Show detailed diagnostic output including subprocess commands and batch details.")
+    public boolean verboseFlag;
+
     public OpenApiAutomatorWorkflow() {
         outStream = System.out;
         errorStream = System.err;
@@ -54,11 +60,16 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
         }
 
         try {
+            if (quietFlag && verboseFlag) {
+                throw new CliException("options -q/--quiet and -v/--verbose are mutually exclusive", 2);
+            }
+            String logLevel = quietFlag ? "quiet" : verboseFlag ? "verbose" : "normal";
+
             Path openApiSpecPath = OpenApiPathValidationUtils.validate(inputPath);
             Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.validate(outputPath);
 
             BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
-                    openApiSpecPath.toString(), ballerinaProjectPath.toString());
+                    openApiSpecPath.toString(), ballerinaProjectPath.toString(), logLevel);
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
             ProcessUtils.exit(e.getExitCode(), exitWhenFinish);

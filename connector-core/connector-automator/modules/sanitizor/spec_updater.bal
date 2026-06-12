@@ -1,4 +1,5 @@
-import ballerina/log;
+import wso2/connector_automator.utils;
+
 import ballerina/regex;
 
 // Helper function to update description in spec using location path
@@ -208,7 +209,7 @@ function updateOperationIdInSpec(map<json> paths, string location, string operat
 }
 
 // Helper function to update schema references throughout the JSON structure
-function updateSchemaReferences(json jsonData, map<string> nameMapping, boolean quietMode = false) returns json {
+function updateSchemaReferences(json jsonData, map<string> nameMapping, utils:LogLevel logLevel = "normal") returns json {
     if (jsonData is map<json>) {
         map<json> resultMap = {};
 
@@ -216,17 +217,14 @@ function updateSchemaReferences(json jsonData, map<string> nameMapping, boolean 
             json|error value = jsonData.get(key);
             if (value is json) {
                 if (key == "$ref" && value is string) {
-                    // Update schema reference if it matches a renamed schema
                     string refValue = <string>value;
                     if (refValue.startsWith("#/components/schemas/")) {
-                        string schemaName = refValue.substring(21); // Remove "#/components/schemas/"
+                        string schemaName = refValue.substring(21);
                         string? newName = nameMapping[schemaName];
                         if (newName is string) {
                             string newRef = "#/components/schemas/" + newName;
                             resultMap[key] = newRef;
-                            if !quietMode {
-                                log:printInfo("Updated schema reference", oldRef = refValue, newRef = newRef);
-                            }
+                            utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`, logLevel);
                         } else {
                             resultMap[key] = value;
                         }
@@ -234,8 +232,7 @@ function updateSchemaReferences(json jsonData, map<string> nameMapping, boolean 
                         resultMap[key] = value;
                     }
                 } else {
-                    // Recursively process nested structures
-                    resultMap[key] = updateSchemaReferences(value, nameMapping, quietMode);
+                    resultMap[key] = updateSchemaReferences(value, nameMapping, logLevel);
                 }
             }
         }
@@ -244,11 +241,10 @@ function updateSchemaReferences(json jsonData, map<string> nameMapping, boolean 
     } else if (jsonData is json[]) {
         json[] resultArray = [];
         foreach json item in jsonData {
-            resultArray.push(updateSchemaReferences(item, nameMapping, quietMode));
+            resultArray.push(updateSchemaReferences(item, nameMapping, logLevel));
         }
         return resultArray;
     } else {
-        // Primitive values remain unchanged
         return jsonData;
     }
 }
