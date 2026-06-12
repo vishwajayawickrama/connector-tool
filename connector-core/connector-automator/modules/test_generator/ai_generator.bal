@@ -44,7 +44,7 @@ function generateTestsWithAI(ConnectorAnalysis analysis) returns string|error {
 function fixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose("fixing compilation errors", logLevel);
 
-    string ballerinaDir = connectorPath + "/ballerina";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
 
     code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir, logLevel, true);
 
@@ -164,7 +164,7 @@ function sdkGenerateTestsWithAI(ConnectorAnalysis analysis) returns string|error
 function sdkFixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose("fixing compilation errors", logLevel);
 
-    string ballerinaDir = connectorPath + "/ballerina";
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
 
     code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir,
             logLevel, true);

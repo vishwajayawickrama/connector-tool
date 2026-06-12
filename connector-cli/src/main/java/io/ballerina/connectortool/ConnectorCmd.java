@@ -17,6 +17,7 @@ public class ConnectorCmd implements BLauncherCmd {
     private static final String COMMAND_NAME = "connector";
     private PrintStream outStream;
     private PrintStream errorStream;
+    
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
 

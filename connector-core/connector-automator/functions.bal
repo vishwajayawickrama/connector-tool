@@ -1,4 +1,5 @@
 import wso2/connector_automator.client_generator as client_generator;
+import wso2/connector_automator.code_fixer as code_fixer;
 import wso2/connector_automator.document_generator as document_generator;
 import wso2/connector_automator.example_generator as example_generator;
 import wso2/connector_automator.sanitizor as sanitizor;
@@ -35,9 +36,17 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir, oautils:Lo
     oautils:logStep(3, 6, "Building and Validating Client", logLevel);
     oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, logLevel);
     if oautils:hasCompilationErrors(buildResult) {
-        oautils:logError("build validation failed: client contains compilation errors");
-        oautils:logError("run 'bal connector openapi fix-code <connector-path>' to resolve");
-        return error(string `client build failed: ${buildResult.stderr}`);
+        oautils:logWarn("client has compilation errors — attempting auto-fix", logLevel);
+        code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(clientPath, logLevel, true);
+        if fixResult is code_fixer:FixResult && fixResult.errorsFixed > 0 {
+            oautils:logVerbose(string `auto-fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`, logLevel);
+        }
+        oautils:CommandResult revalidateResult = oautils:executeBalBuild(clientPath, logLevel);
+        if oautils:hasCompilationErrors(revalidateResult) {
+            oautils:logError("build validation failed: client still has compilation errors after auto-fix");
+            oautils:logError(string `inspect the generated client at: ${clientPath}`);
+            return error(string `client build failed: ${revalidateResult.stderr}`);
+        }
     }
     oautils:logInfo("✓ client built and validated", logLevel);
 
