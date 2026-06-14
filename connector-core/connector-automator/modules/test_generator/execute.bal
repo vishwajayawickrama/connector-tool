@@ -1,6 +1,5 @@
 import wso2/connector_automator.utils;
 
-import ballerina/io;
 import ballerina/lang.regexp;
 import ballerina/os;
 
@@ -149,18 +148,6 @@ function executeOpenApiTestGen(string connectorPath, string specPath, utils:LogL
     }
 
     utils:logInfo(string `✓ tests generated at ${connectorPath}/ballerina/tests/`, logLevel);
-}
-
-function getUserConfirmation(string message, boolean autoYes) returns boolean {
-    if autoYes {
-        return true;
-    }
-    io:fprint(io:stderr, string `${message} (y/n): `);
-    string|io:Error userInput = io:readln();
-    if userInput is io:Error {
-        return false;
-    }
-    return userInput.trim().toLowerAscii() is "y"|"yes";
 }
 
 function validateApiKey() returns error? {

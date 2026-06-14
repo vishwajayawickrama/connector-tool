@@ -14,7 +14,6 @@ public type OpenAPIToolOptions record {|
 configurable OpenAPIToolOptions options = {};
 
 public type ClientGeneratorConfig record {|
-    boolean autoYes = false;
     boolean quietMode = false;
     OpenAPIToolOptions? toolOptions = ();
 |};

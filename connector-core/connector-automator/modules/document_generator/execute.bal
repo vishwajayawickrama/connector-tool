@@ -8,22 +8,22 @@ public function executeDocGen(string command, string connectorPath, utils:LogLev
 
     match command {
         "generate-all" => {
-            check generateAllReadmes(connectorPath, true, logLevel);
+            check generateAllReadmes(connectorPath, logLevel);
         }
         "generate-ballerina" => {
-            check genBallerinaReadme(connectorPath, true, logLevel);
+            check genBallerinaReadme(connectorPath, logLevel);
         }
         "generate-tests" => {
-            check genTestsReadme(connectorPath, true, logLevel);
+            check genTestsReadme(connectorPath, logLevel);
         }
         "generate-examples" => {
-            check genExamplesReadme(connectorPath, true, logLevel);
+            check genExamplesReadme(connectorPath, logLevel);
         }
         "generate-individual-examples" => {
-            check genIndividualExampleReadmes(connectorPath, true, logLevel);
+            check genIndividualExampleReadmes(connectorPath, logLevel);
         }
         "generate-main" => {
-            check genMainReadme(connectorPath, true, logLevel);
+            check genMainReadme(connectorPath, logLevel);
         }
         _ => {
             utils:logError(string `unknown doc command: '${command}'`);
@@ -32,12 +32,7 @@ public function executeDocGen(string command, string connectorPath, utils:LogLev
     }
 }
 
-function generateAllReadmes(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
-    if !getUserConfirmation("Proceed with documentation generation?", autoYes) {
-        utils:logInfo("skipping documentation generation", logLevel);
-        return;
-    }
-
+function generateAllReadmes(string connectorPath, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
     utils:logVerbose("✓ AI generator initialized", logLevel);
@@ -48,12 +43,7 @@ function generateAllReadmes(string connectorPath, boolean autoYes, utils:LogLeve
     utils:logInfo(string `✓ documentation generated at ${connectorPath}/`, logLevel);
 }
 
-function genBallerinaReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
-    if !getUserConfirmation("Proceed with generation?", autoYes) {
-        utils:logInfo("skipping Ballerina README generation", logLevel);
-        return;
-    }
-
+function genBallerinaReadme(string connectorPath, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
 
@@ -65,12 +55,7 @@ function genBallerinaReadme(string connectorPath, boolean autoYes, utils:LogLeve
     utils:logInfo(string `✓ README: ${connectorPath}/ballerina/README.md`, logLevel);
 }
 
-function genTestsReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
-    if !getUserConfirmation("Proceed with generation?", autoYes) {
-        utils:logInfo("skipping tests README generation", logLevel);
-        return;
-    }
-
+function genTestsReadme(string connectorPath, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
 
@@ -82,12 +67,7 @@ function genTestsReadme(string connectorPath, boolean autoYes, utils:LogLevel lo
     utils:logInfo(string `✓ README: ${connectorPath}/ballerina/tests/README.md`, logLevel);
 }
 
-function genExamplesReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
-    if !getUserConfirmation("Proceed with generation?", autoYes) {
-        utils:logInfo("skipping examples README generation", logLevel);
-        return;
-    }
-
+function genExamplesReadme(string connectorPath, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
 
@@ -99,12 +79,7 @@ function genExamplesReadme(string connectorPath, boolean autoYes, utils:LogLevel
     utils:logInfo(string `✓ README: ${connectorPath}/examples/README.md`, logLevel);
 }
 
-function genIndividualExampleReadmes(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
-    if !getUserConfirmation("Proceed with generation?", autoYes) {
-        utils:logInfo("skipping individual example READMEs generation", logLevel);
-        return;
-    }
-
+function genIndividualExampleReadmes(string connectorPath, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
 
@@ -116,12 +91,7 @@ function genIndividualExampleReadmes(string connectorPath, boolean autoYes, util
     utils:logInfo(string `✓ READMEs: ${connectorPath}/examples/*/README.md`, logLevel);
 }
 
-function genMainReadme(string connectorPath, boolean autoYes, utils:LogLevel logLevel) returns error? {
-    if !getUserConfirmation("Proceed with generation?", autoYes) {
-        utils:logInfo("skipping root README generation", logLevel);
-        return;
-    }
-
+function genMainReadme(string connectorPath, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
 
@@ -131,18 +101,6 @@ function genMainReadme(string connectorPath, boolean autoYes, utils:LogLevel log
         return result;
     }
     utils:logInfo(string `✓ README: ${connectorPath}/README.md`, logLevel);
-}
-
-function getUserConfirmation(string message, boolean autoYes) returns boolean {
-    if autoYes {
-        return true;
-    }
-    io:fprint(io:stderr, string `${message} (y/n): `);
-    string|io:Error userInput = io:readln();
-    if userInput is io:Error {
-        return false;
-    }
-    return userInput.trim().toLowerAscii() is "y"|"yes";
 }
 
 function validateApiKey() returns error? {

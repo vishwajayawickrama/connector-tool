@@ -483,3 +483,146 @@ The `templates/` directory on disk is kept as a developer reference but is no lo
 | Java interop via native adapter | Yes, if added to native JAR | Yes — new native module required | Yes — classpath path |
 
 Embedding as constants is the only approach with zero moving parts at runtime.
+
+---
+
+## Optional `-o` / `--output` — defaults to CWD
+
+The `-o`/`--output` option was previously required. It is now optional.
+
+When `-o` is omitted, `BallerinaProjectPathValidationUtils.validate(null)` resolves the output path to `System.getProperty("user.dir")` — the JVM's working directory at startup, which equals the shell CWD where `bal connector openapi` was invoked.
+
+```java
+public static Path validate(String outputPath) {
+    String resolvedPath = (outputPath == null || outputPath.isBlank())
+            ? System.getProperty("user.dir")
+            : outputPath;
+    Path projectPath = Path.of(resolvedPath);
+    validateBallerinaProject(projectPath.toAbsolutePath().normalize(), "-o");
+    return projectPath;
+}
+```
+
+This matches the convention used by `bal build`, `bal new`, and `npm init`, all of which default to "the directory you're currently in." The downstream validation is unchanged — the resolved path must still exist, be a directory, contain `Ballerina.toml`, and load successfully as a `BUILD_PROJECT`.
+
+**Practical result:** A user can `cd` into an existing Ballerina project and run `bal connector openapi -i spec.yaml` without specifying `-o`.
+
+---
+
+## Removal of `autoYes` / Interactive Gate Pattern from OpenAPI Modules
+
+### The original pattern
+
+Several OpenAPI modules had a `getUserConfirmation(message, autoYes)` helper that prompted the user "Proceed?" before each step. To let the automated Java-invoked pipeline skip these prompts, every call site passed `autoYes=true`.
+
+The hidden bug: because `getUserConfirmation(msg, autoYes=true)` always returned `true`, the `if !getUserConfirmation(...) { return; }` abort branch **could never execute**. When a critical step failed — for example, YAML→JSON conversion in the sanitizor — the pipeline logged a warning and continued to the next step, which then failed on the missing output file, which logged another warning, and so on through all six steps. The user saw six warnings but no non-zero exit code and no clear root cause.
+
+### The fix
+
+`autoYes` and `getUserConfirmation` were removed from every OpenAPI module. The pipeline runs unconditionally — no prompts, no gates. Critical failures propagate as `error?`; non-critical failures emit a warning and continue.
+
+| Module | What was removed |
+|--------|-----------------|
+| `modules/sanitizor/execute.bal` | `boolean autoYes` param, `getUserConfirmation` helper, all gate blocks; YAML→JSON failure now hard-aborts |
+| `modules/example_generator/execute.bal` | `boolean autoYes` param, `getUserConfirmation` helper, "Proceed with example generation?" gate |
+| `modules/client_generator/types.bal` | `boolean autoYes` field from `ClientGeneratorConfig` record |
+| `modules/client_generator/execute.bal` | `getUserConfirmation` gate before Ballerina client generation |
+| `modules/document_generator/execute.bal` | `boolean autoYes` from six private functions, `getUserConfirmation` helper, all "Proceed?" gates |
+| `modules/test_generator/execute.bal` | `getUserConfirmation` helper function |
+| `main.bal` | `parseOpenApiAutoYes` helper, all `autoYes` local vars from OpenAPI call sites, `"yes"` exclusion from `parseOpenApiPositionalArgs` |
+
+**What was NOT changed:** `code_fixer`'s `autoYes` is a "apply fixes automatically" feature flag (not an interactive gate) — it was left intact. The OpenAPI pipeline calls `code_fixer:fixAllErrors(clientPath, logLevel, true)` with `autoYes=true`, which is intentional and correct.
+
+---
+
+## Consolidation of `functions.bal` into `openapi_workflow.bal`
+
+`functions.bal` contained exactly one function: `executeOpenApiPipeline`. `openapi_workflow.bal` contained exactly one function: `runOpenApiWorkflow`, which delegated immediately to `executeOpenApiPipeline`.
+
+Both files lived in the same Ballerina module root (`connector-core/connector-automator/`), so the split was cosmetic. They were merged into `openapi_workflow.bal` and `functions.bal` was deleted.
+
+**After the merge**, `openapi_workflow.bal` contains:
+1. All imports (the seven cross-module imports from `functions.bal` merged with the `utils` import already in `openapi_workflow.bal`)
+2. `runOpenApiWorkflow(openApiSpec, outputDir, logLevel)` — the `public` entry point called by Java
+3. `executeOpenApiPipeline(openApiSpec, outputDir, logLevel)` — the private 6-step pipeline body
+
+The Java invocation path is unchanged: `BallerinaRuntimeUtils.callBallerinaFunction(...)` still resolves `runOpenApiWorkflow` by name at runtime from the `wso2/connector_automator` module.
+
+The invocation diagram in "Two-Layer Invocation Model" section above is now simplified:
+
+```
+openapi_workflow.bal
+  runOpenApiWorkflow(spec, outputDir, logLevel)        [public — Java entry point]
+    └─▶ executeOpenApiPipeline(spec, outputDir, logLevel)  [private — 6-step pipeline]
+```
+
+The intermediate hop through the now-deleted `functions.bal` is gone.
+
+---
+
+## YAML→JSON Conversion — Backtick Fix
+
+### Why the conversion exists
+
+`sanitizor:executeSanitizor` produces `aligned_ballerina_openapi.json`, which all downstream steps (steps 2–6) read exclusively. When the input spec is YAML, `bal openapi flatten` and `bal openapi align` always emit YAML. `convertAlignedYamlToJson` bridges the gap using Ballerina's built-in `yaml:readString` to parse the aligned YAML file and write the JSON output.
+
+### Why Ballerina's YAML parser fails on real-world specs
+
+Ballerina uses a YAML 1.1 parser. YAML 1.1 reserves the backtick character (U+0060) as a future indicator — it cannot appear in a plain scalar value. OpenAPI spec descriptions commonly contain Markdown code spans (`` `name` ``, `` `limit` ``, `` `format` ``). These cause `yaml:readString` to hard-fail on the first line containing a backtick.
+
+Before this fix, the failure was swallowed by the `autoYes=true` gate (see § above), causing all six pipeline steps to fail silently with no clear root cause. After removing `autoYes`, the failure became a hard abort, making the root cause visible and fixable.
+
+### Why single-quote is not a safe replacement
+
+The first candidate replacement was single-quote (U+0027). Single-quote is a YAML flow scalar indicator. When it appears at the start of a word in a plain-scalar continuation line — exactly the pattern produced by `` `name` used when creating the resource `` → `'name' used when creating the resource` — the parser interprets it as a new flow-scalar token and fails with `Expected a key for the block mapping.`
+
+Double-quote (U+0022) fails for the same reason. Asterisk (U+002A) fails because it is a YAML alias indicator.
+
+### Sandbox testing
+
+Six candidate replacements were tested against the actual 33,784-line aligned YAML file (Twilio Conversations API) using a standalone Ballerina program before committing:
+
+| Replacement | Code point | Result |
+|------------|-----------|--------|
+| raw (backtick intact) | U+0060 (96) | FAIL |
+| single-quote | U+0027 (39) | FAIL — YAML flow scalar token |
+| asterisk | U+002A (42) | FAIL — YAML alias indicator |
+| double-quote | U+0022 (34) | FAIL — YAML flow scalar token |
+| space | U+0020 (32) | PASS |
+| underscore | U+005F (95) | PASS |
+| removal | — | PASS |
+
+### The fix
+
+Code-point mapping replaces each backtick (U+0060, decimal 96) with underscore (U+005F, decimal 95):
+
+```ballerina
+if jsonData is yaml:Error {
+    // Ballerina YAML 1.1 rejects backtick (U+0060) in plain scalars — reserved indicator.
+    // Single-quote/double-quote/asterisk are also unsafe (YAML token characters).
+    // Underscore is safe and preserves code-span readability: `name` → _name_.
+    int[] sanitizedCodePoints = from int cp in yamlContent.toCodePointInts()
+        select (cp == 96 ? 95 : cp);
+    string|error sanitizedContent = string:fromCodePointInts(sanitizedCodePoints);
+    if sanitizedContent is string {
+        json|yaml:Error retryData = yaml:readString(sanitizedContent);
+        if retryData is json {
+            // write JSON and return
+        }
+    }
+    // falls through to yq fallback, then python3 fallback, then hard error
+}
+```
+
+`regex:replaceAll` was considered but rejected: the `\x60` hex escape in Ballerina's regex engine has ambiguous behaviour and was unreliable in testing. The `toCodePointInts()` / `fromCodePointInts()` round-trip is character-precise and unambiguous.
+
+Underscore was chosen over space and removal because `` `name` `` → `_name_` preserves the code-span intent in a way that is still legible for downstream AI processing.
+
+### Fallback chain
+
+If the code-point remapping still fails (other problematic characters in a spec not seen during testing), the function falls through to:
+1. `yq -o=json '.' <file>` — system `yq` tool
+2. `python3 -c 'import yaml,json; ...'` — Python YAML parser
+3. Hard `error?` propagated up to `executeOpenApiPipeline`, which aborts the pipeline at step 1
+
+The fallback chain predates this fix; the new primary path (Ballerina parser with backtick substitution) runs before the fallbacks.

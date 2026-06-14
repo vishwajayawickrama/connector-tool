@@ -1,16 +1,10 @@
 import connector_automator.utils;
 
 import ballerina/file;
-import ballerina/io;
 import ballerina/lang.runtime;
 
-public function executeExampleGen(string connectorPath, utils:LogLevel logLevel = "normal", boolean autoYes = false) returns error? {
+public function executeExampleGen(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `connector: ${connectorPath}`, logLevel);
-
-    if !getUserConfirmation("Proceed with example generation?", autoYes) {
-        utils:logInfo("skipping example generation", logLevel);
-        return;
-    }
 
     utils:logVerbose("analyzing connector", logLevel);
     ConnectorDetails|error details = analyzeConnector(connectorPath);
@@ -116,18 +110,6 @@ public function executeExampleGen(string connectorPath, utils:LogLevel logLevel 
     } else {
         utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${connectorPath}/examples/`, logLevel);
     }
-}
-
-function getUserConfirmation(string message, boolean autoYes) returns boolean {
-    if autoYes {
-        return true;
-    }
-    io:fprint(io:stderr, string `${message} (y/n): `);
-    string|io:Error userInput = io:readln();
-    if userInput is io:Error {
-        return false;
-    }
-    return userInput.trim().toLowerAscii() is "y"|"yes";
 }
 
 function getExistingExampleDirectories(string connectorPath) returns string[]|error {

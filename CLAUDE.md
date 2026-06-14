@@ -39,8 +39,7 @@ connector-generation-cli-tool/
 │   └── connector-automator/   # Ballerina package wso2/connector_automator
 │       ├── Ballerina.toml
 │       ├── main.bal             # SDK workflow CLI dispatcher + all SDK subcommands
-│       ├── functions.bal        # OpenAPI pipeline step helper (executeOpenApiPipeline)
-│       ├── openapi_workflow.bal # Public entry: runOpenApiWorkflow(spec, outputDir, logLevel)
+│       ├── openapi_workflow.bal # Public entry + pipeline: runOpenApiWorkflow + executeOpenApiPipeline
 │       └── modules/
 │           ├── utils/           # Shared: executeCommand, resolveBallerinaDir, types, LogLevel, log_utils
 │           ├── sanitizor/       # Step 1 OpenAPI: sanitize + align spec
@@ -268,7 +267,7 @@ import wso2/connector_automator.document_generator as document_generator;
 
 ---
 
-## OpenAPI pipeline steps (functions.bal)
+## OpenAPI pipeline steps (openapi_workflow.bal)
 
 ```
 Step 1  sanitizor:executeSanitizor          — flatten + AI-align spec
@@ -283,7 +282,7 @@ Client is generated into `outputDir/ballerina/` (flat layout). Sanitized spec go
 
 ### Alternative entry: `runOpenApiWorkflow` vs `executeOpenApiCommand`
 
-- `runOpenApiWorkflow` in `openapi_workflow.bal` — called by Java via `callBallerinaFunction`; delegates to `executeOpenApiPipeline` in `functions.bal`
+- `runOpenApiWorkflow` in `openapi_workflow.bal` — called by Java via `callBallerinaFunction`; delegates to `executeOpenApiPipeline` (also in `openapi_workflow.bal`)
 - `executeOpenApiCommand` in `main.bal` — called when running the tool directly as `bal tool-id openapi …`; includes all subcommands (sanitize, generate-client, generate-tests, etc.)
 
 Both ultimately call `executeOpenApiPipeline` for the full pipeline.

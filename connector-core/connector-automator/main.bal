@@ -476,8 +476,7 @@ function executeGenerateExamples(string[] args) returns error? {
 
     string[] flagArgs = args.slice(flagsStartIndex);
     oautils:LogLevel exLogLevel = parseOpenApiLogLevel(flagArgs);
-    boolean exAutoYes = parseOpenApiAutoYes(flagArgs);
-    error? exResult = example_generator:executeExampleGen(connectorOutputPath, exLogLevel, exAutoYes);
+    error? exResult = example_generator:executeExampleGen(connectorOutputPath, exLogLevel);
 
     return exResult;
 }
@@ -1588,7 +1587,6 @@ function executeOpenApiCommand(string[] args) returns error? {
     string subCommand = args[0];
     string[] subArgs = args.slice(1);
     oautils:LogLevel logLevel = parseOpenApiLogLevel(subArgs);
-    boolean autoYes = parseOpenApiAutoYes(subArgs);
     string[] positional = parseOpenApiPositionalArgs(subArgs);
 
     match subCommand {
@@ -1597,7 +1595,7 @@ function executeOpenApiCommand(string[] args) returns error? {
                 io:fprintln(io:stderr, "sanitize: requires <spec-path> <output-dir>");
                 return;
             }
-            return sanitizor:executeSanitizor(positional[0], positional[1], logLevel, autoYes);
+            return sanitizor:executeSanitizor(positional[0], positional[1], logLevel);
         }
         "generate-client" => {
             if positional.length() < 2 {
@@ -1618,7 +1616,7 @@ function executeOpenApiCommand(string[] args) returns error? {
                 io:fprintln(io:stderr, "generate-examples: requires <connector-path>");
                 return;
             }
-            return example_generator:executeExampleGen(positional[0], logLevel, autoYes);
+            return example_generator:executeExampleGen(positional[0], logLevel);
         }
         "generate-docs" => {
             if positional.length() < 2 {
@@ -1666,15 +1664,6 @@ function parseOpenApiLogLevel(string[] args) returns oautils:LogLevel {
     return "normal";
 }
 
-function parseOpenApiAutoYes(string[] args) returns boolean {
-    foreach string arg in args {
-        if arg == "-y" || arg == "--yes" || arg == "yes" {
-            return true;
-        }
-    }
-    return false;
-}
-
 // Extract positional args (non-flag values). Also resolves -i/-o flag values.
 function parseOpenApiPositionalArgs(string[] args) returns string[] {
     string[] positional = [];
@@ -1687,7 +1676,7 @@ function parseOpenApiPositionalArgs(string[] args) returns string[] {
                 i += 2;
                 continue;
             }
-        } else if !arg.startsWith("-") && arg != "quiet" && arg != "verbose" && arg != "yes" && arg != "regenerate" {
+        } else if !arg.startsWith("-") && arg != "quiet" && arg != "verbose" && arg != "regenerate" {
             positional.push(arg);
         }
         i += 1;
@@ -1730,7 +1719,7 @@ function printOpenApiSubCommandUsage(string subCommand) {
 
 function runOpenApiPipeline(string[] args) returns error? {
     if args.length() < 2 {
-        io:fprintln(io:stderr, "Usage: bal connector openapi pipeline <openapi-spec> <output-dir> [-q|-v] [--yes]");
+        io:fprintln(io:stderr, "Usage: bal connector openapi pipeline <openapi-spec> <output-dir> [-q|-v]");
         return;
     }
 
@@ -1739,7 +1728,6 @@ function runOpenApiPipeline(string[] args) returns error? {
     string[] pipelineOptions = args.slice(2);
 
     oautils:LogLevel logLevel = parseOpenApiLogLevel(pipelineOptions);
-    boolean autoYes = parseOpenApiAutoYes(pipelineOptions);
     boolean regenerate = false;
 
     foreach string option in pipelineOptions {
@@ -1749,13 +1737,13 @@ function runOpenApiPipeline(string[] args) returns error? {
     }
 
     if regenerate {
-        return runOpenApiRegenerationPipeline(openApiSpec, outputDir, logLevel, autoYes);
+        return runOpenApiRegenerationPipeline(openApiSpec, outputDir, logLevel);
     }
 
     printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, false);
 
     printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel, autoYes);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel);
     if sanitizeResult is error {
         oautils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
         return sanitizeResult;
@@ -1787,7 +1775,7 @@ function runOpenApiPipeline(string[] args) returns error? {
     oautils:logInfo("✓ client built and validated", logLevel);
 
     printOpenApiStepHeader(4, "Generating Examples", logLevel);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel, autoYes);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel);
     if exampleResult is error {
         oautils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
     } else {
@@ -1813,7 +1801,7 @@ function runOpenApiPipeline(string[] args) returns error? {
     printOpenApiPipelineCompletion(outputDir, logLevel);
 }
 
-function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oautils:LogLevel logLevel, boolean autoYes) returns error? {
+function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oautils:LogLevel logLevel) returns error? {
     printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, true);
 
     error? initResult = oautils:initAIService(logLevel);
@@ -1830,7 +1818,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
     }
 
     printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel, autoYes);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel);
     if sanitizeResult is error {
         return sanitizeResult;
     }
@@ -1889,7 +1877,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
     }
 
     printOpenApiStepHeader(5, "Regenerating Examples", logLevel);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel, autoYes);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel);
     if exampleResult is error {
         oautils:logWarn(string `example regeneration failed: ${exampleResult.message()}`, logLevel);
     }

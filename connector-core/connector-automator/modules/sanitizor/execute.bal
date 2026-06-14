@@ -5,22 +5,13 @@ import ballerina/io;
 import ballerina/regex;
 import ballerina/yaml;
 
-public function executeSanitizor(string inputSpecPath, string outputDir, utils:LogLevel logLevel = "normal", boolean autoYes = false) returns error? {
+public function executeSanitizor(string inputSpecPath, string outputDir, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `input: ${inputSpecPath}`, logLevel);
     utils:logVerbose(string `output: ${outputDir}/docs/spec/aligned_ballerina_openapi.json`, logLevel);
-
-    if !getUserConfirmation("\nProceed with sanitization?", autoYes) {
-        utils:logInfo("✗ operation cancelled", logLevel);
-        return;
-    }
 
     LLMServiceError? llmInitResult = initLLMService(logLevel);
     if llmInitResult is LLMServiceError {
         utils:logWarn(string `AI service not available — only programmatic fixes will be applied (${llmInitResult.message()})`, logLevel);
-        if !getUserConfirmation("Continue without AI-powered features?", autoYes) {
-            utils:logError("operation cancelled: check ANTHROPIC_API_KEY");
-            return;
-        }
     } else {
         utils:logInfo("✓ AI service initialized", logLevel);
     }
@@ -35,9 +26,6 @@ public function executeSanitizor(string inputSpecPath, string outputDir, utils:L
     utils:CommandResult flattenResult = utils:executeBalFlatten(inputSpecPath, flattenedSpecPath);
     if !utils:isCommandSuccessfull(flattenResult) {
         utils:logWarn(string `flatten operation failed: ${flattenResult.stderr.trim()}`, logLevel);
-        if !getUserConfirmation("Continue despite flatten failure?", autoYes) {
-            return error("Flatten operation failed: " + flattenResult.stderr);
-        }
     } else {
         utils:logVerbose("✓ spec flattened", logLevel);
     }
@@ -68,9 +56,6 @@ public function executeSanitizor(string inputSpecPath, string outputDir, utils:L
     utils:CommandResult alignResult = utils:executeBalAlign(flattenedSpec, alignedSpecPath);
     if !utils:isCommandSuccessfull(alignResult) {
         utils:logWarn(string `align operation failed: ${alignResult.stderr.trim()}`, logLevel);
-        if !getUserConfirmation("Continue despite align failure?", autoYes) {
-            return error("Align operation failed: " + alignResult.stderr);
-        }
     } else {
         utils:logVerbose("✓ spec aligned", logLevel);
     }
@@ -80,76 +65,39 @@ public function executeSanitizor(string inputSpecPath, string outputDir, utils:L
         error? conversionResult = convertAlignedYamlToJson(alignedSpecPath, logLevel);
         if conversionResult is error {
             utils:logWarn(string `YAML to JSON conversion failed: ${conversionResult.message()}`, logLevel);
-            if !getUserConfirmation("Continue despite conversion failure?", autoYes) {
-                return error("YAML to JSON conversion failed: " + conversionResult.message());
-            }
-        } else {
-            utils:logVerbose("✓ YAML spec converted to JSON", logLevel);
+            return error("YAML to JSON conversion failed: " + conversionResult.message());
         }
+        utils:logVerbose("✓ YAML spec converted to JSON", logLevel);
     }
 
     string alignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
 
     // Step 3: OperationId generation
-    if !getUserConfirmation("Proceed with operationId generation?", autoYes) {
-        utils:logVerbose("skipping operationId generation", logLevel);
+    utils:logVerbose("generating missing operationIds", logLevel);
+    int|LLMServiceError operationIdResult = addMissingOperationIdsBatchWithRetry(alignedSpec, 15, logLevel);
+    if operationIdResult is LLMServiceError {
+        utils:logWarn(string `operationId generation failed: ${operationIdResult.message()}`, logLevel);
     } else {
-        utils:logVerbose("generating missing operationIds", logLevel);
-        int|LLMServiceError operationIdResult = addMissingOperationIdsBatchWithRetry(alignedSpec, 15, logLevel);
-        if operationIdResult is LLMServiceError {
-            utils:logWarn(string `operationId generation failed: ${operationIdResult.message()}`, logLevel);
-            if !getUserConfirmation("Continue despite operationId generation failure?", autoYes) {
-                return error("OperationId generation failed: " + operationIdResult.message());
-            }
-        } else {
-            utils:logInfo(string `  added ${operationIdResult} missing operationId${operationIdResult == 1 ? "" : "s"}`, logLevel);
-        }
+        utils:logInfo(string `  added ${operationIdResult} missing operationId${operationIdResult == 1 ? "" : "s"}`, logLevel);
     }
 
     // Step 4: Schema renaming
-    if !getUserConfirmation("Proceed with schema renaming?", autoYes) {
-        utils:logVerbose("skipping schema renaming", logLevel);
+    utils:logVerbose("renaming InlineResponse schemas", logLevel);
+    int|LLMServiceError schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8, logLevel);
+    if schemaRenameResult is LLMServiceError {
+        utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`, logLevel);
     } else {
-        utils:logVerbose("renaming InlineResponse schemas", logLevel);
-        int|LLMServiceError schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8, logLevel);
-        if schemaRenameResult is LLMServiceError {
-            utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`, logLevel);
-            if !getUserConfirmation("Continue despite schema renaming failure?", autoYes) {
-                return error("Schema renaming failed: " + schemaRenameResult.message());
-            }
-        } else {
-            utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`, logLevel);
-        }
+        utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`, logLevel);
     }
 
     // Step 5: Documentation enhancement
-    if !getUserConfirmation("Proceed with documentation enhancement?", autoYes) {
-        utils:logVerbose("skipping documentation enhancement", logLevel);
+    utils:logVerbose("enhancing field descriptions", logLevel);
+    int|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20, logLevel);
+    if descriptionsResult is LLMServiceError {
+        utils:logWarn(string `documentation enhancement failed: ${descriptionsResult.message()}`, logLevel);
     } else {
-        utils:logVerbose("enhancing field descriptions", logLevel);
-        int|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20, logLevel);
-        if descriptionsResult is LLMServiceError {
-            utils:logWarn(string `documentation enhancement failed: ${descriptionsResult.message()}`, logLevel);
-            if !getUserConfirmation("Continue despite documentation enhancement failure?", autoYes) {
-                return error("Documentation fix failed: " + descriptionsResult.message());
-            }
-        } else {
-            utils:logInfo(string `  added ${descriptionsResult} missing description${descriptionsResult == 1 ? "" : "s"}`, logLevel);
-        }
+        utils:logInfo(string `  added ${descriptionsResult} missing description${descriptionsResult == 1 ? "" : "s"}`, logLevel);
     }
-}
-
-function getUserConfirmation(string message, boolean autoYes = false) returns boolean {
-    if autoYes {
-        return true;
-    }
-    io:fprint(io:stderr, string `${message} (y/n): `);
-    string|io:Error userInput = io:readln();
-    if userInput is io:Error {
-        return false;
-    }
-    string trimmedInput = userInput.trim().toLowerAscii();
-    return trimmedInput == "y" || trimmedInput == "Y" || trimmedInput == "yes";
 }
 
 function isYamlFormat(string filePath) returns boolean {
@@ -180,6 +128,25 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
     json|yaml:Error jsonData = yaml:readString(yamlContent);
 
     if jsonData is yaml:Error {
+        // Ballerina's YAML parser rejects backtick (U+0060) in plain scalars (YAML 1.1
+        // reserved indicator). Replace with underscore (U+005F): single-quote/asterisk/
+        // double-quote all introduce new YAML token errors; space and underscore are safe.
+        // `name` → _name_ preserves the code-span intent without breaking the parser.
+        int[] sanitizedCodePoints = from int cp in yamlContent.toCodePointInts()
+            select (cp == 96 ? 95 : cp);
+        string|error sanitizedContent = string:fromCodePointInts(sanitizedCodePoints);
+        if sanitizedContent is string {
+            json|yaml:Error retryData = yaml:readString(sanitizedContent);
+            if retryData is json {
+                io:Error? retryWrite = io:fileWriteJson(jsonAlignedSpec, retryData);
+                if retryWrite is io:Error {
+                    return error("Failed to write JSON aligned spec file: " + retryWrite.message());
+                }
+                utils:logVerbose("✓ converted YAML to JSON (backtick replacement applied)", logLevel);
+                return;
+            }
+        }
+
         utils:logVerbose(string `Ballerina YAML parser failed, trying yq fallback: ${jsonData.message()}`, logLevel);
 
         string escapedPath = "'" + regex:replaceAll(yamlAlignedSpec, "'", "'\\\\''") + "'";

@@ -32,7 +32,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"-i", "--input"}, description = "input path to openapi specification file.")
     public String inputPath;
 
-    @CommandLine.Option(names = {"-o", "--output"}, description = "output path for the generated connector.")
+    @CommandLine.Option(names = {"-o", "--output"}, description = "Output path for the generated connector. Defaults to the current directory.")
     public String outputPath;
 
     @CommandLine.Option(names = {"-q", "--quiet"}, description = "Suppress all output except errors.")

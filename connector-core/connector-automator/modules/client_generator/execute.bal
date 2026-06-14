@@ -19,11 +19,6 @@ public function executeClientGen(string specPath, string outputDir, utils:LogLev
 }
 
 public function generateBallerinaClient(string specPath, string outputDir, ClientGeneratorConfig config, utils:LogLevel logLevel = "normal") returns error? {
-    if !getUserConfirmation("Proceed with Ballerina client generation?", config.autoYes) {
-        utils:logInfo("skipping client generation", logLevel);
-        return;
-    }
-
     utils:logVerbose("generating Ballerina client code", logLevel);
 
     utils:CommandResult generateResult = executeBalClientGenerate(specPath, outputDir, config.toolOptions, logLevel);
@@ -38,19 +33,6 @@ public function generateBallerinaClient(string specPath, string outputDir, Clien
     }
 
     utils:logInfo(string `✓ client generated at: ${outputDir}`, logLevel);
-}
-
-function getUserConfirmation(string message, boolean autoYes = false) returns boolean {
-    if autoYes {
-        return true;
-    }
-    io:fprint(io:stderr, string `${message} (y/n): `);
-    string|io:Error userInput = io:readln();
-    if userInput is io:Error {
-        return false;
-    }
-    string trimmedInput = userInput.trim().toLowerAscii();
-    return trimmedInput == "y" || trimmedInput == "Y" || trimmedInput == "yes";
 }
 
 function printUsage() {

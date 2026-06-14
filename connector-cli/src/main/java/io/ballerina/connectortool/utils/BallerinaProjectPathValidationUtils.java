@@ -13,10 +13,10 @@ import java.nio.file.Path;
 public class BallerinaProjectPathValidationUtils {
 
     public static Path validate(String outputPath) {
-        if (outputPath == null || outputPath.isBlank()) {
-            throw new CliException(null, "missing required option", "'-o'", 2);
-        }
-        Path projectPath = Path.of(outputPath);
+        String resolvedPath = (outputPath == null || outputPath.isBlank())
+                ? System.getProperty("user.dir")
+                : outputPath;
+        Path projectPath = Path.of(resolvedPath);
         validateBallerinaProject(projectPath.toAbsolutePath().normalize(), "-o");
         return projectPath;
     }
