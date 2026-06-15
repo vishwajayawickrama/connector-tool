@@ -8,7 +8,7 @@ This file is the authoritative architecture reference for this repository. Read 
 
 `bal connector` is a Ballerina CLI tool that automates Ballerina connector generation and maintenance from two source types:
 
-- **OpenAPI workflow** (`bal connector openapi …`) — takes an OpenAPI spec, runs a 6-step pipeline: sanitize → generate client → build/validate → generate tests → generate examples → generate docs
+- **OpenAPI workflow** (`bal connector openapi …`) — takes an OpenAPI spec, runs a 5-step pipeline: sanitize → generate client (+ build/validate) → generate tests → generate examples → generate docs; individual stages can be skipped with `-x`
 - **SDK workflow** (`bal connector sdk …`) — takes a Java SDK JAR, runs: analyze SDK → generate API spec/IR → generate connector → fix code → generate examples → generate tests → generate docs
 
 Both workflows are AI-assisted (Anthropic Claude via `ballerina/ai` + `ballerinax/ai.anthropic`). `ANTHROPIC_API_KEY` must be set.
@@ -39,7 +39,7 @@ connector-generation-cli-tool/
 │   └── connector-automator/   # Ballerina package wso2/connector_automator
 │       ├── Ballerina.toml
 │       ├── main.bal             # SDK workflow CLI dispatcher + all SDK subcommands
-│       ├── openapi_workflow.bal # Public entry + pipeline: runOpenApiWorkflow + executeOpenApiPipeline
+│       ├── openapi_workflow.bal # Public entry point: runOpenApiGenerationWorkflow
 │       └── modules/
 │           ├── utils/           # Shared: executeCommand, resolveBallerinaDir, types, LogLevel, log_utils
 │           ├── sanitizor/       # Step 1 OpenAPI: sanitize + align spec
@@ -73,12 +73,15 @@ The CLI tool is a standard Ballerina tool (`BalTool.toml`). When a user runs `ba
 ```java
 BallerinaRuntimeUtils.callBallerinaFunction(
     "wso2", "connector_automator", "0",
-    "runOpenApiWorkflow",
-    openApiSpecPath.toString(), ballerinaProjectPath.toString(), logLevel
+    "runOpenApiGenerationWorkflow",
+    openApiSpecPath != null ? openApiSpecPath.toString() : "",
+    ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir, excludedArg
 );
 ```
 
-`callBallerinaFunction` creates a fresh `Runtime`, calls the named function with **three** `BString` args (spec path, output dir, log level), and **throws `RuntimeException`** on `BError` or any exception. The caller catches it and exits with `ProcessUtils.exitError(exitWhenFinish)`.
+`callBallerinaFunction` creates a fresh `Runtime`, calls the named function with **five** `BString` args (spec path, output dir, log level, examples dir, excluded stages), and **throws `RuntimeException`** on `BError` or any exception. The caller catches it and exits with `ProcessUtils.exitError(exitWhenFinish)`.
+
+`openApiSpecPath` is `null` when `sanitize` is excluded — in that case an empty string is passed and the Ballerina side ignores it.
 
 The `logLevel` string (`"quiet"`, `"normal"`, or `"verbose"`) is derived from the `-q`/`-v` flags on `OpenApiAutomatorWorkflow`. If both flags are set, a `CliException(exitCode=2)` is thrown before Ballerina is invoked.
 
@@ -134,7 +137,7 @@ logCompletion(outputDir, level)     // normal+verbose: "Connector generated at: 
 
 | Flag | Level | What's shown |
 |------|-------|--------------|
-| (none) | `"normal"` | 6 step headers + key outcomes + warnings |
+| (none) | `"normal"` | step headers + key outcomes + warnings |
 | `-q` / `--quiet` | `"quiet"` | errors only (nothing on success) |
 | `-v` / `--verbose` | `"verbose"` | everything: subprocess commands, batch details, AI internals |
 
@@ -142,7 +145,7 @@ logCompletion(outputDir, level)     // normal+verbose: "Connector generated at: 
 
 ### Thread-through pattern
 
-`LogLevel` flows from Java → `runOpenApiWorkflow(spec, outputDir, logLevel)` → `executeOpenApiPipeline(spec, outputDir, logLevel)` → every step function. All public step functions have the signature:
+`LogLevel` flows from Java → `runOpenApiGenerationWorkflow(spec, outputDir, logLevel, examplesDir, excludedStages, specDir)` → every step function. All public step functions have the signature:
 ```ballerina
 public function executeXxx(..., utils:LogLevel logLevel = "normal") returns error?
 ```
@@ -270,22 +273,40 @@ import wso2/connector_automator.document_generator as document_generator;
 ## OpenAPI pipeline steps (openapi_workflow.bal)
 
 ```
-Step 1  sanitizor:executeSanitizor          — flatten + AI-align spec
-Step 2  client_generator:executeClientGen   — bal openapi → Ballerina client
-Step 3  oautils:executeBalBuild             — compile-check; bail on errors
-Step 4  test_generator:executeOpenApiTestGen — mock server + live tests
-Step 5  example_generator:executeExampleGen — AI-generated .bal examples
-Step 6  document_generator:executeDocGen    — README files
+Step 1  sanitizor:executeSanitizor           — flatten + AI-align spec
+Step 2  client_generator:executeClientGen    — bal openapi → Ballerina client
+        code_fixer:fixAllErrors (embedded)   — auto-fix compilation errors (no extra step)
+Step 3  test_generator:executeOpenApiTestGen — mock server + live tests
+Step 4  example_generator:executeExampleGen  — AI-generated .bal examples
+Step 5  document_generator:executeDocGen     — README files
 ```
 
-Client is generated into `outputDir/ballerina/` (flat layout). Sanitized spec goes to `outputDir/docs/spec/aligned_ballerina_openapi.json`.
+Step numbers shown above are for the full run. When stages are excluded with `-x`, step numbers are recomputed sequentially within the active stages.
 
-### Alternative entry: `runOpenApiWorkflow` vs `executeOpenApiCommand`
+Client is generated into `outputDir/` (flat layout). Sanitized spec goes to `outputDir/docs/spec/aligned_ballerina_openapi.json`.
 
-- `runOpenApiWorkflow` in `openapi_workflow.bal` — called by Java via `callBallerinaFunction`; delegates to `executeOpenApiPipeline` (also in `openapi_workflow.bal`)
-- `executeOpenApiCommand` in `main.bal` — called when running the tool directly as `bal tool-id openapi …`; includes all subcommands (sanitize, generate-client, generate-tests, etc.)
+### `-x`/`--exclude` flag
 
-Both ultimately call `executeOpenApiPipeline` for the full pipeline.
+Any of the 5 stages can be independently excluded:
+
+```
+bal connector openapi -i spec.yaml -o ./out -x tests -x examples
+bal connector openapi -o ./out -x sanitize    # reuses aligned_ballerina_openapi.json on disk
+```
+
+Java-layer preflight checks (before Ballerina runtime starts):
+- Unknown stage name → exit 2
+- All 5 stages excluded → exit 2
+- `sanitize` excluded but `aligned_ballerina_openapi.json` missing → exit 1
+- `client` excluded but `client.bal` missing → exit 1
+- `-i` is only validated when `sanitize` is NOT excluded
+
+`docs` skips sections whose source stage was excluded: `client` excluded → skip main README; `tests` excluded → skip tests README; `examples` excluded → skip examples READMEs.
+
+### Alternative entry: `runOpenApiGenerationWorkflow` vs `executeOpenApiCommand`
+
+- `runOpenApiGenerationWorkflow` in `openapi_workflow.bal` — called by Java via `callBallerinaFunction`; contains the full 5-stage pipeline inline
+- `executeOpenApiCommand` in `main.bal` — called when running the tool directly as `bal tool-id openapi …`; includes all subcommands (sanitize, generate-client, generate-tests, etc.) and its own pipeline implementation
 
 ---
 

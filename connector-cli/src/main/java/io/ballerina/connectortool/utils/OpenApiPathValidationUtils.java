@@ -6,31 +6,26 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.ballerina.connectortool.exceptions.CliException;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
-public class OpenApiPathValidationUtils {
+public final class OpenApiPathValidationUtils {
 
-    public static Path validate(String inputPath) {
+    private OpenApiPathValidationUtils() {}
+
+    public static Path resolve(String inputPath) {
         if (inputPath == null || inputPath.isBlank()) {
             throw new CliException(null, "missing required option", "'-i'", 2);
         }
-        Path specPath = Path.of(inputPath);
-        validateOpenApiSpec(specPath.toAbsolutePath().normalize(), "-i");
+        Path specPath = Path.of(inputPath).toAbsolutePath().normalize();
+        validateOpenApiSpec(specPath, "-i");
         return specPath;
     }
 
     public static void validateOpenApiSpec(Path specPath, String option) {
-        if (!Files.exists(specPath)) {
-            throw new CliException(option, "no such file", specPath.toString(), 1);
-        }
-        if (!Files.isRegularFile(specPath)) {
-            throw new CliException(option, "not a file", specPath.toString(), 1);
-        }
-        if (!Files.isReadable(specPath)) {
-            throw new CliException(option, "permission denied", specPath.toString(), 1);
-        }
+        PathChecks.requireExists(specPath, option);
+        PathChecks.requireRegularFile(specPath, option);
+        PathChecks.requireReadable(specPath, option);
 
         String fileName = specPath.getFileName().toString().toLowerCase(Locale.ROOT);
         boolean jsonSpec = fileName.endsWith(".json");

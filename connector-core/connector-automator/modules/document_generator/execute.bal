@@ -3,12 +3,12 @@ import wso2/connector_automator.utils;
 import ballerina/io;
 import ballerina/os;
 
-public function executeDocGen(string command, string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+public function executeDocGen(string command, string connectorPath, string[] excluded = [], utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `command: ${command}, connector: ${connectorPath}`, logLevel);
 
     match command {
         "generate-all" => {
-            check generateAllReadmes(connectorPath, logLevel);
+            check generateAllReadmes(connectorPath, excluded, logLevel);
         }
         "generate-ballerina" => {
             check genBallerinaReadme(connectorPath, logLevel);
@@ -32,13 +32,24 @@ public function executeDocGen(string command, string connectorPath, utils:LogLev
     }
 }
 
-function generateAllReadmes(string connectorPath, utils:LogLevel logLevel) returns error? {
+function generateAllReadmes(string connectorPath, string[] excluded, utils:LogLevel logLevel) returns error? {
     check validateApiKey();
     check initDocumentationGenerator();
     utils:logVerbose("✓ AI generator initialized", logLevel);
 
     utils:logVerbose("generating documentation files", logLevel);
-    check generateAllDocumentation(connectorPath, logLevel);
+
+    if excluded.indexOf("client") is () {
+        check generateMainReadme(connectorPath, logLevel);
+        check generateBallerinaReadme(connectorPath, logLevel);
+    }
+    if excluded.indexOf("tests") is () {
+        check generateTestsReadme(connectorPath, logLevel);
+    }
+    if excluded.indexOf("examples") is () {
+        check generateExamplesReadme(connectorPath, logLevel);
+        check generateIndividualExampleReadmes(connectorPath, logLevel);
+    }
 
     utils:logInfo(string `✓ documentation generated at ${connectorPath}/`, logLevel);
 }

@@ -5,9 +5,9 @@ import ballerina/io;
 import ballerina/regex;
 import ballerina/yaml;
 
-public function executeSanitizor(string inputSpecPath, string outputDir, utils:LogLevel logLevel = "normal") returns error? {
+public function executeSanitizor(string inputSpecPath, string specDir, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `input: ${inputSpecPath}`, logLevel);
-    utils:logVerbose(string `output: ${outputDir}/docs/spec/aligned_ballerina_openapi.json`, logLevel);
+    utils:logVerbose(string `output: ${specDir}/aligned_ballerina_openapi.json`, logLevel);
 
     LLMServiceError? llmInitResult = initLLMService(logLevel);
     if llmInitResult is LLMServiceError {
@@ -18,7 +18,7 @@ public function executeSanitizor(string inputSpecPath, string outputDir, utils:L
 
     // Step 1: Flatten
     utils:logVerbose("flattening OpenAPI specification", logLevel);
-    string flattenedSpecPath = outputDir + "/docs/spec";
+    string flattenedSpecPath = specDir;
     error? createDirResult = file:createDir(flattenedSpecPath, file:RECURSIVE);
     if createDirResult is error {
         return error("Failed to create output directory: " + flattenedSpecPath + ", reason: " + createDirResult.message());
@@ -32,7 +32,7 @@ public function executeSanitizor(string inputSpecPath, string outputDir, utils:L
 
     // Step 2: Align
     utils:logVerbose("aligning OpenAPI specification", logLevel);
-    string alignedSpecPath = outputDir + "/docs/spec";
+    string alignedSpecPath = specDir;
 
     string flattenedSpec;
     if isYamlFormat(inputSpecPath) {

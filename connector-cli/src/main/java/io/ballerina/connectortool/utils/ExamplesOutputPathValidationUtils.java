@@ -1,33 +1,23 @@
 package io.ballerina.connectortool.utils;
 
-import io.ballerina.connectortool.exceptions.CliException;
-
-import java.nio.file.Files;
 import java.nio.file.Path;
 
-public class ExamplesOutputPathValidationUtils {
+public final class ExamplesOutputPathValidationUtils {
 
-    public static void validate(String exampleDir) {
-        Path path = Path.of(exampleDir).toAbsolutePath().normalize();
-        if (!Files.exists(path)) {
-            throw new CliException("-E", "no such directory", path.toString(), 1);
-        }
-        if (!Files.isDirectory(path)) {
-            throw new CliException("-E", "not a directory", path.toString(), 1);
-        }
-        if (!Files.isWritable(path)) {
-            throw new CliException("-E", "no write permission", path.toString(), 1);
-        }
-    }
+    private ExamplesOutputPathValidationUtils() {}
 
-    public static String resolveExamplesDir(String exampleDir, String outputPath) {
+    public static Path resolve(String exampleDir) {
         if (exampleDir == null) {
-            return outputPath + "/examples";
+            return Path.of(System.getProperty("user.dir")).resolve("examples");
         }
-        String lastName = Path.of(exampleDir).getFileName().toString();
+        Path path = Path.of(exampleDir).toAbsolutePath().normalize();
+        PathChecks.requireExists(path, "--example-dir");
+        PathChecks.requireDirectory(path, "--example-dir");
+        PathChecks.requireWritable(path, "--example-dir");
+        String lastName = path.getFileName().toString();
         if (lastName.equals("example") || lastName.equals("examples")) {
-            return exampleDir;
+            return path;
         }
-        return exampleDir + "/examples";
+        return path.resolve("examples");
     }
 }

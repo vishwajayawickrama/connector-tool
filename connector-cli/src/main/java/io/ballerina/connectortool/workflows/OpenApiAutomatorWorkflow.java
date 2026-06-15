@@ -2,6 +2,8 @@ package io.ballerina.connectortool.workflows;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.ballerina.connectortool.BaseCmd;
 import io.ballerina.connectortool.spi.ConnectorWorkflow;
@@ -12,10 +14,12 @@ import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
 import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.connectortool.utils.ExamplesOutputPathValidationUtils;
 import io.ballerina.connectortool.utils.OpenApiPathValidationUtils;
+import io.ballerina.connectortool.utils.OpenApiStageValidationUtils;
 import io.ballerina.connectortool.utils.ProcessUtils;
+import io.ballerina.connectortool.utils.SpecDirResolutionUtils;
 
 @CommandLine.Command(
-    name = "openapi", 
+    name = "openapi",
     description = "Automate Ballerina connector generation and maintenance from OpenAPI specifications.")
 public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
@@ -42,8 +46,14 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"-v", "--verbose"}, description = "Show detailed diagnostic output including subprocess commands and batch details.")
     public boolean verboseFlag;
 
-    @CommandLine.Option(names = {"-E", "--example-dir"}, description = "Output directory for generated examples. Defaults to <output>/examples.")
+    @CommandLine.Option(names = {"--example-dir"}, description = "Output directory for generated examples. Defaults to <cwd>/examples.")
     public String exampleDir;
+
+    @CommandLine.Option(names = {"--spec-dir"}, description = "Directory where aligned spec and sanitations.md are saved. Always stored inside a docs/spec subdirectory. Defaults to <cwd>/docs/spec.")
+    public String specDir;
+
+    @CommandLine.Option(names = {"-x", "--exclude"}, description = "Exclude a pipeline stage. Repeatable. Valid stages: sanitize, client, tests, examples, docs.")
+    public List<String> excludedStages = new ArrayList<>();
 
     public OpenApiAutomatorWorkflow() {
         outStream = System.out;
@@ -69,17 +79,24 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             }
             String logLevel = quietFlag ? "quiet" : verboseFlag ? "verbose" : "normal";
 
-            Path openApiSpecPath = OpenApiPathValidationUtils.validate(inputPath);
-            Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.validate(outputPath);
+            Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.resolve(outputPath);
+            Path specDirPath = SpecDirResolutionUtils.resolve(specDir);
+            OpenApiStageValidationUtils.validate(excludedStages, ballerinaProjectPath, specDirPath);
 
-            if (exampleDir != null) {
-                ExamplesOutputPathValidationUtils.validate(exampleDir);
+            Path openApiSpecPath = null;
+            if (OpenApiStageValidationUtils.isSpecRequired(excludedStages)) {
+                openApiSpecPath = OpenApiPathValidationUtils.resolve(inputPath);
             }
-            String resolvedExamplesDir = ExamplesOutputPathValidationUtils.resolveExamplesDir(
-                    exampleDir, ballerinaProjectPath.toString());
 
-            BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
-                    openApiSpecPath.toString(), ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir);
+            Path resolvedExamplesDir = ExamplesOutputPathValidationUtils.resolve(exampleDir);
+
+            String excludedArg = String.join(",", excludedStages);
+
+            BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiGenerationWorkflow",
+                    openApiSpecPath != null ? openApiSpecPath.toString() : "",
+                    ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir.toString(), excludedArg,
+                    specDirPath.toString());
+                    
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
             ProcessUtils.exit(e.getExitCode(), exitWhenFinish);

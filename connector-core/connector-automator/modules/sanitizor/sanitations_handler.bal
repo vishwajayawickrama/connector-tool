@@ -86,16 +86,16 @@ type SanitationRules record {|
 #
 # + originalSpecPath - path to the raw input OpenAPI spec
 # + alignedSpecPath  - path to the aligned_ballerina_openapi.json produced by sanitizor
-# + outputDir        - connector root directory (sanitations.md goes to outputDir/docs/spec/)
+# + specDir          - directory where sanitations.md is written (same dir as the aligned spec)
 # + logLevel         - controls diagnostic output verbosity
 # + return           - error if writing fails
 public function generateSanitationsDoc(
         string originalSpecPath,
         string alignedSpecPath,
-        string outputDir,
+        string specDir,
         utils:LogLevel logLevel = "normal") returns error? {
 
-    string sanitationsPath = outputDir + "/docs/spec/sanitations.md";
+    string sanitationsPath = specDir + "/sanitations.md";
 
     json|error originalResult = readSpecAsJson(originalSpecPath);
     if originalResult is error {
