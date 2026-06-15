@@ -8,7 +8,7 @@ This file is the authoritative architecture reference for this repository. Read 
 
 `bal connector` is a Ballerina CLI tool that automates Ballerina connector generation and maintenance from two source types:
 
-- **OpenAPI workflow** (`bal connector openapi …`) — takes an OpenAPI spec, runs a 6-step pipeline: sanitize → generate client → build/validate → generate examples → generate tests → generate docs
+- **OpenAPI workflow** (`bal connector openapi …`) — takes an OpenAPI spec, runs a 6-step pipeline: sanitize → generate client → build/validate → generate tests → generate examples → generate docs
 - **SDK workflow** (`bal connector sdk …`) — takes a Java SDK JAR, runs: analyze SDK → generate API spec/IR → generate connector → fix code → generate examples → generate tests → generate docs
 
 Both workflows are AI-assisted (Anthropic Claude via `ballerina/ai` + `ballerinax/ai.anthropic`). `ANTHROPIC_API_KEY` must be set.
@@ -45,8 +45,8 @@ connector-generation-cli-tool/
 │           ├── sanitizor/       # Step 1 OpenAPI: sanitize + align spec
 │           ├── client_generator/# Step 2 OpenAPI: bal openapi client generation
 │           ├── code_fixer/      # Step 3/optional: fix Ballerina compilation errors
-│           ├── example_generator/ # Step 4: AI-generated code examples
-│           ├── test_generator/  # Step 5: mock server + live test generation
+│           ├── example_generator/ # Step 5: AI-generated code examples
+│           ├── test_generator/  # Step 4: mock server + live test generation
 │           ├── document_generator/ # Step 6: AI-generated README files
 │           ├── sdkanalyzer/     # SDK workflow: Java SDK → metadata JSON
 │           ├── api_specification_generator/ # SDK: metadata → IR + spec
@@ -273,8 +273,8 @@ import wso2/connector_automator.document_generator as document_generator;
 Step 1  sanitizor:executeSanitizor          — flatten + AI-align spec
 Step 2  client_generator:executeClientGen   — bal openapi → Ballerina client
 Step 3  oautils:executeBalBuild             — compile-check; bail on errors
-Step 4  example_generator:executeExampleGen — AI-generated .bal examples
-Step 5  test_generator:executeTestGen       — mock server + live tests
+Step 4  test_generator:executeOpenApiTestGen — mock server + live tests
+Step 5  example_generator:executeExampleGen — AI-generated .bal examples
 Step 6  document_generator:executeDocGen    — README files
 ```
 

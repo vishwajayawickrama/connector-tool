@@ -58,22 +58,22 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir, string exa
     }
     utils:logInfo("✓ client built and validated", logLevel);
 
-    // Stage 4: Generating examples.
-    utils:logStep(4, 6, "Generating Examples", logLevel);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir, logLevel);
-    if exampleResult is error {
-        utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
-    } else {
-        utils:logInfo("✓ examples generated", logLevel);
-    }
-
-    // Stage 5: Generating tests.
-    utils:logStep(5, 6, "Generating Tests", logLevel);
+    // Stage 4: Generating tests.
+    utils:logStep(4, 6, "Generating Tests", logLevel);
     error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
     if testResult is error {
         utils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
     } else {
         utils:logInfo("✓ tests generated", logLevel);
+    }
+
+    // Stage 5: Generating examples.
+    utils:logStep(5, 6, "Generating Examples", logLevel);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir, logLevel);
+    if exampleResult is error {
+        utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
+    } else {
+        utils:logInfo("✓ examples generated", logLevel);
     }
 
     // Stage 6: Generating documentation.
