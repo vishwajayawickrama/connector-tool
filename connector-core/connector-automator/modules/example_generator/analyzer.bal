@@ -161,10 +161,9 @@ public function numberOfExamples(int apiCount) returns int {
     }
 }
 
-public function writeExampleToFile(string connectorPath, string exampleName, string useCase, string exampleCode,
+public function writeExampleToFile(string examplesDir, string exampleName, string useCase, string exampleCode,
         string connectorOrg, string connectorName, string connectorVersion, string connectorDistribution) returns error? {
     // Create examples directory if it doesn't exist
-    string examplesDir = connectorPath + "/examples";
     check file:createDir(examplesDir, file:RECURSIVE);
 
     // Use the provided example name directly

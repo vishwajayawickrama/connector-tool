@@ -10,6 +10,7 @@ import picocli.CommandLine;
 import io.ballerina.connectortool.exceptions.CliException;
 import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
 import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
+import io.ballerina.connectortool.utils.ExamplesOutputPathValidationUtils;
 import io.ballerina.connectortool.utils.OpenApiPathValidationUtils;
 import io.ballerina.connectortool.utils.ProcessUtils;
 
@@ -41,6 +42,9 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"-v", "--verbose"}, description = "Show detailed diagnostic output including subprocess commands and batch details.")
     public boolean verboseFlag;
 
+    @CommandLine.Option(names = {"-E", "--example-dir"}, description = "Output directory for generated examples. Defaults to <output>/examples.")
+    public String exampleDir;
+
     public OpenApiAutomatorWorkflow() {
         outStream = System.out;
         errorStream = System.err;
@@ -68,8 +72,14 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             Path openApiSpecPath = OpenApiPathValidationUtils.validate(inputPath);
             Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.validate(outputPath);
 
+            if (exampleDir != null) {
+                ExamplesOutputPathValidationUtils.validate(exampleDir);
+            }
+            String resolvedExamplesDir = ExamplesOutputPathValidationUtils.resolveExamplesDir(
+                    exampleDir, ballerinaProjectPath.toString());
+
             BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiWorkflow",
-                    openApiSpecPath.toString(), ballerinaProjectPath.toString(), logLevel);
+                    openApiSpecPath.toString(), ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir);
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
             ProcessUtils.exit(e.getExitCode(), exitWhenFinish);

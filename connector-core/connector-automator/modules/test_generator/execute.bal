@@ -72,7 +72,7 @@ function executeSdkTestGen(string connectorPath, string specPath, utils:LogLevel
 }
 
 // OpenAPI workflow: mock server + live tests.
-function executeOpenApiTestGen(string connectorPath, string specPath, utils:LogLevel logLevel) returns error? {
+public function executeOpenApiTestGen(string connectorPath, string specPath, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `connector: ${connectorPath}`, logLevel);
     utils:logVerbose(string `spec: ${specPath}`, logLevel);
 

@@ -14,7 +14,7 @@ function completeMockServer(string mockServerPath, string typesPath, utils:LogLe
     string typesContent = check io:fileReadString(typesPath);
 
     string prompt = createMockServerPrompt(mockServerContent, typesContent);
-    string completedMockServer = check utils:callAI(prompt);
+    string completedMockServer = stripCodeFences(check utils:callAI(prompt));
     check io:fileWriteString(mockServerPath, completedMockServer);
 
     utils:logVerbose("✓ mock server template completed", logLevel);
@@ -23,7 +23,7 @@ function completeMockServer(string mockServerPath, string typesPath, utils:LogLe
 
 function generateTestFile(string connectorPath, string[]? operationIds = (), utils:LogLevel logLevel = "normal") returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForTests(connectorPath, operationIds);
-    string testContent = check generateTestsWithAI(analysis);
+    string testContent = stripCodeFences(check generateTestsWithAI(analysis));
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string testFilePath = ballerinaDir + "/tests/test.bal";
@@ -142,7 +142,7 @@ function extractOperationIdsFromSpec(string specPath) returns string[]|error {
 function sdkGenerateTestFile(string connectorPath, string[]? operationIds = (), utils:LogLevel logLevel = "normal") returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForSdkTests(connectorPath, operationIds);
 
-    string testContent = sdkSanitizeGeneratedCode(check sdkGenerateTestsWithAI(analysis));
+    string testContent = stripCodeFences(check sdkGenerateTestsWithAI(analysis));
     testContent = sdkNormalizeGeneratedLiveTests(testContent);
     testContent = sdkNormalizeLiveTestEnableAnnotations(testContent);
     testContent = sdkNormalizeCredentialMissingNotice(testContent);
@@ -253,32 +253,37 @@ function sdkFixBalTestCompilationErrors(string ballerinaDir, utils:LogLevel logL
     return error(string `Compilation errors remain after test-fix phase (${remaining.length()} remaining)`);
 }
 
-function sdkSanitizeGeneratedCode(string content) returns string {
-    string trimmed = content.trim();
-    if !trimmed.startsWith("```") {
-        return trimmed;
+function stripCodeFences(string content) returns string {
+    string[] lines = regexp:split(re `\n`, content.trim());
+
+    // Scan forward for the opening fence (handles preamble text before the block)
+    int openFence = -1;
+    foreach int i in 0 ..< lines.length() {
+        if lines[i].trim().startsWith("```") {
+            openFence = i;
+            break;
+        }
+    }
+    if openFence == -1 {
+        return content.trim();  // no fence at all — return as-is
     }
 
-    string[] lines = regexp:split(re `\n`, trimmed);
-    if lines.length() <= 2 {
-        return trimmed;
-    }
+    int contentStart = openFence + 1;
 
-    int startIndex = 0;
-    if lines[0].trim().startsWith("```") {
-        startIndex = 1;
+    // Scan forward from content start for the closing fence (handles postamble text after the block)
+    int closeFence = -1;
+    foreach int i in contentStart ..< lines.length() {
+        if lines[i].trim().startsWith("```") {
+            closeFence = i;
+            break;
+        }
     }
+    int endExclusive = closeFence == -1 ? lines.length() : closeFence;
 
-    int endExclusive = lines.length();
-    if lines[lines.length() - 1].trim() == "```" {
-        endExclusive = lines.length() - 1;
+    if contentStart >= endExclusive {
+        return content.trim();
     }
-
-    if startIndex >= endExclusive {
-        return trimmed;
-    }
-
-    return string:'join("\n", ...lines.slice(startIndex, endExclusive)).trim();
+    return string:'join("\n", ...lines.slice(contentStart, endExclusive)).trim();
 }
 
 function sdkStripUnsafeEnumPatterns(string content) returns string {

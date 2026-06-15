@@ -11,7 +11,7 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
     1.  **Output Purity:** The final output must be a single, complete, raw Ballerina source code file. It absolutely cannot contain any conversational text, explanations, apologies, or markdown formatting like ${tripleBacktick}ballerina. It must start with the first line of code and end with the last.
     2.  **Structural Integrity:** I must adhere strictly to the provided template. My job is to *fill in the blanks* (the function bodies), not to refactor or add new elements.
     3.  **Server Initialization:** This is a common point of failure. The user wants the service attached directly to an ${backtick}http:Listener${backtick} on port 9090. A critical mistake to avoid is generating a separate ${backtick}public function init()${backtick}. The listener and service declaration are sufficient to define the running server. I will not add an ${backtick}init${backtick} function.
-    4.  **Data Accuracy:** The mock data must be more than just plausible; it must be a perfect match for the Ballerina record types provided in the ${backtick}<AVAILABLE_TYPES>${backtick} context. I need to meticulously check every field, data type (string, int, boolean), and structure (arrays, nested records, optional fields) to ensure 100% type safety. The return value should be a JSON literal.
+    4.  **Data Accuracy:** The mock data must be a perfect match for the Ballerina record types provided in the ${backtick}<AVAILABLE_TYPES>${backtick} context. I must use the exact Ballerina **field names** (the identifiers in the record definition), NOT JSON property names from ${backtick}@jsondata:Name${backtick} annotations. I need to meticulously check every field, data type (string, int, boolean), and structure (arrays, nested records, optional fields) to ensure 100% type safety. The return value must be a valid Ballerina mapping constructor expression — not a JSON literal.
     5.  **Completeness:** Every single resource function in the template must be implemented. No function should be left with an empty body or a placeholder comment.
 
     **Phase 2: Execution**
@@ -37,15 +37,30 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
     2.  **HTTP Listener:** The service must be attached to a globally defined ${backtick}http:Listener ep0 = new (9090);${backtick}.
     3.  **NO ${backtick}init${backtick} FUNCTION:** You must not include any ${backtick}init${backtick} function. The service definition attached to the listener is the complete server configuration.
     4.  **Complete All Functions:** Implement the body for every resource function.
-    5.  **Realistic & Type-Correct JSON:** Use believable data for all fields. The returned JSON structure must strictly adhere to the function's return type signature as defined in the provided types.
+    5.  **Realistic & Type-Correct Data:** Use believable data for all fields. Return values must use Ballerina mapping constructor expressions with **Ballerina field names** (unquoted identifiers), NOT JSON-style string keys. The data must strictly adhere to the function's return type signature as defined in the provided types.
     6.  **Preserve Doc Comments:** All documentation comments (${backtick}# ...${backtick}) above the resource functions in the template must be preserved.
+
+    **CRITICAL — ${backtick}@jsondata:Name${backtick} annotations:**
+    When a record field is annotated with ${backtick}@jsondata:Name {value: "json_name"}${backtick}, the annotation controls JSON serialization only. In Ballerina code you MUST use the **Ballerina field name** (the identifier on the line below the annotation), NOT the value inside the annotation.
+
+    Example from types.bal:
+      @jsondata:Name {value: "tweet_count"}
+      TweetCount tweetCount;          ← use ${backtick}tweetCount${backtick} in code, NOT ${backtick}tweet_count${backtick}
+
+    Correct mapping constructor:
+      SearchCount count = {tweetCount: 42, 'start: "2024-01-01T00:00:00Z", end: "2024-01-01T01:00:00Z"};
+      ✓ Uses the Ballerina field name — will compile
+
+    Wrong mapping constructor:
+      SearchCount count = {"tweet_count": 42, ...};
+      ✗ Uses the JSON annotation value — will NOT compile (BCE2066)
 
     **Example of a well-implemented resource function:**
     ${tripleBacktick}ballerina
     # Deletes the Tweet specified by the Tweet ID.
     resource function delete users/[string id]/bookmarks/[string tweet_id]() returns BookmarkMutationResponse|http:Response {
         return {
-            "data": {"bookmarked": false}
+            data: {bookmarked: false}
         };
     }
     ${tripleBacktick}

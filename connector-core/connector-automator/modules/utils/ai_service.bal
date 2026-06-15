@@ -36,7 +36,9 @@ public function callAI(string prompt) returns string|error {
     ai:ChatMessage[] messages = [{role: "user", content: prompt}];
     ai:ChatAssistantMessage|error response = model->chat(messages);
     if response is error {
-        return error("AI generation failed: " + response.message());
+        error? cause = response.cause();
+        string causeDetail = cause is error ? " | " + cause.message() : "";
+        return error("AI generation failed: " + response.message() + causeDetail);
     }
     return extractResponseContent(response);
 }
@@ -82,7 +84,9 @@ public function callAIWithMessages(ai:ChatMessage[] messages) returns string|err
 
     ai:ChatAssistantMessage|error response = model->chat(messages);
     if response is error {
-        return error("AI generation failed: " + response.message());
+        error? cause = response.cause();
+        string causeDetail = cause is error ? " | " + cause.message() : "";
+        return error("AI generation failed: " + response.message() + causeDetail);
     }
     return extractResponseContent(response);
 }

@@ -192,7 +192,6 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
 
                         if updateResult is () {
                             descriptionsAdded += 1;
-                            utils:logVerbose(string `applied description for ${response.id} at ${location}`, logLevel);
                         } else {
                             utils:logError(string `failed to apply description for ${response.id}: ${updateResult.message()}`);
                         }
@@ -305,7 +304,6 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
                     if (!isNameTaken(newName, allExistingNames, nameMapping)) {
                         allExistingNames.push(newName);
                         nameMapping[response.originalName] = newName;
-                        utils:logVerbose(string `renamed schema '${response.originalName}' → '${newName}'`, logLevel);
                         renamedCount += 1;
                     } else {
                         utils:logWarn(string `duplicate schema name generated for '${response.originalName}': '${newName}', using fallback`, logLevel);
@@ -439,7 +437,6 @@ public function addMissingOperationIdsBatchWithRetry(string specFilePath, int ba
                     if updateResult is () {
                         existingOperationIds.push(response.operationId);
                         operationIdsAdded += 1;
-                        utils:logVerbose(string `applied operationId '${response.operationId}' at ${location}`, logLevel);
                     } else {
                         utils:logError(string `failed to apply operationId for ${response.id}: ${updateResult.message()}`);
                     }

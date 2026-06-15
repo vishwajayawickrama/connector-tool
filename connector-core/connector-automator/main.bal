@@ -1783,7 +1783,7 @@ function runOpenApiPipeline(string[] args) returns error? {
     }
 
     printOpenApiStepHeader(5, "Generating Tests", logLevel);
-    error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+    error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
     if testResult is error {
         oautils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
     } else {
@@ -1856,7 +1856,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
             }
 
             printOpenApiStepHeader(4, "Regenerating Tests for New API Version", logLevel);
-            error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+            error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
             if testResult is error {
                 return testResult;
             }
@@ -1870,7 +1870,7 @@ function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oa
         }
     } else {
         printOpenApiStepHeader(4, "Regenerating Tests", logLevel);
-        error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+        error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
         if testResult is error {
             oautils:logWarn(string `test regeneration failed: ${testResult.message()}`, logLevel);
         }

@@ -6,15 +6,16 @@ import wso2/connector_automator.sanitizor as sanitizor;
 import wso2/connector_automator.test_generator as test_generator;
 import wso2/connector_automator.utils;
 
-public function runOpenApiWorkflow(string openApiSpec, string outputDir, string logLevel) returns error? {
+public function runOpenApiWorkflow(string openApiSpec, string outputDir, string logLevel, string examplesDir) returns error? {
     utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
-    return executeOpenApiPipeline(openApiSpec, outputDir, level);
+    return executeOpenApiPipeline(openApiSpec, outputDir, examplesDir, level);
 }
 
-function executeOpenApiPipeline(string openApiSpec, string outputDir, utils:LogLevel logLevel = "normal") returns error? {
+function executeOpenApiPipeline(string openApiSpec, string outputDir, string examplesDir, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `spec: ${openApiSpec}`, logLevel);
     utils:logVerbose(string `output: ${outputDir}`, logLevel);
-
+    
+    // Stage 1: Sanitizing the spec.
     utils:logStep(1, 6, "Sanitizing OpenAPI Specification", logLevel);
     error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, outputDir, logLevel);
     if sanitizeResult is error {
@@ -27,7 +28,8 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir, utils:LogL
     if sanitationsDocResult is error {
         utils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
     }
-
+    
+    // Stage 2: Generating the client.
     utils:logStep(2, 6, "Generating Ballerina Client", logLevel);
     string sanitizedSpec = string `${outputDir}/docs/spec/aligned_ballerina_openapi.json`;
     string clientPath = outputDir;
@@ -38,6 +40,7 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir, utils:LogL
         utils:logInfo("✓ client generated", logLevel);
     }
 
+    // Stage 3: Building and validating the client.
     utils:logStep(3, 6, "Building and Validating Client", logLevel);
     utils:CommandResult buildResult = utils:executeBalBuild(clientPath, logLevel);
     if utils:hasCompilationErrors(buildResult) {
@@ -55,22 +58,25 @@ function executeOpenApiPipeline(string openApiSpec, string outputDir, utils:LogL
     }
     utils:logInfo("✓ client built and validated", logLevel);
 
+    // Stage 4: Generating examples.
     utils:logStep(4, 6, "Generating Examples", logLevel);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel);
+    error? exampleResult = example_generator:executeExampleGen(outputDir, examplesDir, logLevel);
     if exampleResult is error {
         utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
     } else {
         utils:logInfo("✓ examples generated", logLevel);
     }
 
+    // Stage 5: Generating tests.
     utils:logStep(5, 6, "Generating Tests", logLevel);
-    error? testResult = test_generator:executeTestGen("openapi", outputDir, sanitizedSpec, logLevel);
+    error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
     if testResult is error {
         utils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
     } else {
         utils:logInfo("✓ tests generated", logLevel);
     }
 
+    // Stage 6: Generating documentation.
     utils:logStep(6, 6, "Generating Documentation", logLevel);
     error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel);
     if docResult is error {

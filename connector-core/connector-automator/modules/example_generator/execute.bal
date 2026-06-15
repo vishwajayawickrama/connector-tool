@@ -3,8 +3,9 @@ import connector_automator.utils;
 import ballerina/file;
 import ballerina/lang.runtime;
 
-public function executeExampleGen(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+public function executeExampleGen(string connectorPath, string examplesDir, utils:LogLevel logLevel = "normal") returns error? {
     utils:logVerbose(string `connector: ${connectorPath}`, logLevel);
+    utils:logVerbose(string `examples output: ${examplesDir}`, logLevel);
 
     utils:logVerbose("analyzing connector", logLevel);
     ConnectorDetails|error details = analyzeConnector(connectorPath);
@@ -84,7 +85,7 @@ public function executeExampleGen(string connectorPath, utils:LogLevel logLevel 
             exampleName = exampleNameResult;
         }
 
-        error? writeResult = writeExampleToFile(connectorPath, exampleName, useCase, generatedCode,
+        error? writeResult = writeExampleToFile(examplesDir, exampleName, useCase, generatedCode,
             details.connectorOrg, details.connectorName, details.connectorVersion, details.connectorDistribution);
         if writeResult is error {
             utils:logWarn(string `failed to write example ${i}: ${writeResult.message()}`, logLevel);
@@ -93,7 +94,7 @@ public function executeExampleGen(string connectorPath, utils:LogLevel logLevel 
 
         runtime:sleep(10);
 
-        string exampleDir = connectorPath + "/examples/" + exampleName;
+        string exampleDir = examplesDir + "/" + exampleName;
         error? fixResult = fixExampleCode(exampleDir, exampleName, logLevel);
         if fixResult is error {
             utils:logWarn(string `compilation fix failed for ${exampleName}: ${fixResult.message()} — may need manual review`, logLevel);
@@ -108,7 +109,7 @@ public function executeExampleGen(string connectorPath, utils:LogLevel logLevel 
     if successCount < numExamples {
         utils:logWarn(string `${successCount}/${numExamples} examples succeeded`, logLevel);
     } else {
-        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${connectorPath}/examples/`, logLevel);
+        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${examplesDir}/`, logLevel);
     }
 }
 
