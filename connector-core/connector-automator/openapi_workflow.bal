@@ -6,7 +6,9 @@ import wso2/connector_automator.sanitizor as sanitizor;
 import wso2/connector_automator.test_generator as test_generator;
 import wso2/connector_automator.utils;
 
-public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDir, string logLevel, string examplesDir, string excludedStages, string specDir) returns error? {
+public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDir, string logLevel,
+        string examplesDir, string excludedStages, string specDir) returns error? {
+
     utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
     string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
 
@@ -15,17 +17,29 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     utils:logVerbose(string `spec-dir: ${specDir}`, level);
     utils:logVerbose(string `examples-dir: ${examplesDir}`, level);
 
-    string[] allStages = ["sanitize", "client", "tests", "examples", "docs"];
-    int total = allStages.filter(s => excluded.indexOf(s) is ()).length();
-    int step = 0;
-
     if excluded.length() > 0 {
         utils:logInfo(string `skipping stages: ${string:'join(", ", ...excluded)}`, level);
     }
 
-    string sanitizedSpec = string `${specDir}/aligned_ballerina_openapi.json`;
+    string[] allStages = ["sanitize", "client", "tests", "examples", "docs"];
+    int total = allStages.filter(s => excluded.indexOf(s) is ()).length();
+    int step = 0;
 
-    // Stage 1: Sanitizing the spec.
+    string sanitizedSpec = string `${specDir}/aligned_ballerina_openapi.json`;
+    string sanitationsPath = string `${specDir}/sanitations.md`;
+    string clientPath = outputDir;
+
+    // Pre-step: apply recorded sanitations to the incoming spec, if any exist (non-fatal)
+    if excluded.indexOf("sanitize") is () {
+        error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, level);
+        if applyResult is error {
+            utils:logWarn(string `could not apply recorded sanitations — continuing: ${applyResult.message()}`, level);
+        } else {
+            utils:logInfo("✓ recorded sanitations applied", level);
+        }
+    }
+
+    // Stage 1: Sanitize
     if excluded.indexOf("sanitize") is () {
         step += 1;
         utils:logStep(step, total, "Sanitizing OpenAPI Specification", level);
@@ -35,10 +49,9 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             return sanitizeResult;
         }
         utils:logInfo("✓ sanitization complete", level);
-        error? sanitationsDocResult = sanitizor:generateSanitationsDoc(
-            openApiSpec, sanitizedSpec, specDir, level);
+        error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, specDir, level);
         if sanitationsDocResult is error {
-            utils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`, level);
+            utils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`, level);
         }
     } else {
         utils:logVerbose("skipping sanitize (excluded)", level);
@@ -48,7 +61,6 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     if excluded.indexOf("client") is () {
         step += 1;
         utils:logStep(step, total, "Generating Ballerina Client", level);
-        string clientPath = outputDir;
         error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, level);
         if clientResult is error {
             utils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`, level);
@@ -89,7 +101,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         utils:logVerbose("skipping tests (excluded)", level);
     }
 
-    // Stage 4: Generating examples.
+    // Stage 4: Examples
     if excluded.indexOf("examples") is () {
         step += 1;
         utils:logStep(step, total, "Generating Examples", level);
@@ -103,7 +115,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         utils:logVerbose("skipping examples (excluded)", level);
     }
 
-    // Stage 5: Generating documentation.
+    // Stage 5: Docs (non-fatal)
     if excluded.indexOf("docs") is () {
         step += 1;
         utils:logStep(step, total, "Generating Documentation", level);

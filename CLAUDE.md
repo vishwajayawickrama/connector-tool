@@ -75,13 +75,16 @@ BallerinaRuntimeUtils.callBallerinaFunction(
     "wso2", "connector_automator", "0",
     "runOpenApiGenerationWorkflow",
     openApiSpecPath != null ? openApiSpecPath.toString() : "",
-    ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir, excludedArg
+    ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir.toString(),
+    excludedArg, specDirPath.toString()
 );
 ```
 
-`callBallerinaFunction` creates a fresh `Runtime`, calls the named function with **five** `BString` args (spec path, output dir, log level, examples dir, excluded stages), and **throws `RuntimeException`** on `BError` or any exception. The caller catches it and exits with `ProcessUtils.exitError(exitWhenFinish)`.
+`callBallerinaFunction` creates a fresh `Runtime`, calls the named function with **six** `BString` args (spec path, output dir, log level, examples dir, excluded stages, spec dir), and **throws `RuntimeException`** on `BError` or any exception. The caller catches it and exits with `ProcessUtils.exitError(exitWhenFinish)`.
 
 `openApiSpecPath` is `null` when `sanitize` is excluded — in that case an empty string is passed and the Ballerina side ignores it.
+
+`runOpenApiGenerationWorkflow` handles both fresh generation and regeneration of an existing connector — see "Regeneration is automatic" below. There is no separate regen flag or function; Java always calls the same function name.
 
 The `logLevel` string (`"quiet"`, `"normal"`, or `"verbose"`) is derived from the `-q`/`-v` flags on `OpenApiAutomatorWorkflow`. If both flags are set, a `CliException(exitCode=2)` is thrown before Ballerina is invoked.
 
@@ -145,7 +148,7 @@ logCompletion(outputDir, level)     // normal+verbose: "Connector generated at: 
 
 ### Thread-through pattern
 
-`LogLevel` flows from Java → `runOpenApiGenerationWorkflow(spec, outputDir, logLevel, examplesDir, excludedStages, specDir)` → every step function. All public step functions have the signature:
+`LogLevel` flows from Java → `runOpenApiGenerationWorkflow` (takes `(spec, outputDir, logLevel, examplesDir, excludedStages, specDir)`) → every step function. All public step functions have the signature:
 ```ballerina
 public function executeXxx(..., utils:LogLevel logLevel = "normal") returns error?
 ```
@@ -273,17 +276,26 @@ import wso2/connector_automator.document_generator as document_generator;
 ## OpenAPI pipeline steps (openapi_workflow.bal)
 
 ```
-Step 1  sanitizor:executeSanitizor           — flatten + AI-align spec
-Step 2  client_generator:executeClientGen    — bal openapi → Ballerina client
-        code_fixer:fixAllErrors (embedded)   — auto-fix compilation errors (no extra step)
-Step 3  test_generator:executeOpenApiTestGen — mock server + live tests
-Step 4  example_generator:executeExampleGen  — AI-generated .bal examples
-Step 5  document_generator:executeDocGen     — README files
+Stage 1  sanitizor:executeSanitizor           — flatten + AI-align spec
+Stage 2  client_generator:executeClientGen    — bal openapi → Ballerina client
+         code_fixer:fixAllErrors (embedded)   — auto-fix compilation errors (no extra step)
+Stage 3  test_generator:executeOpenApiTestGen — mock server + live tests
+Stage 4  example_generator:executeExampleGen  — AI-generated .bal examples
+Stage 5  document_generator:executeDocGen     — README files
 ```
 
-Step numbers shown above are for the full run. When stages are excluded with `-x`, step numbers are recomputed sequentially within the active stages.
+`client` and `tests` are both counted as independent stages (`total` is computed from the fixed list `["sanitize", "client", "tests", "examples", "docs"]` filtered by `-x` exclusions), each with its own `logStep` header. Stage 2 (client) runs generate → build → auto-fix-on-error → rebuild, failing CRITICALLY if errors persist. Stage 3 (tests) runs once, independently, immediately after Stage 2 completes — it does not branch on the build outcome. Step numbers are recomputed sequentially within whichever stages are active after exclusions.
 
 Client is generated into `outputDir/` (flat layout). Sanitized spec goes to `outputDir/docs/spec/aligned_ballerina_openapi.json`.
+
+### Regeneration is automatic
+
+`runOpenApiGenerationWorkflow` is the single entry point for both fresh generation and regenerating an existing connector from an updated spec — there is no separate flag or function:
+
+- **Sanitations replay**: if `${specDir}/sanitations.md` exists (it's written by `generateSanitationsDoc` after every successful sanitize), it's replayed onto the incoming spec via `sanitizor:applySanitations` before sanitization runs (non-fatal — a missing file or AI failure just falls through to plain sanitization). On a fresh project this file doesn't exist yet, so the pre-step is a no-op.
+- **Test generation**: runs as a plain independent Stage 3 once Stage 2 (client generation + build) completes successfully — `test_generator:executeOpenApiTestGen` always overwrites all test/mock files, so no special handling of stale tests is needed on a spec update.
+
+Re-running `bal connector openapi -i <updated-spec> -o <existing-connector-dir>` is the regeneration workflow.
 
 ### `-x`/`--exclude` flag
 
@@ -303,10 +315,11 @@ Java-layer preflight checks (before Ballerina runtime starts):
 
 `docs` skips sections whose source stage was excluded: `client` excluded → skip main README; `tests` excluded → skip tests README; `examples` excluded → skip examples READMEs.
 
-### Alternative entry: `runOpenApiGenerationWorkflow` vs `executeOpenApiCommand`
+### Alternative entry: Java path vs `executeOpenApiCommand`
 
-- `runOpenApiGenerationWorkflow` in `openapi_workflow.bal` — called by Java via `callBallerinaFunction`; contains the full 5-stage pipeline inline
-- `executeOpenApiCommand` in `main.bal` — called when running the tool directly as `bal tool-id openapi …`; includes all subcommands (sanitize, generate-client, generate-tests, etc.) and its own pipeline implementation
+Java calls `runOpenApiGenerationWorkflow` in `openapi_workflow.bal` via `callBallerinaFunction` (6 args) for every invocation — there is no flag-based function routing.
+
+`executeOpenApiCommand` in `main.bal` — called when running the tool directly as `bal tool-id openapi …`; includes all subcommands (sanitize, generate-client, generate-tests, etc.) and its own legacy pipeline implementation (nested layout), including the separate legacy `runOpenApiRegenerationPipeline` for that nested-layout CLI path. That legacy function is unrelated to the unified `runOpenApiGenerationWorkflow` described above.
 
 ---
 

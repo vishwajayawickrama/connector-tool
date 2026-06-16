@@ -1,96 +1,148 @@
-# OpenAPI Regeneration Pipeline — Architecture Reference
+# OpenAPI Regeneration — Architecture Reference
 
-This document covers the design of `executeOpenApiRegen` in `openapi_workflow.bal`, how it differs from `runOpenApiGenerationWorkflow`, and the `sanitations.md` mechanism that drives regeneration. For module-by-module details (sanitizor, client_generator, etc.) see `CLAUDE.md` and `openapi-workflow-architecture.md`.
-
----
-
-## Why a separate regen pipeline
-
-The fresh pipeline (`runOpenApiGenerationWorkflow`) assumes a blank output directory and generates everything from scratch. Regeneration has three additional requirements:
-
-1. **Pre-sanitization replay** — recorded sanitations from a previous run must be applied to the new spec version before sanitizing, so connector-specific decisions survive API updates.
-2. **Aggressive build recovery** — old tests and mock stubs frequently reference types that no longer exist in the new spec; the pipeline must detect this and delete/regenerate them instead of failing.
-3. **Unconditional test regeneration** — even when the build passes cleanly, the API surface may have changed; tests are always regenerated on a regen run.
+This document covers how `runOpenApiGenerationWorkflow` (`openapi_workflow.bal`) handles regenerating an existing connector from an updated OpenAPI spec, and the `sanitations.md` mechanism that drives it. For module-by-module details (sanitizor, client_generator, etc.) see `CLAUDE.md` and `openapi-workflow-architecture.md`.
 
 ---
 
-## Ballerina entry points
+## Why regeneration needs no separate entry point
 
-### `runOpenApiRegenWorkflow` (public — called by Java)
+A fresh run (blank output directory) and a regeneration run (existing connector, updated spec) go through the exact same function — `runOpenApiGenerationWorkflow`. The behaviors that matter for regeneration are unconditional parts of that function and are no-ops on a fresh project:
+
+1. **Sanitations replay** — `sanitations.md` captures every connector-specific transform from prior runs (server URL rewrites, prefix removals, type renames). If it exists at `${specDir}/sanitations.md`, it's applied to the incoming spec before sanitization so those decisions survive spec updates automatically. On a fresh project the file doesn't exist yet, so this step is skipped (non-fatal either way).
+2. **Tests always rewritten** — `test_generator:executeOpenApiTestGen` overwrites all test/mock files whenever it runs, so a plain independent Stage 3 that always runs after the client build succeeds is sufficient to pick up API surface changes from an updated spec. No special recovery logic is needed.
+
+There used to be a separate `runOpenApiRegenWorkflow` mirroring the legacy nested-layout `runOpenApiRegenerationPipeline` in `main.bal` (lines ~1805–1894). That duplication was removed — `runOpenApiGenerationWorkflow` is now a strict superset covering both cases. The legacy `main.bal` function still exists for the legacy nested-layout CLI path (`bal tool-id openapi …` via `executeOpenApiCommand`) and is unrelated to this one.
+
+---
+
+## Ballerina entry point
 
 ```ballerina
-public function runOpenApiRegenWorkflow(string openApiSpec, string outputDir, string logLevel, string examplesDir, string excludedStages) returns error?
+public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDir, string logLevel,
+        string examplesDir, string excludedStages, string specDir) returns error?
 ```
 
-Same signature as `runOpenApiGenerationWorkflow`. Parses `logLevel` → `utils:LogLevel` and `excludedStages` (comma-separated string) → `string[]`, then delegates to `executeOpenApiRegen`.
+- Parses `logLevel` → `utils:LogLevel level`
+- Parses `excludedStages` (comma-separated) → `string[]`
+- Logs verbose preamble (spec, output, specDir, examplesDir paths)
+- Logs skipped stages if any
+- Runs the full pipeline inline (no private delegate)
 
-### `executeOpenApiRegen` (private — the actual pipeline)
+`specDir` is the spec output directory (e.g. `${outputDir}/docs/spec`), **already resolved by the Java layer** before the call. The Ballerina side uses it as-is.
 
-```ballerina
-function executeOpenApiRegen(string openApiSpec, string outputDir, string examplesDir, utils:LogLevel logLevel = "normal", string[] excluded = []) returns error?
-```
-
-Uses **flat layout** (`outputDir` is the client path / `Ballerina.toml` root), identical to `runOpenApiGenerationWorkflow`. Do not use `${outputDir}/ballerina` — that is the legacy CLI path in `main.bal` which is nested layout only.
+Uses **flat layout**: `clientPath = outputDir`. Do not use `${outputDir}/ballerina` — that is the legacy CLI path in `main.bal` (nested layout only).
 
 ---
 
 ## Java invocation
 
-`OpenApiAutomatorWorkflow` gains a `-r` / `--regen` flag. When set, it calls `runOpenApiRegenWorkflow` instead of `runOpenApiGenerationWorkflow`:
+Java always calls the same function — there is no flag-based routing:
 
 ```java
-String functionName = regenFlag ? "runOpenApiRegenWorkflow" : "runOpenApiGenerationWorkflow";
-BallerinaRuntimeUtils.callBallerinaFunction(
-    ORG, MODULE, VERSION, functionName,
-    openApiSpecPath != null ? openApiSpecPath.toString() : "",
-    ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir, excludedArg
-);
+BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiGenerationWorkflow",
+        openApiSpecPath != null ? openApiSpecPath.toString() : "",
+        ballerinaProjectPath.toString(), logLevel,
+        resolvedExamplesDir.toString(), excludedArg, specDirPath.toString());
 ```
 
-Same 5-arg call, same error-propagation contract (`RuntimeException` on `BError`).
+Same 6-arg call every time, same `RuntimeException`-on-`BError` error propagation contract. `OpenApiStageValidationUtils` preflight checks apply uniformly — there's no separate "regen" preflight path since there's no separate regen mode to validate into.
 
 ---
 
-## Pipeline steps
-
-```
-Pre-step  sanitizor:applySanitations           non-fatal
-Stage 1   sanitizor:executeSanitizor            CRITICAL
-          sanitizor:generateSanitationsDoc      non-fatal (refreshes sanitations.md)
-Stage 2   client_generator:executeClientGen     non-fatal
-          utils:executeBalBuild
-          ├── [errors] code_fixer:fixAllErrors  non-fatal attempt
-          │   utils:executeBalBuild             (retry)
-          │   ├── [errors] file:remove tests/ + mock.server/
-          │   │   test_generator:executeOpenApiTestGen   CRITICAL
-          │   │   utils:executeBalBuild
-          │   │   └── [errors] code_fixer:fixAllErrors  CRITICAL
-          │   └── [clean] → continue
-          └── [clean] test_generator:executeOpenApiTestGen  non-fatal
-Stage 3   example_generator:executeExampleGen   non-fatal
-Stage 4   document_generator:executeDocGen      non-fatal
-```
-
-**Stage numbering** follows `runOpenApiGenerationWorkflow` (`total` is computed from non-excluded stages). The `-x` exclude flags carry over: `sanitize`, `client`, `tests`, `examples`, `docs` are all skippable. Tests sit inside Stage 2 (client+build) here, not as a separate top-level stage, because their fate depends on the build outcome.
-
-### Pre-step — apply recorded sanitations
+## Stage counter design
 
 ```ballerina
-string sanitationsPath = string `${outputDir}/docs/spec/sanitations.md`;
-error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, logLevel);
+string[] allStages = ["sanitize", "client", "tests", "examples", "docs"];
+int total = allStages.filter(s => excluded.indexOf(s) is ()).length();
 ```
 
-Run before Stage 1. Non-fatal: if `sanitations.md` doesn't exist or AI fails, the pipeline continues with raw sanitization.
+`client` and `tests` are always two independent counted stages — `total` is fixed regardless of exclusions. Stage 3 (tests) runs once, unconditionally, immediately after Stage 2 (client) completes — it is not interleaved into Stage 2's build-recovery branches.
 
-### Stage 2 — build recovery tiers
+---
 
-| Build outcome | Action |
-|---|---|
-| Clean | Regenerate tests (non-fatal) |
-| Errors, fixed by `code_fixer` | Regenerate tests (non-fatal) |
-| Errors, `code_fixer` cannot fix | Delete `tests/` + `modules/mock.server/`, regenerate tests (CRITICAL), rebuild, final `code_fixer` attempt (CRITICAL) |
+## Pipeline steps in detail
 
-The CRITICAL designations on the forced-regen branch mean the pipeline returns an error and aborts if those steps fail.
+### Setup (before any stage)
+
+```ballerina
+string sanitizedSpec    = string `${specDir}/aligned_ballerina_openapi.json`;
+string sanitationsPath  = string `${specDir}/sanitations.md`;
+string clientPath       = outputDir;  // flat layout
+```
+
+### Pre-step — apply recorded sanitations, if any exist (scoped to sanitize exclusion)
+
+Only runs when `sanitize` is **not** excluded. If `sanitize` is excluded the user is reusing an existing aligned spec; replaying sanitations against the raw spec is pointless since sanitization won't run.
+
+```ballerina
+if excluded.indexOf("sanitize") is () {
+    error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, level);
+    // non-fatal — missing sanitations.md (fresh project) or AI failure → continue with plain sanitization
+}
+```
+
+`applySanitations` modifies `openApiSpec` **in-place** before `executeSanitizor` reads it. AI initialization lives inside `applySanitations` itself now (`sanitations_handler.bal`): it calls `utils:initAIService(logLevel)` right after confirming `sanitations.md` exists, then checks `utils:isAIServiceInitialized()` to choose the AI path vs. the rule-based fallback. This avoids initializing AI at all when there's no `sanitations.md` to apply (e.g. a fresh project) or when `sanitize` is excluded. `executeSanitizor` independently calls `initLLMService` (which wraps `initAIService`) for its own AI-assisted steps — re-initializing is idempotent and cheap.
+
+### Stage 1 — Sanitize (CRITICAL)
+
+```ballerina
+sanitizor:executeSanitizor(openApiSpec, specDir, level)   // CRITICAL: returns error → abort
+sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, specDir, level)  // non-fatal: writes/refreshes sanitations.md
+```
+
+Note: `executeSanitizor` receives `specDir` as the output directory (not `outputDir`). Sanitized output lands at `specDir/aligned_ballerina_openapi.json`. `generateSanitationsDoc` also uses `specDir` as its output base — this is what creates `sanitations.md` on a fresh run, making the *next* run on this directory a regeneration.
+
+### Stage 2 — Client + build recovery
+
+```
+client_generator:executeClientGen(sanitizedSpec, clientPath, level)   [non-fatal]
+
+utils:executeBalBuild(clientPath, level)
+│
+├── [clean build] → Stage 2 done, proceed to Stage 3
+│
+└── [compilation errors]
+    code_fixer:fixAllErrors(clientPath, level, true)   [non-fatal attempt]
+    │
+    utils:executeBalBuild(clientPath, level)   [retry]
+    │
+    ├── [clean after fix] → Stage 2 done, proceed to Stage 3
+    │
+    └── [still failing] → CRITICAL: log error, return error(...) — pipeline aborts
+```
+
+### Stage 3 — Tests
+
+A single independent, non-fatal step that runs once, immediately after Stage 2 completes (or immediately, if `client` is excluded):
+
+```ballerina
+if excluded.indexOf("tests") is () {
+    step += 1;
+    utils:logStep(step, total, "Generating Tests", level);
+    error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, level);
+    // non-fatal: logs a warning and continues if it fails
+}
+```
+
+`test_generator:executeOpenApiTestGen` overwrites all test/mock files on every run, so there's no need to special-case stale tests after a spec update — the same call handles fresh generation and regeneration alike.
+
+`code_fixer:fixAllErrors(clientPath, level, true)` is used directly, not `fixer:executeCodeFixer`. The third arg `true` enables the iterative fix loop.
+
+### Stage 4 — Examples (non-fatal)
+
+```ballerina
+example_generator:executeExampleGen(outputDir, examplesDir, level)
+```
+
+`examplesDir` is threaded from the Java `--example-dir` flag.
+
+### Stage 5 — Docs (non-fatal)
+
+```ballerina
+document_generator:executeDocGen("generate-all", outputDir, excluded, level)
+```
+
+Passes `excluded` through so the doc generator can skip individual readme types if their corresponding stage was skipped.
 
 ---
 
@@ -98,22 +150,22 @@ The CRITICAL designations on the forced-regen branch mean the pipeline returns a
 
 ### What it records
 
-Every transformation applied to the raw spec during sanitization: server URL changes, path prefix removals, type renames, nullability changes, format changes, AI-generated operationId and description additions. Written to `${outputDir}/docs/spec/sanitations.md`.
+Every transformation applied to the raw spec during sanitization: server URL changes, path prefix removals, type renames, nullability changes, format changes, AI-generated operationId and description additions. Written to `${specDir}/sanitations.md`.
 
 ### How it is generated — `sanitizor:generateSanitationsDoc`
 
-Called after `executeSanitizor` in both fresh and regen pipelines. Diffs the original spec against the aligned spec and writes human-readable, machine-parseable markdown sections.
+Called after `executeSanitizor`. Diffs the original spec against the aligned spec.
 
-- If `sanitations.md` **already exists**: calls `mergeWithExistingSanitations` — appends new sections, renumbers, deduplicates.
-- If **new**: calls `buildSanitationsContent` — AI-generated descriptions, falls back to auto-detection.
+- If `sanitations.md` **already exists**: `mergeWithExistingSanitations` — appends new sections, renumbers, deduplicates.
+- If **new**: `buildSanitationsContent` — AI-generated descriptions, falls back to auto-detection.
 
 ### How it is applied — `sanitizor:applySanitations`
 
-Called in the pre-step, before `executeSanitizor`, on the incoming new spec.
+Called in the pre-step on the incoming raw spec, before `executeSanitizor` rewrites it.
 
-**Primary path (AI available):** Sends both `sanitations.md` content and the new spec JSON to Claude. If spec ≤ `SPEC_SINGLE_TURN_THRESHOLD` chars: single-turn rewrite. If larger: chunked multi-turn (same strategy as `client_regenerator/analyze_version_change.bal`). Result is written back to `newSpecPath` in-place.
+**Primary path (AI available):** Sends both `sanitations.md` content and the new spec JSON to Claude. If spec ≤ `SPEC_SINGLE_TURN_THRESHOLD` chars: single-turn rewrite. If larger: chunked multi-turn (same strategy as `client_regenerator/analyze_version_change.bal`). Result written back to `newSpecPath` in-place.
 
-**Fallback (AI unavailable):** `parseSanitationsMarkdown` extracts typed `SanitationRules` and `applyRulesToSpec` applies them programmatically.
+**Fallback (AI unavailable):** `parseSanitationsMarkdown` extracts typed `SanitationRules`; `applyRulesToSpec` applies them programmatically.
 
 ```ballerina
 type SanitationRules record {|
@@ -125,41 +177,28 @@ type SanitationRules record {|
 |};
 ```
 
-The `utils:isAIServiceInitialized()` check selects between the two paths — AI must have been initialized before calling `applySanitations` for the primary path to activate.
+`utils:isAIServiceInitialized()` selects between the two paths — `applySanitations` calls `utils:initAIService` itself immediately beforehand, so this check always reflects the freshest init attempt for this call.
 
 ---
 
 ## `client_regenerator` module
 
-Standalone utilities called outside the pipeline (typically via `bal run` in CI after a regen PR is created). Not invoked from `executeOpenApiRegen` directly.
+Standalone CI utilities. **Not called from within the pipeline.** Runs after `runOpenApiGenerationWorkflow` exits, once changed files are staged in a branch.
 
 | File | Entry | Purpose |
 |------|-------|---------|
-| `analyze_version_change.bal` | `main(diffFilePath)` | AI classifies git diff as breaking/non-breaking; generates PR description sections |
-| `sort_ballerina_client.bal` | `runSortBallerinaClient(args)` | Sorts resource methods by HTTP method + path for stable diffs across regenerations |
-| `sort_ballerina_type.bal` | (internal) | Sorts type definitions alphabetically |
-| `update_changelog.bal` | `runUpdateChangelog(prDescription)` | Parses PR description, generates/merges `Changelog.md` unreleased section |
+| `analyze_version_change.bal` | `main(diffFilePath)` | AI classifies git diff as MAJOR/MINOR/PATCH; produces structured change lists |
+| `sort_ballerina_client.bal` | `runSortBallerinaClient(args)` | Sorts resource methods by path + HTTP method for stable diffs |
+| `sort_ballerina_type.bal` | `runSortBallerinaType(args)` | Sorts type definitions alphabetically |
+| `update_changelog.bal` | `runUpdateChangelog(prDescription)` | Generates/merges `CHANGELOG.md` `[Unreleased]` section |
 
-`analyze_version_change.bal` uses the same chunked multi-turn pattern as `applySanitations` for large diffs.
-
----
-
-## Differences from `runOpenApiGenerationWorkflow`
-
-| Aspect | `runOpenApiGenerationWorkflow` (fresh) | `executeOpenApiRegen` |
-|--------|-----------------------------------|-----------------------|
-| Pre-step | none | `applySanitations` |
-| Build recovery | auto-fix → CRITICAL fail | auto-fix → delete tests+mock → force-regen tests → CRITICAL fail |
-| Test generation | independent stage, non-fatal | interleaved with build, conditionally CRITICAL |
-| `examplesDir` | threaded from Java `-E` flag | same |
-| Layout | flat (`outputDir`) | flat (`outputDir`) — same |
-| Invoked by | `runOpenApiGenerationWorkflow` | `runOpenApiRegenWorkflow` |
-| Java flag | (default) | `-r` / `--regen` |
+See `docs/client-regenerator-architecture.md` for full details.
 
 ---
 
-## Invariants specific to regen
+## Invariants
 
-- `applySanitations` modifies the spec **in-place** before `executeSanitizor` reads it. The original spec file is overwritten; ensure the incoming path is a writable copy if the original must be preserved.
-- `file:remove(clientPath + "/tests", file:RECURSIVE)` and `file:remove(clientPath + "/modules/mock.server", file:RECURSIVE)` are destructive. They only execute after two failed build attempts, not speculatively.
-- `clientPath` in `executeOpenApiRegen` is `outputDir` (flat layout). The `main.bal::runOpenApiRegenerationPipeline` uses `${outputDir}/ballerina` (nested layout, CLI-only legacy path) — do not copy that pattern into `openapi_workflow.bal`.
+- `applySanitations` modifies the incoming spec **in-place**. It runs before `executeSanitizor`. The original file is overwritten — if the caller needs the raw spec preserved, it must copy it before invoking `runOpenApiGenerationWorkflow`.
+- `applySanitations` initializes AI itself (`utils:initAIService`) right after confirming `sanitations.md` exists — callers don't need to initialize AI beforehand for this step. The `isAIServiceInitialized()` check right after selects the AI path vs rule-based fallback.
+- `clientPath = outputDir` (flat). Never use `${outputDir}/ballerina` — that is the `main.bal` legacy path (nested layout). The two must not be conflated.
+- `specDir` is resolved by Java before the Ballerina call. Ballerina must use the `specDir` param directly for `sanitizedSpec` and `sanitationsPath` — never re-derive it from `outputDir` inside `runOpenApiGenerationWorkflow`.
