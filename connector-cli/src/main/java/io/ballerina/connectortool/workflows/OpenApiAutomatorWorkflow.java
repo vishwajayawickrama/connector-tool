@@ -55,6 +55,18 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"-x", "--exclude"}, description = "Exclude a pipeline stage. Repeatable. Valid stages: sanitize, client, tests, examples, docs.")
     public List<String> excludedStages = new ArrayList<>();
 
+    @CommandLine.Option(names = {"--license"}, description = "License file path to use when generating Ballerina client source headers.")
+    public String licensePath;
+
+    @CommandLine.Option(names = {"-t", "--tags"}, description = "OpenAPI tag to include during client generation. Repeatable.")
+    public List<String> tags = new ArrayList<>();
+
+    @CommandLine.Option(names = {"--operations"}, description = "OpenAPI operation ID to include during client generation. Repeatable.")
+    public List<String> operations = new ArrayList<>();
+
+    @CommandLine.Option(names = {"--remote"}, description = "Generate client APIs as remote methods instead of resource methods.")
+    public boolean remoteFlag;
+
     public OpenApiAutomatorWorkflow() {
         outStream = System.out;
         errorStream = System.err;
@@ -91,11 +103,15 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             Path resolvedExamplesDir = ExamplesOutputPathValidationUtils.resolve(exampleDir);
 
             String excludedArg = String.join(",", excludedStages);
+            String licenseArg = licensePath != null ? Path.of(licensePath).toAbsolutePath().normalize().toString() : "";
+            String tagsArg = String.join(",", tags);
+            String operationsArg = String.join(",", operations);
+            String clientMethodArg = remoteFlag ? "remote" : "";
 
             BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiGenerationWorkflow",
                     openApiSpecPath != null ? openApiSpecPath.toString() : "",
                     ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir.toString(), excludedArg,
-                    specDirPath.toString());
+                    specDirPath.toString(), licenseArg, tagsArg, operationsArg, clientMethodArg);
 
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
