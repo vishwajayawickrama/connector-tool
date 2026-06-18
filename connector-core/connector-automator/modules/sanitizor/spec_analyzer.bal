@@ -55,11 +55,36 @@ function extractSchemaUsageContext(string schemaName, json spec) returns string 
     return string `Schema '${schemaName}' usage context not found`;
 }
 
+// Returns true if a description field is absent, empty, or a known placeholder string
+// emitted by upstream spec generators (e.g. HubSpot writes the literal string "null"
+// wherever their generator had no description to provide).
+function isInvalidDescription(map<json> fieldMap) returns boolean {
+    if !fieldMap.hasKey("description") {
+        return true;
+    }
+    json|error descResult = fieldMap.get("description");
+    if !(descResult is string) {
+        return true; // non-string value — treat as missing
+    }
+    string desc = (<string>descResult).trim();
+    if desc.length() == 0 {
+        return true; // empty or whitespace-only
+    }
+    // Placeholder values that upstream generators emit instead of omitting the field
+    string[] placeholders = ["null", "n/a", "none", "todo", "tbd", "-"];
+    foreach string placeholder in placeholders {
+        if desc.toLowerAscii() == placeholder {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Helper function to collect description requests from schema
 function collectDescriptionRequests(map<json> schemaMap, string schemaName, string pathPrefix,
         DescriptionRequest[] requests, map<string> locationMap, json fullSpec) {
     // Check if schema itself needs description
-    if !schemaMap.hasKey("description") {
+    if isInvalidDescription(schemaMap) {
         string requestId = generateRequestId(schemaName, pathPrefix, "schema");
         string context = string `Schema '${schemaName}' definition: ${schemaMap.toString()}`;
         requests.push({
@@ -114,7 +139,7 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                 parentSchemaName + ".properties." + propertyName;
 
             // Check if property needs description
-            if !propertyMap.hasKey("description") {
+            if isInvalidDescription(propertyMap) {
                 string requestId = generateRequestId(parentSchemaName, propertyPath, "property");
                 string context = string `Property '${propertyName}' in schema '${parentSchemaName}'. Property definition: ${propertyMap.toString()}`;
                 // add schema type infor to context for better IA understanding
@@ -350,21 +375,8 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
                                             if param is map<json> {
                                                 map<json> paramMap = <map<json>>param;
 
-                                                // Only check if parameter completely lacks description
-                                                boolean needsDescription = false;
-
-                                                if !paramMap.hasKey("description") {
-                                                    needsDescription = true;
-                                                } else {
-                                                    json|error descResult = paramMap.get("description");
-                                                    if descResult is string {
-                                                        string currentDescription = <string>descResult;
-                                                        // Only flag if description is truly empty
-                                                        if currentDescription.trim().length() == 0 {
-                                                            needsDescription = true;
-                                                        }
-                                                    }
-                                                }
+                                                // Flag if description is absent, empty, or a known placeholder (e.g. "null")
+                                                boolean needsDescription = isInvalidDescription(paramMap);
 
                                                 if needsDescription && paramMap.hasKey("name") {
                                                     string paramName = <string>paramMap.get("name");
@@ -519,6 +531,81 @@ function collectOperationDescriptionRequests(json spec, DescriptionRequest[] req
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper function to collect operation summary requests (for client resource/remote function doc comments)
+function collectOperationSummaryRequests(json spec, DescriptionRequest[] requests, map<string> locationMap) {
+    json|error pathsResult = spec.paths;
+    if pathsResult is map<json> {
+        foreach string path in pathsResult.keys() {
+            json|error pathResult = pathsResult.get(path);
+            if pathResult is map<json> {
+                map<json> pathItem = <map<json>>pathResult;
+                string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
+
+                foreach string method in httpMethods {
+                    if pathItem.hasKey(method) {
+                        json|error operationResult = pathItem.get(method);
+                        if operationResult is map<json> {
+                            map<json> operation = <map<json>>operationResult;
+
+                            boolean needsSummary = false;
+                            boolean tooLong = false;
+                            string existingSummary = "";
+                            if !operation.hasKey("summary") {
+                                needsSummary = true;
+                            } else {
+                                json|error summaryResult = operation.get("summary");
+                                if summaryResult is string {
+                                    existingSummary = summaryResult.trim();
+                                    if existingSummary.length() == 0 {
+                                        needsSummary = true;
+                                    } else if !existingSummary.includes(" ") &&
+                                            !existingSummary.includes("\t") &&
+                                            !existingSummary.includes("\n") {
+                                        // Single token (e.g. "Read", "Archive") — too terse to be useful
+                                        needsSummary = true;
+                                    } else if existingSummary.length() > 37 {
+                                        // Already descriptive, but exceeds the hard UI cap — condense it
+                                        needsSummary = true;
+                                        tooLong = true;
+                                    }
+                                } else {
+                                    needsSummary = true;
+                                }
+                            }
+
+                            if needsSummary {
+                                string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
+
+                                string requestId = generateRequestId("operation", string `${path}_${method}`, "summary");
+                                string context = string `Operation '${operationId}' (${method.toUpperAscii()} ${path})`;
+
+                                if tooLong {
+                                    context += string `. Existing summary is too long (${existingSummary.length()} chars): "${existingSummary}". Condense it to fit the cap while preserving its meaning.`;
+                                } else if operation.hasKey("description") {
+                                    // Use the existing description (NOT the existing summary) as context.
+                                    json|error descResult = operation.get("description");
+                                    if descResult is string && descResult.trim().length() > 0 {
+                                        context += string `. Description: ${descResult.trim()}`;
+                                    }
+                                }
+                                context += ". This summary will be used as the doc comment for the generated client's resource/remote function.";
+
+                                requests.push({
+                                    id: requestId,
+                                    name: operationId,
+                                    context: context,
+                                    schemaPath: string `paths.${path}.${method}.summary`
+                                });
+                                locationMap[requestId] = string `paths.${path}.${method}.summary`;
                             }
                         }
                     }

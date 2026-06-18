@@ -105,7 +105,7 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
     return error LLMServiceError("Unexpected error in retry logic");
 }
 
-public function addMissingDescriptionsBatchWithRetry(string specFilePath, int batchSize = 20, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns int|LLMServiceError {
+public function addMissingDescriptionsBatchWithRetry(string specFilePath, int batchSize = 20, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns DescriptionEnhancementResult|LLMServiceError {
     utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${batchSize})`, logLevel);
 
     json|error specResult = io:fileReadJson(specFilePath);
@@ -115,6 +115,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
 
     json specJson = specResult;
     int descriptionsAdded = 0;
+    int summariesAdded = 0;
 
     if specJson is map<json> {
         map<json> specMap = <map<json>>specJson;
@@ -141,6 +142,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
 
         collectParameterDescriptionRequests(specJson, allRequests, requestToLocationMap);
         collectOperationDescriptionRequests(specJson, allRequests, requestToLocationMap);
+        collectOperationSummaryRequests(specJson, allRequests, requestToLocationMap);
 
         int totalRequests = allRequests.length();
         utils:logVerbose(string `collected ${totalRequests} description requests`, logLevel);
@@ -164,6 +166,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
                     string? location = requestToLocationMap[response.id];
                     if location is string {
                         error? updateResult = ();
+                        boolean isSummaryUpdate = false;
 
                         if location.startsWith("paths.") && location.includes("parameters[name=") {
                             json|error pathsResult = specMap.get("paths");
@@ -174,6 +177,12 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
                                 updateResult = updateResponseDescriptionInSpec(<map<json>>pathsResult, location, response.description);
+                            }
+                        } else if location.startsWith("paths.") && location.endsWith(".summary") {
+                            isSummaryUpdate = true;
+                            json|error pathsResult = specMap.get("paths");
+                            if pathsResult is map<json> {
+                                updateResult = updateOperationSummaryInSpec(<map<json>>pathsResult, location, response.description);
                             }
                         } else if location.startsWith("paths.") && !location.includes(".properties.") && !location.includes(".responses.") {
                             json|error pathsResult = specMap.get("paths");
@@ -191,7 +200,11 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
                         }
 
                         if updateResult is () {
-                            descriptionsAdded += 1;
+                            if isSummaryUpdate {
+                                summariesAdded += 1;
+                            } else {
+                                descriptionsAdded += 1;
+                            }
                         } else {
                             utils:logError(string `failed to apply description for ${response.id}: ${updateResult.message()}`);
                         }
@@ -214,7 +227,7 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, int ba
         return error LLMServiceError("Failed to write updated OpenAPI spec", writeResult);
     }
 
-    return descriptionsAdded;
+    return {descriptionsAdded: descriptionsAdded, summariesAdded: summariesAdded};
 }
 
 public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, int batchSize = 10, utils:LogLevel logLevel = "normal", RetryConfig? config = ()) returns int|LLMServiceError {

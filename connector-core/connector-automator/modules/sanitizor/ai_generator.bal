@@ -16,6 +16,8 @@ public function generateDescriptionsBatch(DescriptionRequest[] requests, string 
         string requestType = "field";
         if req.schemaPath.startsWith("paths.") && req.schemaPath.includes("parameters[name=") {
             requestType = "parameter";
+        } else if req.schemaPath.startsWith("paths.") && req.schemaPath.endsWith(".summary") {
+            requestType = "operationSummary";
         } else if req.schemaPath.startsWith("paths.") && !req.schemaPath.includes(".properties.") {
             requestType = "operation";
         }
@@ -41,11 +43,16 @@ INSTRUCTIONS:
 1. For FIELD descriptions: Describe what the field represents (under 80 characters)
 2. For PARAMETER descriptions: Explain the parameter's purpose (under 100 characters)
 3. For OPERATION descriptions: Describe what the operation returns (under 120 characters, suitable for return parameter docs)
-4. Use professional API documentation language
-5. Consider the API context and element context
-6. Return responses in the exact JSON format shown below
-7. Do not include fenced code blocks in the response
-8. Keep descriptions concise but informative
+4. For OPERATION SUMMARY: Produce a short imperative-verb action phrase suitable as a one-line doc comment. Rules (all mandatory, no exceptions):
+   a) HARD LIMIT: 37 characters total — count every character including spaces before you respond.
+   b) The phrase MUST be complete: it must end at a natural sentence or clause boundary — never mid-word and never mid-sentence. If your draft exceeds 37 characters, shorten the idea (drop qualifiers, use a shorter synonym, simplify the verb object) until the entire phrase fits within 37 characters as a finished thought.
+   c) Use an imperative verb phrase, e.g. "Retrieve a contact by ID" or "List all active deals". Do not restate the operationId verbatim.
+   d) If the context provides an existing summary marked as "too long", condense that exact summary to fit the limit while preserving its meaning — do not invent unrelated wording.
+5. Use professional API documentation language
+6. Consider the API context and element context
+7. Return responses in the exact JSON format shown below
+8. Do not include fenced code blocks in the response
+9. Keep descriptions concise but informative
 
 REQUIRED RESPONSE FORMAT (JSON):
 {

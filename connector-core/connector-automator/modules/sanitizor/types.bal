@@ -19,6 +19,11 @@ public type BatchDescriptionResponse record {
     string description;
 };
 
+public type DescriptionEnhancementResult record {
+    int descriptionsAdded;
+    int summariesAdded;
+};
+
 public type BatchRenameResponse record {
     string originalName;
     string newName;
