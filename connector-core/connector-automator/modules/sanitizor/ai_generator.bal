@@ -88,7 +88,11 @@ REQUIRED RESPONSE FORMAT (JSON):
                     string? id = desc.get("id") is string ? <string>desc.get("id") : ();
                     string? description = desc.get("description") is string ? <string>desc.get("description") : ();
                     if id is string && description is string {
-                        results.push({id: id, description: description.trim()});
+                        string cleanedDesc = description.trim();
+                        if cleanedDesc.endsWith(".") {
+                            cleanedDesc = cleanedDesc.substring(0, cleanedDesc.length() - 1).trim();
+                        }
+                        results.push({id: id, description: cleanedDesc});
                     }
                 }
             }

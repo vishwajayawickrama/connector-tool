@@ -136,6 +136,7 @@ This connector uses resource methods. Use the resource path syntax from the mock
             * For responses that return an array, I must check if the array is not empty: ${backtick}test:assertTrue(response.data.length() > 0);${backtick}. Using ${backtick}!is ()${backtick} on an array will fail.
             * Where applicable, I will also assert that the ${backtick}errors${backtick} field is nil: ${backtick}test:assertTrue(response?.errors is ());${backtick}.
     5.  **Completeness and Correctness:** I must ensure all necessary imports (${backtick}ballerina/os${backtick}, ${backtick}ballerina/test${backtick}, etc.) are present and that the entire file is syntactically correct and ready to compile.
+    6.  **${backtick}Type|record {}${backtick} union fields (BCE2523):** Before writing any payload or variable, I must scan ${backtick}<FULL_TYPES_DEFINITIONS>${backtick} for fields whose declared type contains ${backtick}|record {}${backtick}. Every such field requires an explicit type cast on any mapping constructor assigned to it. A bare ${backtick}{ ... }${backtick} literal for a ${backtick}Type|record {}${backtick} field will NOT compile — I must always write ${backtick}fieldName: <SomeType>{ ... }${backtick}. This rule applies at every nesting level.
 
     **Phase 2: Execution**
 
