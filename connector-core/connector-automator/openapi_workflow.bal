@@ -1,3 +1,5 @@
+import ballerina/io;
+
 import wso2/connector_automator.client_generator as client_generator;
 import wso2/connector_automator.code_fixer as code_fixer;
 import wso2/connector_automator.document_generator as document_generator;
@@ -8,9 +10,10 @@ import wso2/connector_automator.utils;
 
 public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDir, string logLevel,
         string examplesDir, string excludedStages, string specDir, string license = "", string tags = "",
-        string operations = "", string clientMethod = "") returns error? {
+        string operations = "", string clientMethod = "", string interactiveArg = "") returns error? {
 
     utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
+    boolean interactive = interactiveArg == "interactive";
     string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
 
     utils:logVerbose(string `spec: ${openApiSpec}`, level);
@@ -72,6 +75,12 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         if sanitationsDocResult is error {
             utils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`, level);
         }
+        if interactive && step < total {
+            if !interactivePause(sanitizedSpec, level) {
+                utils:logInfo("Stopped at user request.", level);
+                return;
+            }
+        }
     } else {
         utils:logVerbose("skipping sanitize (excluded)", level);
     }
@@ -102,6 +111,12 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             }
         }
         utils:logInfo("✓ client built and validated", level);
+        if interactive && step < total {
+            if !interactivePause(outputDir, level) {
+                utils:logInfo("Stopped at user request.", level);
+                return;
+            }
+        }
     } else {
         utils:logVerbose("skipping client (excluded)", level);
     }
@@ -116,6 +131,12 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         } else {
             utils:logInfo("✓ tests generated", level);
         }
+        if interactive && step < total {
+            if !interactivePause(string `${outputDir}/tests/`, level) {
+                utils:logInfo("Stopped at user request.", level);
+                return;
+            }
+        }
     } else {
         utils:logVerbose("skipping tests (excluded)", level);
     }
@@ -129,6 +150,12 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             utils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, level);
         } else {
             utils:logInfo("✓ examples generated", level);
+        }
+        if interactive && step < total {
+            if !interactivePause(examplesDir, level) {
+                utils:logInfo("Stopped at user request.", level);
+                return;
+            }
         }
     } else {
         utils:logVerbose("skipping examples (excluded)", level);
@@ -149,4 +176,18 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     }
 
     utils:logCompletion(outputDir, level);
+}
+
+// Pauses the pipeline and prompts the user to review the artifact at the given path.
+// Returns true to continue, false to stop.
+function interactivePause(string artifact, utils:LogLevel level) returns boolean {
+    io:fprintln(io:stderr, string `    → Review: ${artifact}`);
+    io:fprint(io:stderr, "  Continue? [y/N]: ");
+    string|io:Error input = io:readln();
+    if input is io:Error {
+        utils:logWarn("could not read input — stopping", level);
+        return false;
+    }
+    string answer = (<string>input).trim().toLowerAscii();
+    return answer == "y" || answer == "yes";
 }
