@@ -4,8 +4,9 @@ import ballerina/file;
 import ballerina/lang.runtime;
 
 public function executeExampleGen(string connectorPath, string examplesDir = "") returns error? {
+    string resolvedExamplesDir = examplesDir.length() > 0 ? examplesDir : connectorPath + "/examples";
     utils:logVerbose(string `connector: ${connectorPath}`);
-    utils:logVerbose(string `examples output: ${examplesDir}`);
+    utils:logVerbose(string `examples output: ${resolvedExamplesDir}`);
 
     utils:logVerbose("analyzing connector");
     ConnectorDetails|error details = analyzeConnector(connectorPath);
@@ -85,7 +86,7 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
             exampleName = exampleNameResult;
         }
 
-        error? writeResult = writeExampleToFile(examplesDir, exampleName, useCase, generatedCode,
+        error? writeResult = writeExampleToFile(resolvedExamplesDir, exampleName, useCase, generatedCode,
             details.connectorOrg, details.connectorName, details.connectorVersion, details.connectorDistribution);
         if writeResult is error {
             utils:logWarn(string `failed to write example ${i}: ${writeResult.message()}`);
@@ -94,7 +95,7 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
 
         runtime:sleep(10);
 
-        string exampleDir = examplesDir + "/" + exampleName;
+        string exampleDir = resolvedExamplesDir + "/" + exampleName;
         error? fixResult = fixExampleCode(exampleDir, exampleName);
         if fixResult is error {
             utils:logWarn(string `compilation fix failed for ${exampleName}: ${fixResult.message()} — may need manual review`);
@@ -109,7 +110,7 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
     if successCount < numExamples {
         utils:logWarn(string `${successCount}/${numExamples} examples succeeded`);
     } else {
-        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${examplesDir}/`);
+        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${resolvedExamplesDir}/`);
     }
 }
 
