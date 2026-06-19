@@ -174,8 +174,7 @@ function sdkFixTestFileErrors(string connectorPath) returns error? {
                 utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
             }
         } else {
-            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — manual intervention may be required`);
-            return error(string `Compilation errors remain after auto-fix (${fixResult.errorsRemaining} remaining)`);
+            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — attempting test-phase fixer`);
         }
     } else {
         utils:logError(string `compilation fix failed: ${fixResult.message()}`);
