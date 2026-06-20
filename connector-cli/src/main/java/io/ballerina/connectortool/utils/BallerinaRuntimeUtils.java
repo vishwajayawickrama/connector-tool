@@ -109,6 +109,37 @@ public class BallerinaRuntimeUtils {
         }
     }
 
+    /**
+     * Call a named Ballerina function whose single parameter is a {@code string[]} (BArray).
+     * Throws {@link RuntimeException} on {@code BError} or any unexpected exception so the
+     * Java caller can propagate exit-code failures (same contract as {@link #callBallerinaFunction}).
+     */
+    public static void callBallerinaFunctionWithBArray(String org, String module, String version,
+            String functionName, BArray args) {
+        Runtime runtime = null;
+        boolean runtimeStarted = false;
+        try {
+            Module balModule = new Module(org, module, version);
+            runtime = Runtime.from(balModule);
+            runtime.init();
+            runtime.start();
+            runtimeStarted = true;
+
+            Object result = runtime.callFunction(balModule, functionName, null, args);
+            if (result instanceof BError error) {
+                throw new RuntimeException(error.getErrorMessage().toString());
+            }
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e.getMessage(), e);
+        } finally {
+            if (runtimeStarted && runtime != null) {
+                runtime.stop();
+            }
+        }
+    }
+
     public static void callBallerinaFunction(String org, String module, String version,
             String functionName, String inputPath, String outputPath, String logLevel,
             String examplesDir, String excludedStages, String specDir, String license,

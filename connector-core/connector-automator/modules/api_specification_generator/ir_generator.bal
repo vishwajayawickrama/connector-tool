@@ -585,10 +585,7 @@ function filterEnumClassesFromMemberClasses(string metadataJson) returns string|
     map<json> filteredMemberClasses = {};
     foreach string key in memberClasses.keys() {
         if !enumsMap.hasKey(key) {
-            json|() val = memberClasses[key];
-            if val is json {
-                filteredMemberClasses[key] = val;
-            }
+            filteredMemberClasses[key] = memberClasses.get(key);
         }
     }
 
@@ -739,12 +736,10 @@ function enrichEmptyStructuresFromMetadata(IntermediateRepresentation ir, string
 
     map<json> bySimpleName = {};
     foreach string fqName in memberClassesMap.keys() {
-        json|() entry = memberClassesMap[fqName];
-        if entry is json {
-            json|error snResult = entry.simpleName;
-            if snResult is string {
-                bySimpleName[canonicalizeTypeName(snResult)] = entry;
-            }
+        json entry = memberClassesMap.get(fqName);
+        json|error snResult = entry.simpleName;
+        if snResult is string {
+            bySimpleName[canonicalizeTypeName(snResult)] = entry;
         }
     }
 
@@ -756,12 +751,10 @@ function enrichEmptyStructuresFromMetadata(IntermediateRepresentation ir, string
         map<json>|error enumsMap = enumsResult.cloneWithType();
         if enumsMap is map<json> {
             foreach string fqName in enumsMap.keys() {
-                json|() enumEntry = enumsMap[fqName];
-                if enumEntry is json {
-                    json|error snResult = enumEntry.simpleName;
-                    if snResult is string {
-                        enumSimpleNames[canonicalizeTypeName(snResult)] = true;
-                    }
+                json enumEntry = enumsMap.get(fqName);
+                json|error snResult = enumEntry.simpleName;
+                if snResult is string {
+                    enumSimpleNames[canonicalizeTypeName(snResult)] = true;
                 }
             }
         }

@@ -7,20 +7,14 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
 
     string command = string `bal openapi -i ${inputPath} --mode client -o ${outputPath}`;
 
-    if toolOptions.license is string {
-        string licensePath = toolOptions.license;
-
-        if !licensePath.startsWith("/") {
-            string workingDir = utils:getDirectoryPath(outputPath);
-            licensePath = string `${workingDir}/${licensePath}`;
-        }
-
-        boolean|file:Error licenseExists = file:test(licensePath, file:EXISTS);
-        if licenseExists is boolean && licenseExists {
-            command += string ` --license ${licensePath}`;
-        } else {
-            utils:logWarn(string `license file not found at ${licensePath} — skipping`);
-        }
+    string licensePath = toolOptions.license;
+    if !licensePath.startsWith("/") {
+        string workingDir = utils:getDirectoryPath(outputPath);
+        licensePath = string `${workingDir}/${licensePath}`;
+    }
+    boolean|file:Error licenseExists = file:test(licensePath, file:EXISTS);
+    if licenseExists is boolean && licenseExists {
+        command += string ` --license ${licensePath}`;
     }
 
     if toolOptions.tags is string[] {

@@ -10,6 +10,7 @@ import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import io.ballerina.cli.BLauncherCmd;
 import picocli.CommandLine;
 import io.ballerina.connectortool.exceptions.CliException;
+import io.ballerina.connectortool.utils.Utils;
 import io.ballerina.connectortool.utils.BallerinaProjectPathValidationUtils;
 import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.connectortool.utils.ExamplesOutputPathValidationUtils;
@@ -33,6 +34,11 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
+
+    public OpenApiAutomatorWorkflow() {
+        outStream = baseCmd.outStream;
+        errorStream = baseCmd.errorStream;
+    }
 
     @CommandLine.Option(names = {"-i", "--input"}, description = "input path to openapi specification file.")
     public String inputPath;
@@ -70,11 +76,6 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"--interactive"}, description = "Pause after each stage and prompt for confirmation before continuing.")
     public boolean interactiveFlag;
 
-    public OpenApiAutomatorWorkflow() {
-        outStream = System.out;
-        errorStream = System.err;
-    }
-
     @Override
     public String getName() {
         return NAME;
@@ -89,6 +90,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
         }
 
         try {
+            Utils.validateApiKey();
             if (quietFlag && verboseFlag) {
                 throw new CliException("options -q/--quiet and -v/--verbose are mutually exclusive", 2);
             }
