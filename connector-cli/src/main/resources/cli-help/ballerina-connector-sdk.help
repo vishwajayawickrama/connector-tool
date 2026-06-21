@@ -1,0 +1,129 @@
+NAME
+      bal connector sdk - Generate and maintain Ballerina connectors from Java
+       SDKs.
+
+SYNOPSIS
+      bal connector sdk analyze <sdk-ref> <output-dir>
+               [sources=<path>] [include-packages=<packages>]
+               [exclude-packages=<packages>] [max-depth=<n>]
+               [methods-to-list=<n>] [include-deprecated]
+               [include-internal] [include-non-public]
+
+      bal connector sdk pipeline <dataset-key> <output-dir>
+               [--fix-iterations=<n>] [--fix-code] [--fix-report-only]
+               [--skip-fix] [--skip-tests]
+               [--generate-examples|--skip-examples]
+               [--generate-docs|--skip-docs]
+
+      bal connector sdk generate <output-dir> [no-thinking]
+
+      bal connector sdk connector <output-dir>
+
+      bal connector sdk fix-code <output-dir> [--fix-iterations=<n>]
+
+      bal connector sdk fix-report-only <output-dir> [--fix-iterations=<n>]
+
+      bal connector sdk generate-tests <output-dir>
+
+      bal connector sdk generate-examples <output-dir>
+
+      bal connector sdk generate-docs <output-dir>
+
+DESCRIPTION
+       Analyze Java SDKs, generate API specifications and intermediate
+       representations, generate Ballerina connector code, and optionally run
+       AI-assisted code fixing, test generation, example generation, and
+       documentation generation.
+
+COMMANDS
+       analyze
+             Analyze a Java SDK from a dataset key or Maven coordinate and
+             write SDK metadata under the output root.
+
+       pipeline
+             Run the full Java SDK connector workflow.
+
+       generate
+             Generate the API specification and intermediate representation
+             from SDK analyzer metadata.
+
+       connector
+             Generate Ballerina connector artifacts from SDK metadata, IR, and
+             API specification.
+
+       fix-code
+             Fix Java native adapter and Ballerina compilation errors in an
+             SDK-generated connector.
+
+       fix-report-only
+             Run code fixer diagnostics for an SDK-generated connector without
+             applying all fixes.
+
+       generate-tests
+             Generate live integration tests for an SDK-generated connector.
+
+       generate-examples
+             Generate AI-assisted Ballerina examples for an SDK-generated
+             connector.
+
+       generate-docs
+             Generate all README documentation for an SDK-generated connector.
+
+OPTIONS
+       sources=<path>
+             Path to a sources JAR or extracted source directory.
+
+       include-packages=<packages>
+             Comma-separated Java packages to include during SDK analysis.
+
+       exclude-packages=<packages>
+             Comma-separated Java packages to exclude during SDK analysis.
+
+       max-depth=<n>
+             Maximum dependency traversal depth.
+
+       methods-to-list=<n>
+             Maximum number of SDK methods to list for analysis.
+
+       --fix-iterations=<n>
+             Maximum code fixer iterations. The default is `3`.
+
+FLAGS
+       include-deprecated
+             Include deprecated SDK methods.
+
+       include-internal
+             Include SDK classes or methods that would otherwise be treated as
+             internal.
+
+       include-non-public
+             Include non-public SDK classes or methods.
+
+       no-thinking, --no-thinking
+             Disable extended LLM reasoning mode during specification
+             generation.
+
+       --fix-code
+             Run the full code fixing phase.
+
+       --fix-report-only
+             Run code fixer diagnostics without applying all fixes.
+
+       --skip-fix
+             Skip the code fixing phase.
+
+       --skip-tests
+             Skip SDK live test generation.
+
+       --generate-examples, --skip-examples
+             Run or skip example generation.
+
+       --generate-docs, --skip-docs
+             Run or skip documentation generation.
+
+EXAMPLES
+       Analyze a Java SDK using a Maven coordinate.
+             $ bal connector sdk analyze com.example:example-sdk:1.2.3 ./out
+
+       Run the full SDK connector workflow.
+             $ bal connector sdk pipeline example-sdk ./out --fix-iterations=3

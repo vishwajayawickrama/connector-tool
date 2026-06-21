@@ -1,4 +1,4 @@
-rootProject.name = 'aigen-ballerina-cli-tool'
+rootProject.name = 'connector-ballerina-cli-tool'
 
-include ':aigen-cli'
-include ':aigen-core'
+include ':connector-cli'
+include ':connector-core'

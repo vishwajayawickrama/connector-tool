@@ -19,10 +19,10 @@ Config.toml
 # Nested project build artifacts
 .gradle/
 build/
-aigen-cli/.gradle/
-aigen-cli/build/
-aigen-core/.gradle/
-aigen-core/build/
+connector-cli/.gradle/
+connector-cli/build/
+connector-core/.gradle/
+connector-core/build/
 
 # Local findings and investigation notes
 docs/finding/

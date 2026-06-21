@@ -262,13 +262,13 @@
       "updated": 1717400000000,
       "link": null,
       "locked": false,
-      "text": "bal aigen CLI",
+      "text": "bal connector CLI",
       "fontSize": 20,
       "fontFamily": 1,
       "textAlign": "left",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "bal aigen CLI",
+      "originalText": "bal connector CLI",
       "lineHeight": 1.25
     },
     {

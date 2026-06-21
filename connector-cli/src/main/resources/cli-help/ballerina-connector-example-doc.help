@@ -1,0 +1,43 @@
+NAME
+      bal connector example-doc - Generate visual WSO2 Integrator example
+       documentation with screenshots.
+
+SYNOPSIS
+      bal connector example-doc connector <connector-name>
+               [additional-instructions]
+
+      bal connector example-doc trigger <trigger-name>
+               [additional-instructions]
+
+      bal connector example-doc batch [config=<path>] [timeout=<seconds>]
+
+DESCRIPTION
+       Generate visual example documentation for connectors and triggers, or
+       process multiple documentation items from a batch queue.
+
+COMMANDS
+       connector
+             Generate a visual example guide for a connector.
+
+       trigger
+             Generate a visual example guide for a trigger.
+
+       batch
+             Generate multiple connector and trigger example guides from a
+             batch queue.
+
+OPTIONS
+       config=<path>
+             Path to the batch queue JSON file. The default is
+             `batch_items.json`.
+
+       timeout=<seconds>
+             Per-item timeout in seconds. The default is `7200`.
+
+EXAMPLES
+       Generate a visual connector example guide.
+             $ bal connector example-doc connector mysql \
+                   "show insert and query operations"
+
+       Generate a visual trigger example guide.
+             $ bal connector example-doc trigger trigger.github

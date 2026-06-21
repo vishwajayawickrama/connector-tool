@@ -1,4 +1,0 @@
-[package]
-org = "ballerina"
-name = "aigen_tool"
-version = "0.1.0"
