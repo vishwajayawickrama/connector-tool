@@ -56,20 +56,30 @@ function updateParameterDescriptionInSpec(map<json> paths, string location, stri
     }
 
     string locationWithoutPrefix = location.substring(6); // Remove "paths."
-    int? lastDot = locationWithoutPrefix.lastIndexOf(".");
-    if !(lastDot is int) {
+
+    // Anchor on ".parameters[" rather than the last dot.
+    // Using lastIndexOf(".") would absorb ".{method}" into the path segment because
+    // the last dot in "/{path}.{method}.parameters[...]" sits before "parameters", not before the method.
+    int? paramsBracketStart = locationWithoutPrefix.indexOf(".parameters[");
+    if !(paramsBracketStart is int) {
         return error("Could not find parameter at location: " + location);
     }
 
-    string path = locationWithoutPrefix.substring(0, lastDot);
-    string methodAndRest = locationWithoutPrefix.substring(lastDot + 1);
-    int? firstDotAfterMethod = methodAndRest.indexOf(".");
-    string method = firstDotAfterMethod is int ? methodAndRest.substring(0, firstDotAfterMethod) : methodAndRest;
-    string paramLocation = firstDotAfterMethod is int ? methodAndRest.substring(firstDotAfterMethod + 1) : "";
+    string pathAndMethod = locationWithoutPrefix.substring(0, paramsBracketStart);
+    string paramLocation = locationWithoutPrefix.substring(paramsBracketStart + 1); // "parameters[name=...]"
 
     if !paramLocation.startsWith("parameters[name=") || !paramLocation.endsWith("]") {
         return error("Could not find parameter at location: " + location);
     }
+
+    // Split pathAndMethod → path + method using the last dot
+    int? lastDot = pathAndMethod.lastIndexOf(".");
+    if !(lastDot is int) {
+        return error("Could not find parameter at location: " + location);
+    }
+
+    string path = pathAndMethod.substring(0, lastDot);
+    string method = pathAndMethod.substring(lastDot + 1);
 
     string inner = paramLocation.substring(16, paramLocation.length() - 1);
     string paramName = inner;
@@ -130,6 +140,46 @@ function updateOperationDescriptionInSpec(map<json> paths, string location, stri
                     if operation is map<json> {
                         map<json> operationMap = <map<json>>operation;
                         operationMap["description"] = description;
+                        return ();
+                    }
+                }
+            }
+        }
+    }
+
+    return error("Could not find operation at location: " + location);
+}
+
+// Helper function to update operation summary in spec
+function updateOperationSummaryInSpec(map<json> paths, string location, string summary) returns error? {
+    // Parse location: paths.{path}.{method}.summary
+    if location.startsWith("paths.") && location.endsWith(".summary") {
+        string locationWithoutPrefix = location.substring(6); // Remove "paths."
+        // Strip trailing ".summary" (8 chars) before the last-dot split, otherwise
+        // "summary" itself would be mistaken for the method.
+        string pathAndMethod = locationWithoutPrefix.substring(0, locationWithoutPrefix.length() - 8);
+
+        int? lastDot = pathAndMethod.lastIndexOf(".");
+        if lastDot is int {
+            string path = pathAndMethod.substring(0, lastDot);
+            string method = pathAndMethod.substring(lastDot + 1);
+
+            json|error pathItem = paths.get(path);
+            if pathItem is map<json> {
+                map<json> pathItemMap = <map<json>>pathItem;
+
+                if pathItemMap.hasKey(method) {
+                    json|error operation = pathItemMap.get(method);
+                    if operation is map<json> {
+                        map<json> operationMap = <map<json>>operation;
+
+                        // Defensive hard cap: 37 characters, regardless of AI prompt compliance.
+                        string cappedSummary = summary;
+                        if cappedSummary.length() > 37 {
+                            cappedSummary = cappedSummary.substring(0, 37);
+                        }
+
+                        operationMap["summary"] = cappedSummary;
                         return ();
                     }
                 }

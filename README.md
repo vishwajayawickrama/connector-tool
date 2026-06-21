@@ -10,7 +10,7 @@ and documentation — so that a complete, ready-to-use connector project comes o
 single command.
 
 ```bash
-bal connector openapi -i ./openapi.yaml -o ./my-connector
+bal connector openapi -i ./openapi.yaml
 ```
 
 ## What it does

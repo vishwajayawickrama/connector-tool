@@ -2,11 +2,12 @@ import wso2/connector_automator.utils;
 
 import ballerina/io;
 
-public function executeClientGen(string specPath, string outputDir, utils:LogLevel logLevel = "normal") returns error? {
+public function executeClientGen(string specPath, string outputDir, utils:LogLevel logLevel = "normal",
+        OpenAPIToolOptions? customOptions = ()) returns error? {
     utils:logVerbose(string `spec: ${specPath}`, logLevel);
     utils:logVerbose(string `output: ${outputDir}`, logLevel);
 
-    utils:CommandResult result = executeBalClientGenerate(specPath, outputDir, (), logLevel);
+    utils:CommandResult result = executeBalClientGenerate(specPath, outputDir, customOptions, logLevel);
 
     if !utils:isCommandSuccessfull(result) {
         if result.compilationErrors.length() > 0 {

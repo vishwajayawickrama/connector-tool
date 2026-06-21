@@ -55,6 +55,26 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
       SearchCount count = {"tweet_count": 42, ...};
       ✗ Uses the JSON annotation value — will NOT compile (BCE2066)
 
+    **CRITICAL — ${backtick}Type|record {}${backtick} union fields (BCE2523):**
+    Before writing any mock data, scan ${backtick}<AVAILABLE_TYPES>${backtick} for fields whose declared type contains ${backtick}|record {}${backtick}. Every such field requires an explicit type cast on any mapping constructor assigned to it.
+
+      fieldName: <SomeType>{ ... }    ✓ unambiguous — compiles
+      fieldName: { ... }              ✗ BCE2523 ambiguous type — will NOT compile
+
+    Example — given in types.bal:
+      MicrosoftGraphIdleSessionSignOut|record {} idleSessionSignOut?;
+
+    Correct (use explicit cast):
+      idleSessionSignOut: <MicrosoftGraphIdleSessionSignOut>{
+          warnAfterInSeconds: 3300.0,
+          isEnabled: true,
+          signOutAfterInSeconds: 3600.0
+      }
+    Wrong (bare mapping constructor will not compile):
+      idleSessionSignOut: {warnAfterInSeconds: 3300.0, ...}
+
+    This rule applies at every nesting level — if ${backtick}SomeType${backtick} itself contains ${backtick}|record {}${backtick} fields, cast those inner values too.
+
     **Example of a well-implemented resource function:**
     ${tripleBacktick}ballerina
     # Deletes the Tweet specified by the Tweet ID.

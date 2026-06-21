@@ -91,12 +91,12 @@ public function executeSanitizor(string inputSpecPath, string specDir, utils:Log
     }
 
     // Step 5: Documentation enhancement
-    utils:logVerbose("enhancing field descriptions", logLevel);
-    int|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20, logLevel);
+    utils:logVerbose("enhancing field descriptions and operation summaries", logLevel);
+    DescriptionEnhancementResult|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20, logLevel);
     if descriptionsResult is LLMServiceError {
         utils:logWarn(string `documentation enhancement failed: ${descriptionsResult.message()}`, logLevel);
     } else {
-        utils:logInfo(string `  added ${descriptionsResult} missing description${descriptionsResult == 1 ? "" : "s"}`, logLevel);
+        utils:logInfo(string `  added ${descriptionsResult.descriptionsAdded} missing description${descriptionsResult.descriptionsAdded == 1 ? "" : "s"}, updated ${descriptionsResult.summariesAdded} operation summar${descriptionsResult.summariesAdded == 1 ? "y" : "ies"}`, logLevel);
     }
 }
 

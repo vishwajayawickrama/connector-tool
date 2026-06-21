@@ -227,7 +227,8 @@ function isEligibleBallerinaSourcePath(string path) returns boolean {
         lower.includes("/build/") {
         return false;
     }
-    return lower.endsWith("client.bal") || lower.endsWith("types.bal") || lower.endsWith("main.bal") || lower.endsWith("test.bal");
+    return lower.endsWith("client.bal") || lower.endsWith("types.bal") || lower.endsWith("main.bal") || lower.endsWith("test.bal")
+        || lower.endsWith("mock_server.bal");
 }
 
 function isInteropClassNotFoundError(CompilationError err) returns boolean {

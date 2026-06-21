@@ -7,7 +7,8 @@ import wso2/connector_automator.test_generator as test_generator;
 import wso2/connector_automator.utils;
 
 public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDir, string logLevel,
-        string examplesDir, string excludedStages, string specDir) returns error? {
+        string examplesDir, string excludedStages, string specDir, string license = "", string tags = "",
+        string operations = "", string clientMethod = "") returns error? {
 
     utils:LogLevel level = logLevel == "quiet" ? "quiet" : logLevel == "verbose" ? "verbose" : "normal";
     string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
@@ -28,6 +29,24 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     string sanitizedSpec = string `${specDir}/aligned_ballerina_openapi.json`;
     string sanitationsPath = string `${specDir}/sanitations.md`;
     string clientPath = outputDir;
+
+    client_generator:OpenAPIToolOptions? toolOptions = ();
+    if license != "" || tags != "" || operations != "" || clientMethod != "" {
+        client_generator:OpenAPIToolOptions opts = {};
+        if license != "" {
+            opts.license = license;
+        }
+        if tags != "" {
+            opts.tags = re`,`.split(tags);
+        }
+        if operations != "" {
+            opts.operations = re`,`.split(operations);
+        }
+        if clientMethod != "" {
+            opts.clientMethod = clientMethod == "remote" ? "remote" : "resource";
+        }
+        toolOptions = opts;
+    }
 
     // Pre-step: apply recorded sanitations to the incoming spec, if any exist (non-fatal)
     if excluded.indexOf("sanitize") is () {
@@ -61,7 +80,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     if excluded.indexOf("client") is () {
         step += 1;
         utils:logStep(step, total, "Generating Ballerina Client", level);
-        error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, level);
+        error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, level, customOptions = toolOptions);
         if clientResult is error {
             utils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`, level);
         } else {
