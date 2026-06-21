@@ -96,7 +96,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
                     openApiSpecPath != null ? openApiSpecPath.toString() : "",
                     ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir.toString(), excludedArg,
                     specDirPath.toString());
-                    
+
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
             ProcessUtils.exit(e.getExitCode(), exitWhenFinish);

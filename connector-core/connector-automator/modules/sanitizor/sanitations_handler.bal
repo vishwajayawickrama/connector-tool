@@ -153,6 +153,11 @@ public function applySanitations(
         return;
     }
 
+    error? initResult = utils:initAIService(logLevel);
+    if initResult is error {
+        utils:logWarn("AI service unavailable — sanitations will use rule-based fallback", logLevel);
+    }
+
     utils:logVerbose(string `reading sanitations from: ${sanitationsPath}`, logLevel);
 
     string sanitationsContent = check io:fileReadString(sanitationsPath);

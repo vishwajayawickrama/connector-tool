@@ -26,3 +26,6 @@ connector-core/build/
 
 # Local findings and investigation notes
 docs/finding/
+
+# Local agent instructions, not shared via git
+CLAUDE.md
