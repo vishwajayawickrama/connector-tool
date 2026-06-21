@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="connector-cli-test-suite">
+    <test name="connector-cli-tests" parallel="false">
+        <classes>
+            <class name="io.ballerina.connectortool.CliExceptionTest"/>
+            <class name="io.ballerina.connectortool.SpecDirResolutionUtilsTest"/>
+            <class name="io.ballerina.connectortool.OpenApiPathValidationUtilsTest"/>
+            <class name="io.ballerina.connectortool.OpenApiStageValidationUtilsTest"/>
+            <class name="io.ballerina.connectortool.cmd.OpenApiAutomatorWorkflowTest"/>
+        </classes>
+    </test>
+</suite>

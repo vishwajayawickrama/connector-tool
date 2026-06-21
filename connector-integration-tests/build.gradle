@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+}
+
+group = 'io.ballerina'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation "org.testng:testng:7.6.1"
+}
+
+test {
+    // Integration tests run the installed `bal connector` binary via subprocess.
+    // The ANTHROPIC_API_KEY is forwarded so subprocess tests that need it work correctly.
+    // Tests that require the key use @BeforeClass to skip gracefully when it is absent.
+    environment "ANTHROPIC_API_KEY", System.getenv("ANTHROPIC_API_KEY") ?: ""
+
+    useTestNG() {
+        suites "src/test/resources/testng.xml"
+    }
+    testLogging {
+        events "PASSED", "FAILED", "SKIPPED"
+        showStandardStreams = false
+    }
+}
