@@ -2,3 +2,4 @@ rootProject.name = 'connector-ballerina-cli-tool'
 
 include ':connector-cli'
 include ':connector-core'
+include ':connector-integration-tests'

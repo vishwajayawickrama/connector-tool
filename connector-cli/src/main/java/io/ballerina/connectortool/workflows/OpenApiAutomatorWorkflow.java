@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.ballerina.connectortool.BaseCmd;
+import io.ballerina.connectortool.ExitHandler;
 import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import io.ballerina.cli.BLauncherCmd;
 import picocli.CommandLine;
@@ -31,6 +32,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     private PrintStream outStream;
     private PrintStream errorStream;
     private boolean exitWhenFinish = true;
+    private ExitHandler exitHandler;
 
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
@@ -38,6 +40,18 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     public OpenApiAutomatorWorkflow() {
         outStream = baseCmd.outStream;
         errorStream = baseCmd.errorStream;
+        exitHandler = code -> ProcessUtils.exit(code, exitWhenFinish);
+    }
+
+    /**
+     * Constructor for unit tests. Injects custom streams and an {@link ExitHandler} so tests can
+     * assert exit codes without triggering a real JVM exit.
+     */
+    public OpenApiAutomatorWorkflow(PrintStream outStream, PrintStream errorStream, ExitHandler exitHandler) {
+        this.outStream = outStream;
+        this.errorStream = errorStream;
+        this.exitHandler = exitHandler;
+        // baseCmd is already initialised by the field initialiser above; helpFlag defaults to false
     }
 
     @CommandLine.Option(names = {"-i", "--input"}, description = "input path to openapi specification file.")
@@ -122,14 +136,14 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());
-            ProcessUtils.exit(e.getExitCode(), exitWhenFinish);
+            exitHandler.exit(e.getExitCode());
             return;
         } catch (Exception e) {
             errorStream.println("bal: fatal: unexpected error: " + e.getMessage());
-            ProcessUtils.exitError(exitWhenFinish);
+            exitHandler.exit(1);
             return;
         }
-        ProcessUtils.exitSuccess(exitWhenFinish);
+        exitHandler.exit(0);
     }
 
     @Override

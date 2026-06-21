@@ -52,6 +52,13 @@ dependencies {
     runtimeOnly ':connector_automator'
     runtimeOnly ':connector_doc_generator'
     runtimeOnly ':example_doc_generator'
+
+    // Tests need the full Ballerina bre/lib classpath so that ProjectLoader (used by
+    // BallerinaProjectPathValidationUtils) can resolve all its transitive dependencies.
+    testImplementation fileTree(dir: ballerinaLibDir, include: ['*.jar'])
+    // java-semver is required by ProjectLoader / BallerinaDistribution but lives outside bre/lib
+    testImplementation "com.github.zafarkhaja:java-semver:0.9.0"
+    testImplementation "org.testng:testng:7.6.1"
 }
 
 jar {
@@ -70,6 +77,20 @@ shadowJar {
     exclude 'META-INF/*.SF'
     exclude 'META-INF/*.DSA'
     exclude 'META-INF/*.RSA'
+}
+
+test {
+    // ProjectLoader.load() requires ballerina.home to be set as a system property
+    systemProperty "ballerina.home", ballerinaHome
+    systemProperty "ballerina.offline.flag", "true"
+
+    useTestNG() {
+        suites "src/test/resources/testng.xml"
+    }
+    testLogging {
+        events "PASSED", "FAILED", "SKIPPED"
+        showStandardStreams = false
+    }
 }
 
 assemble.dependsOn shadowJar
