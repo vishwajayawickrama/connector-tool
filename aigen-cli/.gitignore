@@ -1,0 +1,17 @@
+# Gradle build artifacts
+.gradle/
+build/
+
+# Java build outputs
+*.class
+*.jar
+
+# Local Gradle configuration
+gradle.properties
+
+# Editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

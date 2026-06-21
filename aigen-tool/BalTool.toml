@@ -1,0 +1,5 @@
+[tool]
+id = "aigen"
+
+[[dependency]]
+path = "../aigen-cli/build/libs/aigen-tool-0.1.0.jar"

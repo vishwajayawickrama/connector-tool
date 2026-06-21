@@ -1,0 +1,420 @@
+{
+  "name": "aigen",
+  "version": "0.1.0",
+  "description": "Centralized CLI tool to generate and maintain Ballerina connector assets from OpenAPI specifications or Java SDKs.",
+  "invocation": "bal aigen",
+  "environment": {
+    "ANTHROPIC_API_KEY": {
+      "requiredFor": [
+        "sdk",
+        "openapi sanitize",
+        "openapi generate-tests",
+        "openapi generate-examples",
+        "openapi generate-docs",
+        "openapi pipeline"
+      ],
+      "description": "Required for AI-powered SDK workflow stages and OpenAPI AI-assisted generation, sanitization, documentation, and repair."
+    }
+  },
+  "globalFlags": {
+    "help": {
+      "aliases": [
+        "help",
+        "--help",
+        "-h"
+      ],
+      "type": "boolean",
+      "description": "Show help information."
+    },
+    "yes": {
+      "type": "boolean",
+      "description": "Auto-confirm prompts where supported."
+    },
+    "quiet": {
+      "type": "boolean",
+      "description": "Use minimal logging output."
+    }
+  },
+  "commands": {
+    "openapi": {
+      "description": "Generate and maintain Ballerina connectors from OpenAPI specifications.",
+      "subcommands": {
+        "pipeline": {
+          "description": "Run the complete OpenAPI connector automation pipeline.",
+          "arguments": [
+            {
+              "name": "openapi_spec",
+              "required": true,
+              "description": "Path to the OpenAPI specification file."
+            },
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Output directory for the generated connector workspace."
+            }
+          ],
+          "flags": {
+            "regenerate": {
+              "type": "boolean",
+              "description": "Reapply recorded sanitations and recover tests/examples for an updated spec."
+            },
+            "remote-methods": {
+              "type": "boolean",
+              "description": "Generate client APIs as remote methods."
+            },
+            "resource-methods": {
+              "type": "boolean",
+              "description": "Generate client APIs as resource methods."
+            }
+          }
+        },
+        "sanitize": {
+          "description": "Sanitize an OpenAPI specification with AI enhancements.",
+          "arguments": [
+            {
+              "name": "input_spec",
+              "required": true,
+              "description": "Path to the OpenAPI specification file."
+            },
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Directory for processed files."
+            }
+          ]
+        },
+        "generate-client": {
+          "description": "Generate a Ballerina client from an OpenAPI specification.",
+          "arguments": [
+            {
+              "name": "openapi_spec",
+              "required": true,
+              "description": "Path to the OpenAPI specification file."
+            },
+            {
+              "name": "output_directory",
+              "required": true,
+              "description": "Directory where the generated client will be stored."
+            }
+          ],
+          "flags": {
+            "remote-methods": {
+              "type": "boolean",
+              "description": "Generate client APIs as remote methods."
+            },
+            "resource-methods": {
+              "type": "boolean",
+              "description": "Generate client APIs as resource methods."
+            }
+          },
+          "options": {
+            "license": {
+              "type": "string",
+              "format": "key=value",
+              "description": "License file path for generated copyright headers."
+            },
+            "tags": {
+              "type": "array",
+              "items": "string",
+              "format": "key=comma-separated-values",
+              "description": "Comma-separated OpenAPI tags to include."
+            },
+            "operations": {
+              "type": "array",
+              "items": "string",
+              "format": "key=comma-separated-values",
+              "description": "Comma-separated operation IDs to include."
+            },
+            "client-method": {
+              "type": "string",
+              "values": [
+                "resource",
+                "remote"
+              ],
+              "format": "key=value",
+              "description": "Client method generation mode."
+            }
+          }
+        },
+        "fix-code": {
+          "description": "Fix Ballerina compilation errors in an OpenAPI-generated connector.",
+          "arguments": [
+            {
+              "name": "connector_path",
+              "required": true,
+              "description": "Path to the generated Ballerina connector directory."
+            }
+          ]
+        },
+        "generate-tests": {
+          "description": "Generate mock-server and live tests for an OpenAPI-generated connector.",
+          "arguments": [
+            {
+              "name": "connector_path",
+              "required": true,
+              "description": "Path to the connector workspace."
+            },
+            {
+              "name": "spec_path",
+              "required": true,
+              "description": "Path to the OpenAPI specification."
+            }
+          ]
+        },
+        "generate-examples": {
+          "description": "Generate example code for an OpenAPI-generated connector.",
+          "arguments": [
+            {
+              "name": "connector_path",
+              "required": true,
+              "description": "Path to the connector workspace."
+            }
+          ],
+          "flags": {
+            "regenerate": {
+              "type": "boolean",
+              "description": "Try fixing existing examples first, then fall back to fresh generation."
+            }
+          }
+        },
+        "generate-docs": {
+          "description": "Generate README documentation for an OpenAPI-generated connector.",
+          "arguments": [
+            {
+              "name": "doc_command",
+              "required": true,
+              "values": [
+                "generate-all",
+                "generate-ballerina",
+                "generate-tests",
+                "generate-examples",
+                "generate-individual-examples",
+                "generate-main"
+              ],
+              "description": "Documentation generation mode."
+            },
+            {
+              "name": "connector_path",
+              "required": true,
+              "description": "Path to the connector workspace."
+            }
+          ]
+        },
+        "generate-all": {
+          "description": "Shortcut for OpenAPI documentation generation using generate-all.",
+          "arguments": [
+            {
+              "name": "connector_path",
+              "required": true,
+              "description": "Path to the connector workspace."
+            }
+          ]
+        }
+      }
+    },
+    "sdk": {
+      "description": "Generate and maintain Ballerina connectors from Java SDKs.",
+      "subcommands": {
+        "analyze": {
+          "description": "Analyze a Java SDK JAR or Maven coordinate and write metadata.",
+          "arguments": [
+            {
+              "name": "sdk_ref",
+              "required": true,
+              "description": "Dataset key resolved from test-jars, or Maven coordinate such as group:artifact:version."
+            },
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory for generated SDK workflow artifacts."
+            }
+          ],
+          "flags": {
+            "include-deprecated": {
+              "type": "boolean",
+              "description": "Include deprecated methods."
+            },
+            "include-internal": {
+              "type": "boolean",
+              "description": "Include internal classes or methods."
+            },
+            "include-non-public": {
+              "type": "boolean",
+              "description": "Include non-public classes."
+            }
+          },
+          "options": {
+            "sources": {
+              "type": "string",
+              "format": "key=value",
+              "description": "Path to a sources JAR or extracted source directory."
+            },
+            "include-packages": {
+              "type": "array",
+              "items": "string",
+              "format": "key=comma-separated-values",
+              "description": "Restrict analysis to specific Java packages."
+            },
+            "exclude-packages": {
+              "type": "array",
+              "items": "string",
+              "format": "key=comma-separated-values",
+              "description": "Exclude specific Java packages."
+            },
+            "max-depth": {
+              "type": "integer",
+              "format": "key=value",
+              "description": "Maximum dependency traversal depth."
+            },
+            "methods-to-list": {
+              "type": "integer",
+              "format": "key=value",
+              "description": "Maximum number of SDK methods to list."
+            }
+          }
+        },
+        "pipeline": {
+          "description": "Run the complete Java SDK to Ballerina connector pipeline.",
+          "arguments": [
+            {
+              "name": "dataset_key",
+              "required": true,
+              "description": "Dataset key resolved from test-jars/<dataset-key>.jar and test-jars/<dataset-key>-javadoc.jar."
+            },
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory for generated connector artifacts."
+            }
+          ],
+          "flags": {
+            "fix-code": {
+              "type": "boolean",
+              "description": "Run full code fixing phase. Enabled by default."
+            },
+            "fix-report-only": {
+              "type": "boolean",
+              "description": "Run fixer diagnostics without applying all fixes."
+            },
+            "skip-fix": {
+              "type": "boolean",
+              "description": "Skip code fixing."
+            },
+            "skip-tests": {
+              "type": "boolean",
+              "description": "Skip SDK live test generation."
+            },
+            "skip-examples": {
+              "type": "boolean",
+              "description": "Skip example generation."
+            },
+            "skip-docs": {
+              "type": "boolean",
+              "description": "Skip documentation generation."
+            }
+          },
+          "options": {
+            "fix-iterations": {
+              "type": "integer",
+              "format": "key=value",
+              "description": "Maximum fixer iterations. Default is 3."
+            }
+          }
+        },
+        "generate": {
+          "description": "Generate SDK API specification and IR from analyzer metadata.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing analyzer metadata."
+            }
+          ],
+          "flags": {
+            "no-thinking": {
+              "type": "boolean",
+              "description": "Disable LLM extended thinking mode."
+            }
+          }
+        },
+        "connector": {
+          "description": "Generate Ballerina connector artifacts from SDK metadata, IR, and API spec.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing SDK workflow artifacts."
+            }
+          ]
+        },
+        "fix-code": {
+          "description": "Fix generated SDK connector Java native and Ballerina compilation errors.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing generated SDK connector artifacts."
+            }
+          ],
+          "options": {
+            "fix-iterations": {
+              "type": "integer",
+              "format": "key=value",
+              "description": "Maximum fixer iterations. Default is 3."
+            }
+          }
+        },
+        "fix-report-only": {
+          "description": "Run SDK connector fixer diagnostics without applying all fixes.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing generated SDK connector artifacts."
+            }
+          ]
+        },
+        "generate-tests": {
+          "description": "Generate live integration tests for an SDK-generated connector.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing generated SDK connector artifacts."
+            }
+          ]
+        },
+        "generate-examples": {
+          "description": "Generate examples for an SDK-generated connector.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing generated SDK connector artifacts."
+            }
+          ]
+        },
+        "generate-docs": {
+          "description": "Generate all documentation for an SDK-generated connector.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing generated SDK connector artifacts."
+            }
+          ]
+        },
+        "generate-all": {
+          "description": "Shortcut for SDK documentation generation.",
+          "arguments": [
+            {
+              "name": "output_dir",
+              "required": true,
+              "description": "Root directory containing generated SDK connector artifacts."
+            }
+          ]
+        }
+      }
+    }
+  }
+}

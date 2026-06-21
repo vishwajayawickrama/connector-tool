@@ -1,0 +1,4 @@
+io.ballerina.aigentool.workflows.ConnectorDocGeneratorWorkflow
+io.ballerina.aigentool.workflows.ExampleDocGeneratorWorkflow
+io.ballerina.aigentool.workflows.OpenApiAutomatorWorkflow
+io.ballerina.aigentool.workflows.SdkAutomatorWorkflow

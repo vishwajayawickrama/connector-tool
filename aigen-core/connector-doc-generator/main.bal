@@ -38,8 +38,20 @@ const string OUTPUT_DIR = "./output";
 #   4. Write the generated markdown files to the docs directory
 #   5. Patch sidebars.ts and catalog/index.md
 #
+# + arg - optional CLI argument; use help, --help, or -h to print usage
 # + return - an error if any step fails
-public function main() returns error? {
+public function main(string arg = "") returns error? {
+    if arg.trim().length() > 0 {
+        if isHelpArg(arg) {
+            printUsage();
+            return;
+        }
+        printUsage();
+        return error(string `Unknown argument: ${arg}`);
+    }
+
+    check validateRequiredConfig();
+
     log("=== Connector Doc Generator ===");
     log(string `Connector: ${connectorName}  |  Module: ${moduleSlug}  |  Category: ${category}`);
     log("");
@@ -387,6 +399,46 @@ public function main() returns error? {
     log(string `  Phase 1 raw:     ${phase1RawPath}`);
     log(string `  Phase 2a raw:    ${phase2aRawPath}`);
     log(string `  Docs:            ${connectorDir}/`);
+}
+
+function isHelpArg(string arg) returns boolean {
+    return arg == "help" || arg == "--help" || arg == "-h";
+}
+
+function printUsage() {
+    io:println();
+    io:println("Connector Doc Generator");
+    io:println();
+    io:println("USAGE:");
+    io:println("  bal run");
+    io:println("  bal run -- help");
+    io:println();
+    io:println("DESCRIPTION:");
+    io:println("  Generates connector catalog documentation including overview, setup guide,");
+    io:println("  action reference, and trigger reference.");
+    io:println();
+    io:println("INPUTS:");
+    io:println("  Connector identity, source repository, category, docs repository path,");
+    io:println("  dry-run mode, and overwrite behavior are provided through configuration.");
+    io:println();
+}
+
+function validateRequiredConfig() returns error? {
+    if connectorName.trim().length() == 0 {
+        return error("connectorName is required");
+    }
+    if moduleSlug.trim().length() == 0 {
+        return error("moduleSlug is required");
+    }
+    if packageName.trim().length() == 0 {
+        return error("packageName is required");
+    }
+    if githubRepo.trim().length() == 0 {
+        return error("githubRepo is required");
+    }
+    if category.trim().length() == 0 {
+        return error("category is required");
+    }
 }
 
 // Runs a single phase 2b Claude call and logs stats immediately on completion.

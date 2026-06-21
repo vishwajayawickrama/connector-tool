@@ -40,12 +40,26 @@ import wso2/example_doc_generator.utils;
 # + arg4                   - third batch option
 # + return                 - an error if any step fails
 public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
+    if isHelpArg(modeOrConnectorName) {
+        printUsage(arg2);
+        return;
+    }
+
     if modeOrConnectorName == "batch" {
+        if isHelpArg(arg2) {
+            printBatchUsage();
+            return;
+        }
         check batch_runner:runBatch(arg2, arg3, arg4);
         return;
     }
 
     boolean triggerMode = modeOrConnectorName == "trigger";
+    if triggerMode && isHelpArg(arg2) {
+        printTriggerUsage();
+        return;
+    }
+
     string workflowKind = triggerMode ? "trigger" : "connector";
     string targetName = triggerMode ? arg2.trim() : modeOrConnectorName.trim();
     if targetName == "" {
@@ -370,4 +384,75 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("");
     utils:log("=== Pipeline Complete ===");
     utils:log("Artifacts saved under '" + utils:OUTPUT_DIR + "'.");
+}
+
+function isHelpArg(string arg) returns boolean {
+    return arg == "help" || arg == "--help" || arg == "-h";
+}
+
+function printUsage(string topic = "") {
+    match topic {
+        "connector" => {
+            printConnectorUsage();
+        }
+        "trigger" => {
+            printTriggerUsage();
+        }
+        "batch" => {
+            printBatchUsage();
+        }
+        _ => {
+            io:println();
+            io:println("Example Doc Generator");
+            io:println();
+            io:println("USAGE:");
+            io:println("  bal run -- <connector-name> [additional-instructions]");
+            io:println("  bal run -- trigger <trigger-name> [additional-instructions]");
+            io:println("  bal run -- batch [config=<path>] [timeout=<seconds>]");
+            io:println("  bal run -- help [connector|trigger|batch]");
+            io:println();
+            io:println("DESCRIPTION:");
+            io:println("  Generates WSO2 Integrator visual example guides with screenshots.");
+            io:println();
+        }
+    }
+}
+
+function printConnectorUsage() {
+    io:println();
+    io:println("Generate a connector example guide");
+    io:println();
+    io:println("USAGE:");
+    io:println("  bal run -- <connector-name> [additional-instructions]");
+    io:println();
+    io:println("ARGUMENTS:");
+    io:println("  <connector-name>           Connector package or module name");
+    io:println("  [additional-instructions]  Optional guidance for auth, operations, or setup");
+    io:println();
+}
+
+function printTriggerUsage() {
+    io:println();
+    io:println("Generate a trigger example guide");
+    io:println();
+    io:println("USAGE:");
+    io:println("  bal run -- trigger <trigger-name> [additional-instructions]");
+    io:println();
+    io:println("ARGUMENTS:");
+    io:println("  <trigger-name>             Trigger package or module name");
+    io:println("  [additional-instructions]  Optional guidance for handler, payload, or setup");
+    io:println();
+}
+
+function printBatchUsage() {
+    io:println();
+    io:println("Generate multiple connector and trigger example guides");
+    io:println();
+    io:println("USAGE:");
+    io:println("  bal run -- batch [config=<path>] [timeout=<seconds>]");
+    io:println();
+    io:println("OPTIONS:");
+    io:println("  config=<path>       Path to the batch queue JSON file");
+    io:println("  timeout=<seconds>   Per-item timeout in seconds");
+    io:println();
 }

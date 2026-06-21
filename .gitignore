@@ -1,0 +1,28 @@
+# macOS and editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Ballerina build artifacts
+target/
+generated/
+Config.toml
+
+# Nested project build artifacts
+.gradle/
+build/
+aigen-cli/.gradle/
+aigen-cli/build/
+aigen-core/.gradle/
+aigen-core/build/
+
+# Local findings and investigation notes
+docs/finding/

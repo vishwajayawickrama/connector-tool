@@ -18,11 +18,11 @@
 // Copy Config.toml.example → Config.toml and fill in the required fields.
 
 // === Required ===
-configurable string connectorName = ?;
-configurable string moduleSlug = ?;
-configurable string packageName = ?;
-configurable string githubRepo = ?;
-configurable string category = ?;
+configurable string connectorName = "";
+configurable string moduleSlug = "";
+configurable string packageName = "";
+configurable string githubRepo = "";
+configurable string category = "";
 
 // === Optional ===
 configurable string connectorVersion = "";

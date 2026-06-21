@@ -1,0 +1,4 @@
+rootProject.name = 'aigen-ballerina-cli-tool'
+
+include ':aigen-cli'
+include ':aigen-core'

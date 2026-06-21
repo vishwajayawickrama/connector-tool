@@ -18,7 +18,7 @@
 // Copy Config.toml.example → Config.toml and fill in the required fields.
 
 // === Required ===
-configurable string llmApiKey = ?;
+configurable string llmApiKey = "";
 
 // === Service Ports ===
 configurable int codeServerPort = 8080;
