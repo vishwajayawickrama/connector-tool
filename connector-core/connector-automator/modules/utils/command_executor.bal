@@ -72,8 +72,8 @@ public function executeCommand(string command, string workingDir) returns Comman
                             logVerbose(string `failed to read stderr file: ${stderrContent.message()}`);
                         }
 
-                        file:Error? removeStdout = file:remove(stdoutFile);
-                        file:Error? removeStderr = file:remove(stderrFile);
+                        do { check file:remove(stdoutFile); } on fail { }
+                        do { check file:remove(stderrFile); } on fail { }
                     } else {
                         stderr = exitResult.toString();
                         exitCode = 1;

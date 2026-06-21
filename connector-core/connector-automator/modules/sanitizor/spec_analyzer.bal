@@ -151,10 +151,8 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
                     string refValue = propertyMap.get("$ref").toString();
                     context += string ` References: ${refValue}.`;
                 }
-                boolean isGenericRecord = false;
                 if propertyMap.keys().length() == 0 {
                     // Empty property definition = record {}
-                    isGenericRecord = true;
                     context += " Generic record type - needs specific description.";
                 }
 

@@ -17,13 +17,13 @@ public class ConnectorCmd implements BLauncherCmd {
     private static final String COMMAND_NAME = "connector";
     private PrintStream outStream;
     private PrintStream errorStream;
-    
+
     @CommandLine.Mixin
     private BaseCmd baseCmd = new BaseCmd();
 
     public ConnectorCmd() {
-        outStream = System.out;
-        errorStream = System.err;
+        outStream = baseCmd.outStream;
+        errorStream = baseCmd.errorStream;
     }
 
     @Override
