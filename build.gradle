@@ -1,0 +1,12 @@
+plugins {
+    id 'base'
+}
+
+allprojects {
+    group = 'io.ballerina'
+    version = '0.1.0'
+
+    repositories {
+        mavenCentral()
+    }
+}

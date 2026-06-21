@@ -1,0 +1,364 @@
+import wso2/connector_automator.utils;
+
+import ballerina/regex;
+
+// Helper function to update description in spec using location path
+function updateDescriptionInSpec(map<json> schemas, string location, string description) returns error? {
+    string[] pathParts = regex:split(location, "\\.");
+
+    if pathParts.length() == 1 {
+        // Schema-level description
+        string schemaName = pathParts[0];
+        json|error schemaResult = schemas.get(schemaName);
+        if schemaResult is map<json> {
+            map<json> schemaMap = <map<json>>schemaResult;
+            schemaMap["description"] = description;
+            // No need to reassign since we're modifying the original reference
+        }
+    } else {
+        // Property-level description - navigate to the correct location
+        string schemaName = pathParts[0];
+        json|error schemaResult = schemas.get(schemaName);
+        if schemaResult is map<json> {
+            error? result = updateNestedDescription(<map<json>>schemaResult, pathParts, 1, description);
+            if result is error {
+                return result;
+            }
+        }
+    }
+
+    return ();
+}
+
+// Searches a parameter array for a matching entry and updates its description.
+// Returns true if a match was found and updated.
+function findAndUpdateParam(json[] params, string paramName, string paramIn, string description) returns boolean {
+    foreach json param in params {
+        if !(param is map<json>) {
+            continue;
+        }
+        map<json> paramMap = <map<json>>param;
+        boolean nameMatches = paramMap.hasKey("name") && paramMap.get("name") == paramName;
+        boolean inMatches = paramIn == "" || (paramMap.hasKey("in") && paramMap.get("in") == paramIn);
+        if nameMatches && inMatches {
+            paramMap["description"] = description;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Helper function to update parameter description in spec
+function updateParameterDescriptionInSpec(map<json> paths, string location, string description) returns error? {
+    // Parse location: paths.{path}.{method}.parameters[name={paramName}] or parameters[name={paramName},in={paramIn}]
+    if !location.startsWith("paths.") {
+        return error("Could not find parameter at location: " + location);
+    }
+
+    string locationWithoutPrefix = location.substring(6); // Remove "paths."
+
+    // Anchor on ".parameters[" rather than the last dot.
+    // Using lastIndexOf(".") would absorb ".{method}" into the path segment because
+    // the last dot in "/{path}.{method}.parameters[...]" sits before "parameters", not before the method.
+    int? paramsBracketStart = locationWithoutPrefix.indexOf(".parameters[");
+    if !(paramsBracketStart is int) {
+        return error("Could not find parameter at location: " + location);
+    }
+
+    string pathAndMethod = locationWithoutPrefix.substring(0, paramsBracketStart);
+    string paramLocation = locationWithoutPrefix.substring(paramsBracketStart + 1); // "parameters[name=...]"
+
+    if !paramLocation.startsWith("parameters[name=") || !paramLocation.endsWith("]") {
+        return error("Could not find parameter at location: " + location);
+    }
+
+    // Split pathAndMethod → path + method using the last dot
+    int? lastDot = pathAndMethod.lastIndexOf(".");
+    if !(lastDot is int) {
+        return error("Could not find parameter at location: " + location);
+    }
+
+    string path = pathAndMethod.substring(0, lastDot);
+    string method = pathAndMethod.substring(lastDot + 1);
+
+    string inner = paramLocation.substring(16, paramLocation.length() - 1);
+    string paramName = inner;
+    string paramIn = "";
+    int? commaPos = inner.indexOf(",in=");
+    if commaPos is int {
+        paramName = inner.substring(0, commaPos);
+        paramIn = inner.substring(commaPos + 4);
+    }
+
+    json|error pathItem = paths.get(path);
+    if !(pathItem is map<json>) {
+        return error("Could not find parameter at location: " + location);
+    }
+    map<json> pathItemMap = <map<json>>pathItem;
+
+    if !pathItemMap.hasKey(method) {
+        return error("Could not find parameter at location: " + location);
+    }
+    json|error operation = pathItemMap.get(method);
+    if !(operation is map<json>) {
+        return error("Could not find parameter at location: " + location);
+    }
+    map<json> operationMap = <map<json>>operation;
+
+    // Check operation-level parameters first, then fall back to path-level
+    json|error opParams = operationMap.get("parameters");
+    if opParams is json[] && findAndUpdateParam(opParams, paramName, paramIn, description) {
+        return ();
+    }
+
+    json|error pathParams = pathItemMap.get("parameters");
+    if pathParams is json[] && findAndUpdateParam(pathParams, paramName, paramIn, description) {
+        return ();
+    }
+
+    return error("Could not find parameter at location: " + location);
+}
+
+// Helper function to update operation description in spec
+function updateOperationDescriptionInSpec(map<json> paths, string location, string description) returns error? {
+    // Parse location: paths.{path}.{method}
+    if location.startsWith("paths.") {
+        string locationWithoutPrefix = location.substring(6); // Remove "paths."
+
+        // Use last dot to split path and method (handles dots inside path)
+        int? lastDot = locationWithoutPrefix.lastIndexOf(".");
+        if lastDot is int {
+            string path = locationWithoutPrefix.substring(0, lastDot);
+            string method = locationWithoutPrefix.substring(lastDot + 1);
+
+            json|error pathItem = paths.get(path);
+            if pathItem is map<json> {
+                map<json> pathItemMap = <map<json>>pathItem;
+
+                if pathItemMap.hasKey(method) {
+                    json|error operation = pathItemMap.get(method);
+                    if operation is map<json> {
+                        map<json> operationMap = <map<json>>operation;
+                        operationMap["description"] = description;
+                        return ();
+                    }
+                }
+            }
+        }
+    }
+
+    return error("Could not find operation at location: " + location);
+}
+
+// Helper function to update operation summary in spec
+function updateOperationSummaryInSpec(map<json> paths, string location, string summary) returns error? {
+    // Parse location: paths.{path}.{method}.summary
+    if location.startsWith("paths.") && location.endsWith(".summary") {
+        string locationWithoutPrefix = location.substring(6); // Remove "paths."
+        // Strip trailing ".summary" (8 chars) before the last-dot split, otherwise
+        // "summary" itself would be mistaken for the method.
+        string pathAndMethod = locationWithoutPrefix.substring(0, locationWithoutPrefix.length() - 8);
+
+        int? lastDot = pathAndMethod.lastIndexOf(".");
+        if lastDot is int {
+            string path = pathAndMethod.substring(0, lastDot);
+            string method = pathAndMethod.substring(lastDot + 1);
+
+            json|error pathItem = paths.get(path);
+            if pathItem is map<json> {
+                map<json> pathItemMap = <map<json>>pathItem;
+
+                if pathItemMap.hasKey(method) {
+                    json|error operation = pathItemMap.get(method);
+                    if operation is map<json> {
+                        map<json> operationMap = <map<json>>operation;
+
+                        // Defensive hard cap: 37 characters, regardless of AI prompt compliance.
+                        // Also strip any trailing period before capping.
+                        string cappedSummary = summary.trim();
+                        if cappedSummary.endsWith(".") {
+                            cappedSummary = cappedSummary.substring(0, cappedSummary.length() - 1).trim();
+                        }
+                        if cappedSummary.length() > 37 {
+                            cappedSummary = cappedSummary.substring(0, 37);
+                        }
+
+                        operationMap["summary"] = cappedSummary;
+                        return ();
+                    }
+                }
+            }
+        }
+    }
+
+    return error("Could not find operation at location: " + location);
+}
+
+// Recursive helper to safely update nested descriptions
+function updateNestedDescription(map<json> current, string[] pathParts, int index, string description) returns error? {
+    if index == pathParts.length() {
+        // We've reached the target - add description
+        current["description"] = description;
+        return ();
+    }
+
+    string part = pathParts[index];
+
+    if part.includes("[") {
+        // Handle array indices like "allOf[0]"
+        string[] indexParts = regex:split(part, "\\[");
+        string arrayName = indexParts[0];
+        string indexStr = regex:replaceAll(indexParts[1], "\\]", "");
+        int|error indexResult = int:fromString(indexStr);
+
+        if indexResult is int {
+            json|error arrayResult = current.get(arrayName);
+            if arrayResult is json[] {
+                json[] array = arrayResult;
+                if indexResult < array.length() && array[indexResult] is map<json> {
+                    return updateNestedDescription(<map<json>>array[indexResult], pathParts, index + 1, description);
+                }
+            }
+        }
+    } else {
+        json|error nextResult = current.get(part);
+        if nextResult is map<json> {
+            return updateNestedDescription(<map<json>>nextResult, pathParts, index + 1, description);
+        }
+    }
+
+    return ();
+}
+
+// Helper function to update operationId in the spec
+function updateOperationIdInSpec(map<json> paths, string location, string operationId) returns error? {
+    // Expect location like "{path}.{method}" (no leading "paths." here)
+    // To be robust, tolerate both "paths.{path}.{method}" and "{path}.{method}"
+    string loc = location;
+    if loc.startsWith("paths.") {
+        loc = loc.substring(6);
+    }
+
+    int? lastDot = loc.lastIndexOf(".");
+    if lastDot is int {
+        string path = loc.substring(0, lastDot);
+        string method = loc.substring(lastDot + 1);
+
+        json|error pathItem = paths.get(path);
+        if pathItem is map<json> {
+            map<json> pathItemMap = <map<json>>pathItem;
+
+            if pathItemMap.hasKey(method) {
+                json|error operation = pathItemMap.get(method);
+                if operation is map<json> {
+                    map<json> operationMap = <map<json>>operation;
+                    operationMap["operationId"] = operationId;
+                    return ();
+                }
+            }
+        }
+    }
+
+    return error("Could not find operation at location: " + location);
+}
+
+// Helper function to update schema references throughout the JSON structure
+function updateSchemaReferences(json jsonData, map<string> nameMapping) returns json {
+    if (jsonData is map<json>) {
+        map<json> resultMap = {};
+
+        foreach string key in jsonData.keys() {
+            json|error value = jsonData.get(key);
+            if (value is json) {
+                if (key == "$ref" && value is string) {
+                    string refValue = <string>value;
+                    if (refValue.startsWith("#/components/schemas/")) {
+                        string schemaName = refValue.substring(21);
+                        string? newName = nameMapping[schemaName];
+                        if (newName is string) {
+                            string newRef = "#/components/schemas/" + newName;
+                            resultMap[key] = newRef;
+                            utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`);
+                        } else {
+                            resultMap[key] = value;
+                        }
+                    } else {
+                        resultMap[key] = value;
+                    }
+                } else {
+                    resultMap[key] = updateSchemaReferences(value, nameMapping);
+                }
+            }
+        }
+
+        return resultMap;
+    } else if (jsonData is json[]) {
+        json[] resultArray = [];
+        foreach json item in jsonData {
+            resultArray.push(updateSchemaReferences(item, nameMapping));
+        }
+        return resultArray;
+    } else {
+        return jsonData;
+    }
+}
+
+// Helper function to update response description in spec
+function updateResponseDescriptionInSpec(map<json> paths, string location, string description) returns error? {
+    // Parse location: paths.{path}.{method}.responses.{responseCode}.description
+    if location.startsWith("paths.") {
+        string locationWithoutPrefix = location.substring(6); // Remove "paths."
+
+        // Split by dots, but be careful with path segments that might contain dots
+        string[] locationParts = regex:split(locationWithoutPrefix, "\\.");
+
+        if locationParts.length() >= 5 { // minimum: path, method, "responses", responseCode, "description"
+            // Last three parts are always "responses", responseCode, "description"
+            int responsesIndex = locationParts.length() - 3;
+            int responseCodeIndex = locationParts.length() - 2;
+            int descriptionIndex = locationParts.length() - 1;
+
+            if locationParts[responsesIndex] == "responses" && locationParts[descriptionIndex] == "description" {
+                string responseCode = locationParts[responseCodeIndex];
+
+                // Reconstruct path and method (everything before "responses")
+                string[] pathAndMethodParts = locationParts.slice(0, responsesIndex);
+
+                // Last part is method, rest is path
+                string method = pathAndMethodParts[pathAndMethodParts.length() - 1];
+                string[] pathParts = pathAndMethodParts.slice(0, pathAndMethodParts.length() - 1);
+                string path = string:'join(".", ...pathParts);
+
+                json|error pathItem = paths.get(path);
+                if pathItem is map<json> {
+                    map<json> pathItemMap = <map<json>>pathItem;
+
+                    if pathItemMap.hasKey(method) {
+                        json|error operation = pathItemMap.get(method);
+                        if operation is map<json> {
+                            map<json> operationMap = <map<json>>operation;
+
+                            if operationMap.hasKey("responses") {
+                                json|error responsesResult = operationMap.get("responses");
+                                if responsesResult is map<json> {
+                                    map<json> responses = <map<json>>responsesResult;
+
+                                    if responses.hasKey(responseCode) {
+                                        json|error responseResult = responses.get(responseCode);
+                                        if responseResult is map<json> {
+                                            map<json> response = <map<json>>responseResult;
+                                            response["description"] = description;
+                                            return ();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return error("Could not find response at location: " + location);
+}

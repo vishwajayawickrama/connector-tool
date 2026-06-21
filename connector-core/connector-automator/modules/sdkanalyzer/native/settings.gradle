@@ -1,0 +1,2 @@
+// Empty settings file for native subproject to run independently
+rootProject.name = 'native'

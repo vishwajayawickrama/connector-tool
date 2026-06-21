@@ -1,0 +1,75 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.2.2'
+}
+
+group = 'io.ballerina'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+def resolveBallerinaHome = {
+    def configuredHome = providers.gradleProperty('ballerina.home')
+            .orElse(providers.environmentVariable('BALLERINA_HOME'))
+            .orNull
+    if (configuredHome) {
+        return configuredHome
+    }
+
+    return providers.exec {
+        commandLine 'bal', 'home'
+    }.standardOutput.asText.get().trim()
+}
+
+def ballerinaHome = resolveBallerinaHome()
+def ballerinaLibDir = file("${ballerinaHome}/bre/lib")
+
+repositories {
+    mavenCentral()
+    flatDir {
+        dirs 'libs', 
+                '../connector-core/connector-automator/target/bin',
+                '../connector-core/connector-doc-generator/target/bin',
+                '../connector-core/example-doc-generator/target/bin'
+    }
+}
+
+dependencies {
+    compileOnly fileTree(dir: ballerinaLibDir, include: ['ballerina-cli-*.jar', 'ballerina-lang-*.jar',
+                                                         'ballerina-rt-*.jar', 'picocli-*.jar'])
+    implementation fileTree(dir: ballerinaLibDir, include: ['jackson-annotations-*.jar', 'jackson-core-*.jar',
+                                                            'jackson-databind-*.jar',
+                                                            'jackson-dataformat-yaml-*.jar',
+                                                            'snakeyaml-*.jar'])
+    runtimeOnly ':connector_automator'
+    runtimeOnly ':connector_doc_generator'
+    runtimeOnly ':example_doc_generator'
+}
+
+jar {
+    archiveBaseName.set('connector-tool')
+    enabled = false
+}
+
+shadowJar {
+    archiveBaseName.set('connector-tool')
+    archiveClassifier.set('')
+    archiveVersion.set(version)
+    zip64 = true
+
+    mergeServiceFiles()
+
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+}
+
+assemble.dependsOn shadowJar
