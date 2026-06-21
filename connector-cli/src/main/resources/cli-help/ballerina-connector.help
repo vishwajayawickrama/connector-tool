@@ -1,62 +1,64 @@
 NAME
-      bal connector - Generate and maintain Ballerina connector assets with AI
+       bal connector - Generate and maintain Ballerina connector assets with AI
        assistance.
 
 SYNOPSIS
-      bal connector -h | --help
-      bal connector <workflow> <command> [arguments...] [options...] [flags...]
+       bal connector -h | --help
+       bal connector openapi -i <openapi-spec> [-o <output-dir>] [options...]
+       bal connector sdk <command> <arguments...> [options...]
 
 DESCRIPTION
-      The `bal connector` command provides AI-assisted workflows for generating,
-       validating, documenting, and maintaining Ballerina connectors.
+       The `bal connector` command provides AI-assisted workflows for
+       generating, sanitizing, validating, testing, documenting, and
+       maintaining Ballerina connectors from OpenAPI specifications or Java
+       SDKs.
 
-       Use one of the available workflows to run OpenAPI connector generation,
-       Java SDK connector generation, connector catalog documentation
-       generation, or visual example documentation generation.
+       Use one of the available workflows to generate connector assets.
+       Each workflow exposes its own commands and options.
 
 WORKFLOWS
        openapi
-             Generate and maintain Ballerina connectors from OpenAPI
-             specifications.
+            Generate and maintain Ballerina connectors from OpenAPI
+            specifications. Runs a configurable pipeline covering
+            sanitization, client generation, code repair, test and example
+            generation, and documentation.
 
        sdk
-             Generate and maintain Ballerina connectors from Java SDKs.
-
-       doc-generator
-             Generate connector catalog documentation such as overview, setup
-             guide, action reference, and trigger reference.
-
-       example-doc
-             Generate visual WSO2 Integrator example documentation with
-             screenshots.
+            Generate and maintain Ballerina connectors from Java SDKs.
+            Provides discrete commands for SDK analysis, specification and
+            IR generation, connector code generation, code repair, test and
+            example generation, and documentation.
 
 ENVIRONMENT
        ANTHROPIC_API_KEY
-             Required for AI-powered workflow stages such as SDK analysis,
-             OpenAPI sanitization, code repair, test generation, example
-             generation, and documentation generation.
+            Required for all workflow stages. Both the openapi and sdk
+            workflows call the Anthropic API at every stage and will fail
+            at startup if this variable is not set.
 
-GLOBAL OPTIONS
+            Set the variable before running any connector command:
+
+            macOS / Linux:
+                  $ export ANTHROPIC_API_KEY=<your-api-key>
+
+            Windows (Command Prompt):
+                  > set ANTHROPIC_API_KEY=<your-api-key>
+
+            Windows (PowerShell):
+                  > $env:ANTHROPIC_API_KEY="<your-api-key>"
+
+OPTIONS
        -h, --help
-             Print help information about the `bal connector` command.
-
-       -y, --yes
-             Auto-confirm prompts where supported.
-
-       -q, --quiet
-             Reduce log output where supported.
+            Print help information for `bal connector` or a workflow.
 
 EXAMPLES
-       Run the full OpenAPI connector workflow.
-             $ bal connector openapi pipeline ./openapi.yaml ./out
+       Run the full OpenAPI connector pipeline.
+           $ bal connector openapi -i ./openapi.yaml -o ./out
 
-       Run the full SDK connector workflow.
-             $ bal connector sdk pipeline example-sdk ./out
+       Run the full Java SDK connector pipeline.
+           $ bal connector sdk pipeline example-sdk ./out
 
-       Generate connector catalog documentation.
-             $ bal connector doc-generator generate connector-name=HubSpot \
-                   module-slug=hubspot package-name=ballerinax/hubspot
+       Print help for the openapi workflow.
+           $ bal connector openapi --help
 
-       Generate a visual connector example guide.
-             $ bal connector example-doc connector mysql \
-                   "show insert and query operations"
+       Print help for the sdk workflow.
+           $ bal connector sdk --help

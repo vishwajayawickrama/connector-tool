@@ -1,96 +1,115 @@
 NAME
-      bal connector openapi - Generate and maintain Ballerina connectors from
+       bal connector openapi - Generate and maintain Ballerina connectors from
        OpenAPI specifications.
 
 SYNOPSIS
-      bal connector openapi pipeline <openapi-spec> <output-dir>
-               [license=<path>] [tags=<tags>] [operations=<operations>]
-               [client-method=<resource|remote>] [regenerate]
-               [remote-methods|resource-methods]
-
-      bal connector openapi sanitize <input-spec> <output-dir>
-
-      bal connector openapi generate-client <openapi-spec> <output-dir>
-               [license=<path>] [tags=<tags>] [operations=<operations>]
-               [client-method=<resource|remote>]
-               [remote-methods|resource-methods]
-
-      bal connector openapi fix-code <connector-path>
-
-      bal connector openapi generate-tests <connector-path> <spec-path>
-
-      bal connector openapi generate-examples <connector-path> [regenerate]
-
-      bal connector openapi generate-docs <doc-command> <connector-path>
+       bal connector openapi -i <openapi-spec> [-o <output-dir>]
+                    [-x <stage>...] [--spec-dir <path>] [--example-dir <path>]
+                    [--license <path>] [-t <tag>...] [--operations <id>...]
+                    [--remote] [-q | -v] [--interactive] [-h]
 
 DESCRIPTION
-       Generate, sanitize, repair, test, document, and maintain Ballerina
-       connectors from OpenAPI specifications.
+       Run AI-assisted stages to sanitize an OpenAPI specification, generate
+       a Ballerina client, fix compilation errors, generate tests and
+       examples, and produce README documentation.
 
-COMMANDS
-       pipeline
-             Run the complete OpenAPI connector workflow. This sanitizes the
-             source specification, generates the Ballerina client, builds and
-             validates the client, generates examples and tests, and produces
-             documentation.
+       All five stages run by default in the following order:
+       sanitize → client → tests → examples → docs.
 
+       Use -x/--exclude to skip individual stages and run only the stages
+       you need. Already-recorded sanitations are re-applied automatically
+       at the start of each run when the sanitize stage is active.
+
+STAGES
        sanitize
-             Flatten and align an OpenAPI specification, apply AI-assisted
-             operation ID, schema-name, and description improvements, and record
-             sanitations for future regeneration.
+            Flatten and align the OpenAPI specification. Apply AI-assisted
+            improvements to operation IDs, schema names, and descriptions.
+            Record sanitations for future regeneration runs.
 
-       generate-client
-             Generate a Ballerina client project from an OpenAPI specification.
+       client
+            Generate a Ballerina client project from the sanitized
+            specification. Automatically apply compilation fixes if errors
+            are found after generation.
 
-       fix-code
-             Fix Ballerina compilation errors in an OpenAPI-generated connector
-             project using AI-assisted code repair.
+       tests
+            Generate connector tests, including a mock server module and a
+            test suite derived from the connector and source specification.
 
-       generate-tests
-             Generate connector tests, including a mock server module and a
-             test suite derived from the connector and source specification.
+       examples
+            Generate AI-assisted Ballerina usage examples for the connector.
 
-       generate-examples
-             Generate AI-assisted Ballerina examples for an OpenAPI-generated
-             connector.
-
-       generate-docs
-             Generate README documentation for an OpenAPI-generated connector.
-             The doc command can be one of `generate-all`,
-             `generate-ballerina`, `generate-tests`, `generate-examples`,
-             `generate-individual-examples`, or `generate-main`.
+       docs
+            Generate README documentation for the connector, its tests,
+            and its examples.
 
 OPTIONS
-       license=<path>
-             License file path to use for generated Ballerina source headers.
+       -i <path>, --input=<path>
+            Mandatory. Path to the OpenAPI specification file.
 
-       tags=<tags>
-             Comma-separated OpenAPI tags to include.
+       -o <path>, --output=<path>
+            Path to the output directory for the generated connector
+            workspace. Defaults to the current working directory.
 
-       operations=<operations>
-             Comma-separated OpenAPI operation IDs to include.
+       --spec-dir=<path>
+            Directory where the aligned specification and sanitations.md
+            are written. Content is placed inside a docs/spec subdirectory.
+            Defaults to <output-dir>/docs/spec.
 
-       client-method=<resource|remote>
-             Client method style to generate.
+       --example-dir=<path>
+            Output directory for generated examples. Defaults to
+            <output-dir>/examples.
 
-FLAGS
-       regenerate
-             Reapply recorded sanitations and recover or refresh generated
-             assets for an updated specification.
+       --license=<path>
+            License file path for generated Ballerina source headers.
 
-       remote-methods
-             Generate client APIs as remote methods.
+       -t <tag>, --tags=<tag>
+            OpenAPI tag to include during client generation. Repeatable.
 
-       resource-methods
-             Generate client APIs as resource methods.
+       --operations=<id>
+            OpenAPI operation ID to include during client generation.
+            Repeatable.
+
+       -x <stage>, --exclude=<stage>
+            Exclude a pipeline stage. Repeatable. Valid values: sanitize,
+            client, tests, examples, docs.
+
+       --remote
+            Generate client APIs as remote methods instead of the default
+            resource methods.
+
+       --interactive
+            Pause after each stage and prompt for confirmation before
+            continuing to the next stage.
+
+       -q, --quiet
+            Suppress all output except errors.
+
+       -v, --verbose
+            Show detailed diagnostic output including subprocess commands
+            and stage batch details.
+
+       -h, --help
+            Print help information for the openapi workflow.
 
 EXAMPLES
-       Run the full OpenAPI connector workflow.
-             $ bal connector openapi pipeline ./openapi.yaml ./out
+       Run the full OpenAPI connector pipeline.
+           $ bal connector openapi -i ./openapi.yaml -o ./out
 
-       Generate a Ballerina client from an OpenAPI specification.
-             $ bal connector openapi generate-client ./openapi.yaml ./out \
-                   client-method=resource
+       Run only the sanitize stage.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -x client -x tests -x examples -x docs
 
-       Generate tests for an OpenAPI connector.
-             $ bal connector openapi generate-tests ./out ./openapi.yaml
+       Generate a client from an existing sanitized specification with a
+       license header and tag filters.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -x sanitize -x tests -x examples -x docs \
+                 --license ./license.txt -t Accounts -t Payments
+
+       Regenerate examples for an existing connector workspace.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -x sanitize -x client -x tests -x docs
+
+       Run the full pipeline with verbose output and interactive stage
+       confirmation.
+           $ bal connector openapi -i ./openapi.yaml -o ./out \
+                 -v --interactive

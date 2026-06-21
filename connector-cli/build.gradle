@@ -35,10 +35,8 @@ def ballerinaLibDir = file("${ballerinaHome}/bre/lib")
 repositories {
     mavenCentral()
     flatDir {
-        dirs 'libs', 
-                '../connector-core/connector-automator/target/bin',
-                '../connector-core/connector-doc-generator/target/bin',
-                '../connector-core/example-doc-generator/target/bin'
+        dirs 'libs',
+                '../connector-core/connector-automator/target/bin'
     }
 }
 
@@ -50,8 +48,6 @@ dependencies {
                                                             'jackson-dataformat-yaml-*.jar',
                                                             'snakeyaml-*.jar'])
     runtimeOnly ':connector_automator'
-    runtimeOnly ':connector_doc_generator'
-    runtimeOnly ':example_doc_generator'
 }
 
 jar {
