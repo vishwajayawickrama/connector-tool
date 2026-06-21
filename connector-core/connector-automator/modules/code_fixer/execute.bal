@@ -2,23 +2,23 @@ import wso2/connector_automator.utils;
 
 import ballerina/io;
 
-public function executeCodeFixer(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
-    utils:logVerbose(string `project: ${connectorPath}`, logLevel);
+public function executeCodeFixer(string connectorPath) returns error? {
+    utils:logVerbose(string `project: ${connectorPath}`);
 
-    FixResult|BallerinaFixerError result = fixAllErrors(connectorPath, logLevel, true);
+    FixResult|BallerinaFixerError result = fixAllErrors(connectorPath, true);
 
     if result is FixResult {
         if result.success {
             if result.errorsFixed == 0 {
-                utils:logInfo("✓ no errors found — project already compiles", logLevel);
+                utils:logInfo("✓ no errors found — project already compiles");
             } else {
-                utils:logInfo(string `✓ fixed ${result.errorsFixed} error${result.errorsFixed == 1 ? "" : "s"}`, logLevel);
+                utils:logInfo(string `✓ fixed ${result.errorsFixed} error${result.errorsFixed == 1 ? "" : "s"}`);
             }
         } else {
-            utils:logWarn(string `partial success: fixed ${result.errorsFixed}, ${result.errorsRemaining} remain — manual intervention may be required`, logLevel);
-            if logLevel == "verbose" && result.remainingFixes.length() > 0 {
+            utils:logWarn(string `partial success: fixed ${result.errorsFixed}, ${result.errorsRemaining} remain — manual intervention may be required`);
+            if utils:getLogLevel() == "verbose" && result.remainingFixes.length() > 0 {
                 foreach string issue in result.remainingFixes {
-                    utils:logVerbose(string `  remaining: ${issue}`, logLevel);
+                    utils:logVerbose(string `  remaining: ${issue}`);
                 }
             }
         }

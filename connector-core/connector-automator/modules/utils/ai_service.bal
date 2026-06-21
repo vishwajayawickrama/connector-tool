@@ -6,7 +6,7 @@ import ballerinax/ai.anthropic;
 string cachedApiKey = "";
 ai:ModelProvider? defaultModel = ();
 
-public function initAIService(LogLevel logLevel = "normal") returns error? {
+public function initAIService() returns error? {
     string apiKey = os:getEnv("ANTHROPIC_API_KEY");
     if apiKey.length() == 0 {
         return error("ANTHROPIC_API_KEY environment variable is not set");
@@ -25,7 +25,7 @@ public function initAIService(LogLevel logLevel = "normal") returns error? {
     }
     defaultModel = provider;
 
-    logVerbose("AI service initialized successfully", logLevel);
+    logVerbose("AI service initialized successfully");
 }
 
 public function callAI(string prompt) returns string|error {

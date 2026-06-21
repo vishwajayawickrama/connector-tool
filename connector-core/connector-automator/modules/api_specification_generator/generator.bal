@@ -29,7 +29,7 @@ public function generateSpecification(GeneratorConfig config) returns GeneratorR
     printGeneratorPlan(config);
 
     // Step 1: Initialize AI service (validates ANTHROPIC_API_KEY)
-    error? aiInit = utils:initAIService(config.quietMode ? "quiet" : "normal");
+    error? aiInit = utils:initAIService();
     if aiInit is error {
         return error GeneratorError("ANTHROPIC_API_KEY environment variable not set. " +
                                     "LLM is required for IR generation.");

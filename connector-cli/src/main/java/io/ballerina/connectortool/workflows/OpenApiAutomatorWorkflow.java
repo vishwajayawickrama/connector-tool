@@ -67,6 +67,9 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
     @CommandLine.Option(names = {"--remote"}, description = "Generate client APIs as remote methods instead of resource methods.")
     public boolean remoteFlag;
 
+    @CommandLine.Option(names = {"--interactive"}, description = "Pause after each stage and prompt for confirmation before continuing.")
+    public boolean interactiveFlag;
+
     public OpenApiAutomatorWorkflow() {
         outStream = System.out;
         errorStream = System.err;
@@ -107,11 +110,13 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             String tagsArg = String.join(",", tags);
             String operationsArg = String.join(",", operations);
             String clientMethodArg = remoteFlag ? "remote" : "";
+            String interactiveArg = interactiveFlag ? "interactive" : "";
 
             BallerinaRuntimeUtils.callBallerinaFunction(ORG, MODULE, VERSION, "runOpenApiGenerationWorkflow",
                     openApiSpecPath != null ? openApiSpecPath.toString() : "",
                     ballerinaProjectPath.toString(), logLevel, resolvedExamplesDir.toString(), excludedArg,
-                    specDirPath.toString(), licenseArg, tagsArg, operationsArg, clientMethodArg);
+                    specDirPath.toString(), licenseArg, tagsArg, operationsArg, clientMethodArg,
+                    interactiveArg);
 
         } catch (CliException e) {
             errorStream.println(e.getFormattedMessage());

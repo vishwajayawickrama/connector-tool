@@ -5,19 +5,19 @@ import ballerina/io;
 import ballerina/regex;
 import ballerina/yaml;
 
-public function executeSanitizor(string inputSpecPath, string specDir, utils:LogLevel logLevel = "normal") returns error? {
-    utils:logVerbose(string `input: ${inputSpecPath}`, logLevel);
-    utils:logVerbose(string `output: ${specDir}/aligned_ballerina_openapi.json`, logLevel);
+public function executeSanitizor(string inputSpecPath, string specDir) returns error? {
+    utils:logVerbose(string `input: ${inputSpecPath}`);
+    utils:logVerbose(string `output: ${specDir}/aligned_ballerina_openapi.json`);
 
-    LLMServiceError? llmInitResult = initLLMService(logLevel);
+    LLMServiceError? llmInitResult = initLLMService();
     if llmInitResult is LLMServiceError {
-        utils:logWarn(string `AI service not available — only programmatic fixes will be applied (${llmInitResult.message()})`, logLevel);
+        utils:logWarn(string `AI service not available — only programmatic fixes will be applied (${llmInitResult.message()})`);
     } else {
-        utils:logInfo("✓ AI service initialized", logLevel);
+        utils:logInfo("✓ AI service initialized");
     }
 
     // Step 1: Flatten
-    utils:logVerbose("flattening OpenAPI specification", logLevel);
+    utils:logVerbose("flattening OpenAPI specification");
     string flattenedSpecPath = specDir;
     error? createDirResult = file:createDir(flattenedSpecPath, file:RECURSIVE);
     if createDirResult is error {
@@ -25,13 +25,13 @@ public function executeSanitizor(string inputSpecPath, string specDir, utils:Log
     }
     utils:CommandResult flattenResult = utils:executeBalFlatten(inputSpecPath, flattenedSpecPath);
     if !utils:isCommandSuccessfull(flattenResult) {
-        utils:logWarn(string `flatten operation failed: ${flattenResult.stderr.trim()}`, logLevel);
+        utils:logWarn(string `flatten operation failed: ${flattenResult.stderr.trim()}`);
     } else {
-        utils:logVerbose("✓ spec flattened", logLevel);
+        utils:logVerbose("✓ spec flattened");
     }
 
     // Step 2: Align
-    utils:logVerbose("aligning OpenAPI specification", logLevel);
+    utils:logVerbose("aligning OpenAPI specification");
     string alignedSpecPath = specDir;
 
     string flattenedSpec;
@@ -55,48 +55,48 @@ public function executeSanitizor(string inputSpecPath, string specDir, utils:Log
 
     utils:CommandResult alignResult = utils:executeBalAlign(flattenedSpec, alignedSpecPath);
     if !utils:isCommandSuccessfull(alignResult) {
-        utils:logWarn(string `align operation failed: ${alignResult.stderr.trim()}`, logLevel);
+        utils:logWarn(string `align operation failed: ${alignResult.stderr.trim()}`);
     } else {
-        utils:logVerbose("✓ spec aligned", logLevel);
+        utils:logVerbose("✓ spec aligned");
     }
 
     if isYamlFormat(inputSpecPath) {
-        utils:logVerbose("converting aligned YAML spec to JSON", logLevel);
-        error? conversionResult = convertAlignedYamlToJson(alignedSpecPath, logLevel);
+        utils:logVerbose("converting aligned YAML spec to JSON");
+        error? conversionResult = convertAlignedYamlToJson(alignedSpecPath);
         if conversionResult is error {
-            utils:logWarn(string `YAML to JSON conversion failed: ${conversionResult.message()}`, logLevel);
+            utils:logWarn(string `YAML to JSON conversion failed: ${conversionResult.message()}`);
             return error("YAML to JSON conversion failed: " + conversionResult.message());
         }
-        utils:logVerbose("✓ YAML spec converted to JSON", logLevel);
+        utils:logVerbose("✓ YAML spec converted to JSON");
     }
 
     string alignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
 
     // Step 3: OperationId generation
-    utils:logVerbose("generating missing operationIds", logLevel);
-    int|LLMServiceError operationIdResult = addMissingOperationIdsBatchWithRetry(alignedSpec, 15, logLevel);
+    utils:logVerbose("generating missing operationIds");
+    int|LLMServiceError operationIdResult = addMissingOperationIdsBatchWithRetry(alignedSpec, 15);
     if operationIdResult is LLMServiceError {
-        utils:logWarn(string `operationId generation failed: ${operationIdResult.message()}`, logLevel);
+        utils:logWarn(string `operationId generation failed: ${operationIdResult.message()}`);
     } else {
-        utils:logInfo(string `  added ${operationIdResult} missing operationId${operationIdResult == 1 ? "" : "s"}`, logLevel);
+        utils:logInfo(string `  added ${operationIdResult} missing operationId${operationIdResult == 1 ? "" : "s"}`);
     }
 
     // Step 4: Schema renaming
-    utils:logVerbose("renaming InlineResponse schemas", logLevel);
-    int|LLMServiceError schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8, logLevel);
+    utils:logVerbose("renaming InlineResponse schemas");
+    int|LLMServiceError schemaRenameResult = renameInlineResponseSchemasBatchWithRetry(alignedSpec, 8);
     if schemaRenameResult is LLMServiceError {
-        utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`, logLevel);
+        utils:logWarn(string `schema renaming failed: ${schemaRenameResult.message()}`);
     } else {
-        utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`, logLevel);
+        utils:logInfo(string `  renamed ${schemaRenameResult} schema${schemaRenameResult == 1 ? "" : "s"} to meaningful names`);
     }
 
     // Step 5: Documentation enhancement
-    utils:logVerbose("enhancing field descriptions and operation summaries", logLevel);
-    DescriptionEnhancementResult|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20, logLevel);
+    utils:logVerbose("enhancing field descriptions and operation summaries");
+    DescriptionEnhancementResult|LLMServiceError descriptionsResult = addMissingDescriptionsBatchWithRetry(alignedSpec, 20);
     if descriptionsResult is LLMServiceError {
-        utils:logWarn(string `documentation enhancement failed: ${descriptionsResult.message()}`, logLevel);
+        utils:logWarn(string `documentation enhancement failed: ${descriptionsResult.message()}`);
     } else {
-        utils:logInfo(string `  added ${descriptionsResult.descriptionsAdded} missing description${descriptionsResult.descriptionsAdded == 1 ? "" : "s"}, updated ${descriptionsResult.summariesAdded} operation summar${descriptionsResult.summariesAdded == 1 ? "y" : "ies"}`, logLevel);
+        utils:logInfo(string `  added ${descriptionsResult.descriptionsAdded} missing description${descriptionsResult.descriptionsAdded == 1 ? "" : "s"}, updated ${descriptionsResult.summariesAdded} operation summar${descriptionsResult.summariesAdded == 1 ? "y" : "ies"}`);
     }
 }
 
@@ -105,7 +105,7 @@ function isYamlFormat(string filePath) returns boolean {
     return lowerPath.endsWith(".yaml") || lowerPath.endsWith(".yml");
 }
 
-function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLevel = "normal") returns error? {
+function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
     string yamlAlignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.yaml";
     string jsonAlignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
 
@@ -114,7 +114,7 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
         string ymlAlignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.yml";
         boolean|file:Error ymlExists = file:test(ymlAlignedSpec, file:EXISTS);
         if ymlExists is file:Error || !ymlExists {
-            utils:logVerbose(string `no YAML aligned spec found to convert at ${yamlAlignedSpec}`, logLevel);
+            utils:logVerbose(string `no YAML aligned spec found to convert at ${yamlAlignedSpec}`);
             return;
         }
         yamlAlignedSpec = ymlAlignedSpec;
@@ -142,19 +142,18 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
                 if retryWrite is io:Error {
                     return error("Failed to write JSON aligned spec file: " + retryWrite.message());
                 }
-                utils:logVerbose("✓ converted YAML to JSON (backtick replacement applied)", logLevel);
+                utils:logVerbose("✓ converted YAML to JSON (backtick replacement applied)");
                 return;
             }
         }
 
-        utils:logVerbose(string `Ballerina YAML parser failed, trying yq fallback: ${jsonData.message()}`, logLevel);
+        utils:logVerbose(string `Ballerina YAML parser failed, trying yq fallback: ${jsonData.message()}`);
 
         string escapedPath = "'" + regex:replaceAll(yamlAlignedSpec, "'", "'\\\\''") + "'";
 
         utils:CommandResult yqResult = utils:executeCommand(
             string `yq -o=json '.' ${escapedPath}`,
-            ".",
-            logLevel
+            "."
         );
 
         if utils:isCommandSuccessfull(yqResult) && yqResult.stdout.length() > 0 {
@@ -162,7 +161,7 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
             if writeResult is io:Error {
                 return error("Failed to write JSON aligned spec file: " + writeResult.message());
             }
-            utils:logVerbose("converted YAML to JSON via yq", logLevel);
+            utils:logVerbose("converted YAML to JSON via yq");
             return;
         }
 
@@ -172,8 +171,7 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
             string escapedStdinFile = "'" + regex:replaceAll(stdinFile, "'", "'\\\\''") + "'";
             utils:CommandResult pythonResult = utils:executeCommand(
                 string `python3 -c 'import sys,yaml,json; print(json.dumps(yaml.safe_load(sys.stdin), indent=2))' < ${escapedStdinFile}`,
-                ".",
-                logLevel
+                "."
             );
             do { check file:remove(stdinFile); } on fail { }
 
@@ -182,7 +180,7 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
                 if writeResult is io:Error {
                     return error("Failed to write JSON aligned spec file: " + writeResult.message());
                 }
-                utils:logVerbose("converted YAML to JSON via Python", logLevel);
+                utils:logVerbose("converted YAML to JSON via Python");
                 return;
             }
         }
@@ -196,7 +194,7 @@ function convertAlignedYamlToJson(string alignedSpecPath, utils:LogLevel logLeve
         return error("Failed to write JSON aligned spec file: " + writeResult.message());
     }
 
-    utils:logVerbose("✓ converted YAML aligned spec to JSON", logLevel);
+    utils:logVerbose("✓ converted YAML aligned spec to JSON");
     return;
 }
 

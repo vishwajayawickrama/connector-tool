@@ -2,7 +2,7 @@ import wso2/connector_automator.utils;
 
 import ballerina/file;
 
-public function executeBalClientGenerate(string inputPath, string outputPath, OpenAPIToolOptions? customOptions = (), utils:LogLevel logLevel = "normal") returns utils:CommandResult {
+public function executeBalClientGenerate(string inputPath, string outputPath, OpenAPIToolOptions? customOptions = ()) returns utils:CommandResult {
     OpenAPIToolOptions toolOptions = customOptions ?: options;
 
     string command = string `bal openapi -i ${inputPath} --mode client -o ${outputPath}`;
@@ -19,7 +19,7 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
         if licenseExists is boolean && licenseExists {
             command += string ` --license ${licensePath}`;
         } else {
-            utils:logWarn(string `license file not found at ${licensePath} — skipping`, logLevel);
+            utils:logWarn(string `license file not found at ${licensePath} — skipping`);
         }
     }
 
@@ -35,6 +35,6 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
 
     command += string ` --client-methods ${toolOptions.clientMethod}`;
 
-    utils:logVerbose(string `running: ${command}`, logLevel);
-    return utils:executeCommand(command, utils:getDirectoryPath(outputPath), logLevel);
+    utils:logVerbose(string `running: ${command}`);
+    return utils:executeCommand(command, utils:getDirectoryPath(outputPath));
 }

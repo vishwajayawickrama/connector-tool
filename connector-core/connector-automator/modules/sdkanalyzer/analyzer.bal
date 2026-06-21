@@ -30,7 +30,7 @@ import wso2/connector_automator.utils;
 public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig config)
         returns AnalysisResult|AnalyzerError {
 
-    error? aiInitErr = utils:initAIService(config.quietMode ? "quiet" : "normal");
+    error? aiInitErr = utils:initAIService();
     if aiInitErr is error {
         return error AnalyzerError(aiInitErr.message(), aiInitErr);
     }

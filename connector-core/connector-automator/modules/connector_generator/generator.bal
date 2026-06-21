@@ -17,7 +17,7 @@ public function generateConnector(ConnectorGeneratorConfig config)
 
     printConnectorPlan(config);
 
-    error? aiInit = utils:initAIService(config.quietMode ? "quiet" : "normal");
+    error? aiInit = utils:initAIService();
     if aiInit is error {
         return error ConnectorGeneratorError("ANTHROPIC_API_KEY environment variable not set. " +
             "LLM is mandatory for connector generation.");
@@ -103,7 +103,7 @@ Artifacts written for inspection:
         boolean autoYes = config.fixMode != "report-only";
         string nativeProjectPath = string `${config.outputDir}/native`;
         fixer:FixResult|fixer:BallerinaFixerError fixResult = fixer:fixJavaNativeAdaptorErrors(nativeProjectPath,
-                config.quietMode ? "quiet" : "normal", autoYes, config.maxFixIterations);
+                autoYes, config.maxFixIterations);
         if fixResult is fixer:BallerinaFixerError {
             return error ConnectorGeneratorError(string `Code fixing failed: ${fixResult.message()}`, fixResult);
         }

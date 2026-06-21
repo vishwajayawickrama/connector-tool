@@ -9,7 +9,7 @@ import ballerina/lang.regexp;
 const int MAX_OPERATIONS = 30;
 const int SDK_MAX_OPERATIONS = 60;
 
-function completeMockServer(string mockServerPath, string typesPath, utils:LogLevel logLevel = "normal") returns error? {
+function completeMockServer(string mockServerPath, string typesPath) returns error? {
     string mockServerContent = check io:fileReadString(mockServerPath);
     string typesContent = check io:fileReadString(typesPath);
 
@@ -17,11 +17,11 @@ function completeMockServer(string mockServerPath, string typesPath, utils:LogLe
     string completedMockServer = stripCodeFences(check utils:callAI(prompt));
     check io:fileWriteString(mockServerPath, completedMockServer);
 
-    utils:logVerbose("✓ mock server template completed", logLevel);
+    utils:logVerbose("✓ mock server template completed");
     return;
 }
 
-function generateTestFile(string connectorPath, string[]? operationIds = (), utils:LogLevel logLevel = "normal") returns error? {
+function generateTestFile(string connectorPath, string[]? operationIds = ()) returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForTests(connectorPath, operationIds);
     string testContent = stripCodeFences(check generateTestsWithAI(analysis));
 
@@ -29,7 +29,7 @@ function generateTestFile(string connectorPath, string[]? operationIds = (), uti
     string testFilePath = ballerinaDir + "/tests/test.bal";
     check io:fileWriteString(testFilePath, testContent);
 
-    utils:logVerbose(string `test file written: ${testFilePath}`, logLevel);
+    utils:logVerbose(string `test file written: ${testFilePath}`);
     return;
 }
 
@@ -41,20 +41,20 @@ function generateTestsWithAI(ConnectorAnalysis analysis) returns string|error {
     return result;
 }
 
-function fixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
-    utils:logVerbose("fixing compilation errors", logLevel);
+function fixTestFileErrors(string connectorPath) returns error? {
+    utils:logVerbose("fixing compilation errors");
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
 
-    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir, logLevel, true);
+    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir, true);
 
     if fixResult is code_fixer:FixResult {
         if fixResult.success {
             if fixResult.errorsFixed > 0 {
-                utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`, logLevel);
+                utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
             }
         } else {
-            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — manual intervention may be required`, logLevel);
+            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — manual intervention may be required`);
         }
     } else {
         utils:logError(string `compilation fix failed: ${fixResult.message()}`);
@@ -64,9 +64,9 @@ function fixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "norm
     return;
 }
 
-function selectOperationsUsingAI(string specPath, utils:LogLevel logLevel = "normal") returns string|error {
+function selectOperationsUsingAI(string specPath) returns string|error {
     string[] allOperationIds = check extractOperationIdsFromSpec(specPath);
-    utils:logVerbose(string `found ${allOperationIds.length()} operations, selecting ${MAX_OPERATIONS} for testing`, logLevel);
+    utils:logVerbose(string `found ${allOperationIds.length()} operations, selecting ${MAX_OPERATIONS} for testing`);
 
     string prompt = createOperationSelectionPrompt(allOperationIds, MAX_OPERATIONS);
 
@@ -91,7 +91,7 @@ function selectOperationsUsingAI(string specPath, utils:LogLevel logLevel = "nor
         return error("AI did not return a proper comma-separated list of operations");
     }
 
-    utils:logVerbose("✓ operations selected using AI", logLevel);
+    utils:logVerbose("✓ operations selected using AI");
     return cleanedResponse;
 }
 
@@ -139,7 +139,7 @@ function extractOperationIdsFromSpec(string specPath) returns string[]|error {
 }
 
 // Generate and write the SDK live test file.
-function sdkGenerateTestFile(string connectorPath, string[]? operationIds = (), utils:LogLevel logLevel = "normal") returns error? {
+function sdkGenerateTestFile(string connectorPath, string[]? operationIds = ()) returns error? {
     ConnectorAnalysis analysis = check analyzeConnectorForSdkTests(connectorPath, operationIds);
 
     string testContent = stripCodeFences(check sdkGenerateTestsWithAI(analysis));
@@ -150,7 +150,7 @@ function sdkGenerateTestFile(string connectorPath, string[]? operationIds = (), 
 
     string testFilePath = connectorPath + "/ballerina/tests/test.bal";
     check io:fileWriteString(testFilePath, testContent);
-    utils:logVerbose(string `test file written: ${testFilePath}`, logLevel);
+    utils:logVerbose(string `test file written: ${testFilePath}`);
     return;
 }
 
@@ -161,29 +161,27 @@ function sdkGenerateTestsWithAI(ConnectorAnalysis analysis) returns string|error
 }
 
 // Fix compilation errors in the SDK-generated test file.
-function sdkFixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
-    utils:logVerbose("fixing compilation errors", logLevel);
+function sdkFixTestFileErrors(string connectorPath) returns error? {
+    utils:logVerbose("fixing compilation errors");
 
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
 
-    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir,
-            logLevel, true);
+    code_fixer:FixResult|code_fixer:BallerinaFixerError fixResult = code_fixer:fixAllErrors(ballerinaDir, true);
 
     if fixResult is code_fixer:FixResult {
         if fixResult.success {
             if fixResult.errorsFixed > 0 {
-                utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`, logLevel);
+                utils:logVerbose(string `fixed ${fixResult.errorsFixed} compilation error${fixResult.errorsFixed == 1 ? "" : "s"}`);
             }
         } else {
-            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — manual intervention may be required`, logLevel);
-            return error(string `Compilation errors remain after auto-fix (${fixResult.errorsRemaining} remaining)`);
+            utils:logWarn(string `partial fix: ${fixResult.errorsFixed} fixed, ${fixResult.errorsRemaining} remaining — attempting test-phase fixer`);
         }
     } else {
         utils:logError(string `compilation fix failed: ${fixResult.message()}`);
         return error("Failed to fix compilation errors in the project", fixResult);
     }
 
-    error? testCompilationError = sdkFixBalTestCompilationErrors(ballerinaDir, logLevel);
+    error? testCompilationError = sdkFixBalTestCompilationErrors(ballerinaDir);
     if testCompilationError is error {
         return testCompilationError;
     }
@@ -191,12 +189,12 @@ function sdkFixTestFileErrors(string connectorPath, utils:LogLevel logLevel = "n
     return;
 }
 
-function sdkFixBalTestCompilationErrors(string ballerinaDir, utils:LogLevel logLevel = "normal") returns error? {
+function sdkFixBalTestCompilationErrors(string ballerinaDir) returns error? {
     int maxIterations = 2;
     int iteration = 1;
 
     while iteration <= maxIterations {
-        utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir, "quiet");
+        utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir);
         if testResult.success {
             return;
         }
@@ -220,17 +218,16 @@ function sdkFixBalTestCompilationErrors(string ballerinaDir, utils:LogLevel logL
         map<code_fixer:CompilationError[]> errorsByFile = code_fixer:groupErrorsByFile(testErrors);
         boolean anyFixApplied = false;
 
-        utils:logVerbose(string `attempting test error fixes: ${testErrors.length()} errors (iteration ${iteration}/${maxIterations})`, logLevel);
+        utils:logVerbose(string `attempting test error fixes: ${testErrors.length()} errors (iteration ${iteration}/${maxIterations})`);
 
         foreach string filePath in errorsByFile.keys() {
             code_fixer:CompilationError[] fileErrors = errorsByFile.get(filePath);
-            code_fixer:FixResponse|error fileFix = code_fixer:fixFileWithLLM(ballerinaDir, filePath, fileErrors,
-                logLevel);
+            code_fixer:FixResponse|error fileFix = code_fixer:fixFileWithLLM(ballerinaDir, filePath, fileErrors);
             if fileFix is error {
                 continue;
             }
 
-            boolean|error applyResult = code_fixer:applyFix(ballerinaDir, filePath, fileFix.fixedCode, logLevel);
+            boolean|error applyResult = code_fixer:applyFix(ballerinaDir, filePath, fileFix.fixedCode);
             if applyResult is boolean && applyResult {
                 anyFixApplied = true;
             }
@@ -243,7 +240,7 @@ function sdkFixBalTestCompilationErrors(string ballerinaDir, utils:LogLevel logL
         iteration += 1;
     }
 
-    utils:CommandResult finalResult = utils:executeCommand("bal test", ballerinaDir, "quiet");
+    utils:CommandResult finalResult = utils:executeCommand("bal test", ballerinaDir);
     if finalResult.success {
         return;
     }
@@ -586,9 +583,9 @@ function sdkExtractRemoteOperationIdsFromSpec(string specContent) returns string
     return operationIds;
 }
 
-function sdkSelectOperationsUsingAI(string specPath, utils:LogLevel logLevel = "normal") returns string|error {
+function sdkSelectOperationsUsingAI(string specPath) returns string|error {
     string[] allOperationIds = check sdkExtractOperationIdsFromSpec(specPath);
-    utils:logVerbose(string `found ${allOperationIds.length()} operations, selecting ${SDK_MAX_OPERATIONS} for testing`, logLevel);
+    utils:logVerbose(string `found ${allOperationIds.length()} operations, selecting ${SDK_MAX_OPERATIONS} for testing`);
 
     string prompt = sdkCreateOperationSelectionPrompt(allOperationIds, SDK_MAX_OPERATIONS);
     string aiResponse = check utils:callAI(prompt);
@@ -610,7 +607,7 @@ function sdkSelectOperationsUsingAI(string specPath, utils:LogLevel logLevel = "
         return error("AI did not return a proper comma-separated list of operations");
     }
 
-    utils:logVerbose("✓ operations selected using AI", logLevel);
+    utils:logVerbose("✓ operations selected using AI");
     return cleanedResponse;
 }
 

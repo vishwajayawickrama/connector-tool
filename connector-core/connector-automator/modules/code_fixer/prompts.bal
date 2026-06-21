@@ -68,6 +68,7 @@ Before providing the fix, analyze systematically:
 - When accessing record fields, assign to a new variable first
 - To narrow union/optional types, declare separate variable for if conditions
 - Do not update/assign values of function parameters
+- **BCE2523 (ambiguous type on ${backTick}Type|record {}${backTick} union):** When an error says ${backTick}ambiguous type '(TypeName|record {| anydata...; |})?'${backTick}, the fix is an explicit type cast on the mapping constructor. Change ${backTick}fieldName: { ... }${backTick} to ${backTick}fieldName: <TypeName>{ ... }${backTick}. Extract the TypeName from the error message (the identifier before ${backTick}|record${backTick}). Apply this cast at every nesting level — fixing the outermost may reveal a new BCE2523 on an inner field.
 
 ### Error Handling and Best Practices
 - Use proper error handling with check expressions or error returns

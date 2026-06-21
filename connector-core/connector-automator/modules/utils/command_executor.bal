@@ -4,9 +4,9 @@ import ballerina/os;
 import ballerina/regex;
 import ballerina/time;
 
-public function executeCommand(string command, string workingDir, LogLevel logLevel = "normal") returns CommandResult {
+public function executeCommand(string command, string workingDir) returns CommandResult {
     time:Utc startTime = time:utcNow();
-    logVerbose(string `executing: ${command}`, logLevel);
+    logVerbose(string `executing: ${command}`);
 
     string stdout = "";
     string stderr = "";
@@ -26,7 +26,7 @@ public function executeCommand(string command, string workingDir, LogLevel logLe
                     exitCode = 1;
                     success = false;
                 } else {
-                    logVerbose(string `created working directory: ${workingDir}`, logLevel);
+                    logVerbose(string `created working directory: ${workingDir}`);
                 }
             }
         }
@@ -61,7 +61,7 @@ public function executeCommand(string command, string workingDir, LogLevel logLe
                             stdout = stdoutContent;
                         } else {
                             stdout = "";
-                            logVerbose(string `failed to read stdout file: ${stdoutContent.message()}`, logLevel);
+                            logVerbose(string `failed to read stdout file: ${stdoutContent.message()}`);
                         }
 
                         string|io:Error stderrContent = io:fileReadString(stderrFile);
@@ -69,7 +69,7 @@ public function executeCommand(string command, string workingDir, LogLevel logLe
                             stderr = stderrContent;
                         } else {
                             stderr = "";
-                            logVerbose(string `failed to read stderr file: ${stderrContent.message()}`, logLevel);
+                            logVerbose(string `failed to read stderr file: ${stderrContent.message()}`);
                         }
 
                         file:Error? removeStdout = file:remove(stdoutFile);
@@ -89,7 +89,7 @@ public function executeCommand(string command, string workingDir, LogLevel logLe
     decimal executionTime = <decimal>(endTime[0] - startTime[0]);
 
     if !success {
-        logVerbose(string `command exited ${exitCode}: ${stderr.trim()}`, logLevel);
+        logVerbose(string `command exited ${exitCode}: ${stderr.trim()}`);
     }
 
     CmdCompilationError[] compilationErrors = [];
@@ -215,8 +215,8 @@ public function executeBalClientGenerate(string inputPath, string outputPath) re
     return executeCommand(command, getDirectoryPath(outputPath));
 }
 
-public function executeBalBuild(string projectPath, LogLevel logLevel = "normal") returns CommandResult {
-    CommandResult result = executeCommand("bal build", projectPath, logLevel);
+public function executeBalBuild(string projectPath) returns CommandResult {
+    CommandResult result = executeCommand("bal build", projectPath);
 
     string combinedOutput = result.stdout + "\n" + result.stderr;
     result.compilationErrors = parseCmdCompilationErrors(combinedOutput);

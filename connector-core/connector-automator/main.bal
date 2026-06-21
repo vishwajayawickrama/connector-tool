@@ -200,9 +200,10 @@ function executeAnalyze(string[] args) returns error? {
     string[] flagArgs = args.slice(2);
 
     AnalyzerFlags flags = parseAnalyzerFlags(flagArgs);
+    oautils:initLogLevel(flags.logLevel);
 
     if isMavenCoordinate(sdkRef) {
-        analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, "", flags.logLevel);
+        analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, "");
 
         analyzer:AnalysisResult|analyzer:AnalyzerError analysisResult = analyzer:analyzeJavaSDK(
                 sdkRef,
@@ -225,7 +226,7 @@ function executeAnalyze(string[] args) returns error? {
     check ensureFileExists(sdkJarPath, "SDK JAR");
     check ensureFileExists(javadocJarPath, "Javadoc JAR");
 
-    analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, javadocJarPath, flags.logLevel);
+    analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(flagArgs, javadocJarPath);
 
     analyzer:AnalysisResult|analyzer:AnalyzerError analysisResult = analyzer:analyzeJavaSDK(
             sdkJarPath,
@@ -291,6 +292,7 @@ function executeGenerate(string[] args) returns error? {
             }
         }
     }
+    oautils:initLogLevel(logLevel);
 
     string apiSpecOutputRoot = resolveApiSpecOutputRoot(outputRoot);
 
@@ -302,7 +304,7 @@ function executeGenerate(string[] args) returns error? {
             metadataPath: metadataPath,
             outputDir: apiSpecOutputRoot,
             datasetKey: datasetKey,
-            quietMode: logLevel == "quiet",
+            quietMode: oautils:getLogLevel() == "quiet",
             enableExtendedThinking: enableExtendedThinking
         };
 
@@ -368,7 +370,8 @@ function executeConnector(string[] args) returns error? {
     };
 
     oautils:LogLevel connectorLogLevel = parseOpenApiLogLevel(args.slice(flagsStartIndex));
-    config.quietMode = connectorLogLevel == "quiet";
+    oautils:initLogLevel(connectorLogLevel);
+    config.quietMode = oautils:getLogLevel() == "quiet";
 
     connector:ConnectorGeneratorResult|connector:ConnectorGeneratorError result = connector:generateConnector(config);
     if result is connector:ConnectorGeneratorError {
@@ -428,8 +431,11 @@ function executeGenerateTests(string[] args) returns error? {
     check ensureFileExists(connectorBallerinaToml, "Generated connector output");
 
     string[] testFlagArgs = args.slice(flagsStartIndex);
-    oautils:LogLevel testLogLevel = parseOpenApiLogLevel(testFlagArgs);
-    error? genResult = test_generator:executeTestGen("sdk", connectorOutputPath, specPath, testLogLevel);
+    boolean hasTestLogFlag = testFlagArgs.indexOf("quiet") is int || testFlagArgs.indexOf("verbose") is int;
+    if hasTestLogFlag {
+        oautils:initLogLevel(parseOpenApiLogLevel(testFlagArgs));
+    }
+    error? genResult = test_generator:executeTestGen("sdk", connectorOutputPath, specPath);
 
     return genResult;
 }
@@ -475,8 +481,11 @@ function executeGenerateExamples(string[] args) returns error? {
     check ensureFileExists(connectorBallerinaToml, "Generated connector output");
 
     string[] flagArgs = args.slice(flagsStartIndex);
-    oautils:LogLevel exLogLevel = parseOpenApiLogLevel(flagArgs);
-    error? exResult = example_generator:executeExampleGen(connectorOutputPath, exLogLevel);
+    boolean hasExLogFlag = flagArgs.indexOf("quiet") is int || flagArgs.indexOf("verbose") is int;
+    if hasExLogFlag {
+        oautils:initLogLevel(parseOpenApiLogLevel(flagArgs));
+    }
+    error? exResult = example_generator:executeExampleGen(connectorOutputPath);
 
     return exResult;
 }
@@ -524,8 +533,11 @@ function executeGenerateDocs(string[] args) returns error? {
     check ensureFileExists(connectorBallerinaToml, "Generated connector output");
 
     string[] docFlagArgs = args.slice(flagsStartIndex);
-    oautils:LogLevel docLogLevel = parseOpenApiLogLevel(docFlagArgs);
-    error? docResult = document_generator:executeDocGen(docCommand, connectorOutputPath, logLevel = docLogLevel);
+    boolean hasDocLogFlag = docFlagArgs.indexOf("quiet") is int || docFlagArgs.indexOf("verbose") is int;
+    if hasDocLogFlag {
+        oautils:initLogLevel(parseOpenApiLogLevel(docFlagArgs));
+    }
+    error? docResult = document_generator:executeDocGen(docCommand, connectorOutputPath);
 
     return docResult;
 }
@@ -644,7 +656,7 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
     check ensureFileExists(irPath, "IR JSON");
     check ensureFileExists(specPath, "API specification");
 
-    oautils:LogLevel fixLogLevel = "normal";
+    oautils:LogLevel fixLogLevel = oautils:getLogLevel();
     int maxFixIterations = 3;
     boolean autoYes = fixMode != "report-only";
     string connectorOutputPath = resolveConnectorOutputPath(datasetKey, outputRoot);
@@ -679,12 +691,12 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
             "Report consolidated fix status"
         ];
 
+    oautils:initLogLevel(fixLogLevel);
     printCommandPlan(fixMode == "report-only" ? "Fix Report" : "Fix Code", datasetKey,
-        planOperations, fixLogLevel);
+        planOperations);
 
     fixer:FixResult|fixer:BallerinaFixerError javaFixResultOrError = fixer:fixJavaNativeAdaptorErrors(
             nativeOutputPath,
-            fixLogLevel,
             autoYes,
             maxFixIterations
     );
@@ -708,7 +720,6 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
         check ensureFileExists(string `${ballerinaOutputPath}/Ballerina.toml`, "Generated connector Ballerina.toml");
         fixer:FixResult|fixer:BallerinaFixerError ballerinaFixResultOrError = fixer:fixAllErrors(
                 ballerinaOutputPath,
-                fixLogLevel,
                 autoYes
         );
 
@@ -745,11 +756,11 @@ function executeFixCommand(string[] args, string fixMode) returns error? {
             details.push(string `issue: ${issue}`);
         }
     }
-    printCommandSummary(fixMode == "report-only" ? "Fix Report" : "Fix Code", overallSuccess, details, fixLogLevel);
+    printCommandSummary(fixMode == "report-only" ? "Fix Report" : "Fix Code", overallSuccess, details);
 }
 
-function printCommandPlan(string title, string target, string[] operations, oautils:LogLevel logLevel) {
-    if logLevel == "quiet" {
+function printCommandPlan(string title, string target, string[] operations) {
+    if oautils:getLogLevel() == "quiet" {
         return;
     }
 
@@ -768,8 +779,8 @@ function printCommandPlan(string title, string target, string[] operations, oaut
     io:fprintln(io:stderr, sep);
 }
 
-function printCommandSummary(string title, boolean success, string[] details, oautils:LogLevel logLevel) {
-    if logLevel == "quiet" {
+function printCommandSummary(string title, boolean success, string[] details) {
+    if oautils:getLogLevel() == "quiet" {
         return;
     }
     string sep = createMainSeparator("=", 70);
@@ -907,14 +918,13 @@ function executePipeline(string[] args) returns error? {
             }
         }
     }
+    oautils:initLogLevel(pipelineLogLevel);
 
-    printPipelineModuleHeader("SDK Analyzer", pipelineLogLevel);
-    if pipelineLogLevel != "quiet" {
-        io:fprintln(io:stderr, string `  → SDK JAR: ${sdkJarPath}`);
-        io:fprintln(io:stderr, string `  → Javadoc JAR: ${javadocJarPath}`);
-    }
+    printPipelineModuleHeader("SDK Analyzer");
+    oautils:logInfo(string `→ SDK JAR: ${sdkJarPath}`);
+    oautils:logInfo(string `→ Javadoc JAR: ${javadocJarPath}`);
 
-    analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(args.slice(2), javadocJarPath, pipelineLogLevel);
+    analyzer:AnalyzerConfig analyzerConfig = buildAnalyzerConfig(args.slice(2), javadocJarPath);
     analyzer:AnalysisResult|analyzer:AnalyzerError analysisResult = analyzer:analyzeJavaSDK(
             sdkJarPath,
             resolveAnalyzerOutputDir(outputRoot),
@@ -928,26 +938,24 @@ function executePipeline(string[] args) returns error? {
     string metadataPath = resolveMetadataPath(datasetKey, outputRoot);
     check ensureFileExists(metadataPath, "Metadata JSON");
 
-    check runPipelineStagesForDataset(datasetKey, outputRoot, analysisResult.methodsExtracted, autoYes, pipelineLogLevel,
+    check runPipelineStagesForDataset(datasetKey, outputRoot, analysisResult.methodsExtracted, autoYes,
         runFixCode, runGenerateTests, runGenerateExamples, runGenerateDocs, fixMode, maxFixIterations);
 }
 
 function runPipelineStagesForDataset(string datasetKey, string outputRoot, int extractedMethods,
-        boolean autoYes, oautils:LogLevel logLevel,
+        boolean autoYes,
         boolean runFixCode, boolean runGenerateTests, boolean runGenerateExamples, boolean runGenerateDocs,
         string fixMode, int maxFixIterations) returns error? {
     string metadataPath = resolveMetadataPath(datasetKey, outputRoot);
     check ensureFileExists(metadataPath, "Metadata JSON");
 
-    printPipelineModuleHeader("API Specification Generator", logLevel);
-    if logLevel != "quiet" {
-        io:fprintln(io:stderr, string `  → Metadata: ${metadataPath}`);
-    }
+    printPipelineModuleHeader("API Specification Generator");
+    oautils:logInfo(string `→ Metadata: ${metadataPath}`);
 
     generator:GeneratorConfig genConfig = {
         metadataPath: metadataPath,
         outputDir: resolveApiSpecOutputRoot(outputRoot),
-        quietMode: logLevel == "quiet",
+        quietMode: oautils:getLogLevel() == "quiet",
         datasetKey: datasetKey
     };
 
@@ -962,22 +970,20 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
     check ensureFileExists(irPath, "IR JSON");
     check ensureFileExists(specPath, "API specification");
 
-    if !confirmPipelineAfterSpec(datasetKey, metadataPath, irPath, specPath, autoYes, logLevel) {
+    if !confirmPipelineAfterSpec(datasetKey, metadataPath, irPath, specPath, autoYes) {
         return error("Pipeline cancelled by user after API specification generation.");
     }
 
-    printPipelineModuleHeader("Connector Generator", logLevel);
-    if logLevel != "quiet" {
-        io:fprintln(io:stderr, string `  → IR: ${irPath}`);
-        io:fprintln(io:stderr, string `  → API Spec: ${specPath}`);
-    }
+    printPipelineModuleHeader("Connector Generator");
+    oautils:logInfo(string `→ IR: ${irPath}`);
+    oautils:logInfo(string `→ API Spec: ${specPath}`);
 
     connector:ConnectorGeneratorConfig connectorConfig = {
         metadataPath: metadataPath,
         irPath: irPath,
         apiSpecPath: specPath,
         outputDir: resolveConnectorOutputPath(datasetKey, outputRoot),
-        quietMode: logLevel == "quiet",
+        quietMode: oautils:getLogLevel() == "quiet",
         enableCodeFixing: false,
         fixMode: fixMode,
         maxFixIterations: maxFixIterations,
@@ -994,11 +1000,9 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean fixCompleted = false;
     if runFixCode {
-        printPipelineModuleHeader("Code Fixer", logLevel);
+        printPipelineModuleHeader("Code Fixer");
 
         string[] fixArgs = [datasetKey, outputRoot];
-        if logLevel == "quiet" { fixArgs.push("quiet"); }
-        else if logLevel == "verbose" { fixArgs.push("verbose"); }
         if autoYes {
             fixArgs.push("yes");
         }
@@ -1011,12 +1015,10 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean examplesCompleted = false;
     if runGenerateExamples {
-        printPipelineModuleHeader("Example Generator", logLevel);
+        printPipelineModuleHeader("Example Generator");
 
         string[] exampleArgs = [datasetKey, outputRoot];
         if autoYes { exampleArgs.push("yes"); }
-        if logLevel == "quiet" { exampleArgs.push("quiet"); }
-        else if logLevel == "verbose" { exampleArgs.push("verbose"); }
 
         error? exampleError = executeGenerateExamples(exampleArgs);
         if exampleError is error {
@@ -1027,11 +1029,9 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean testsCompleted = false;
     if runGenerateTests {
-        printPipelineModuleHeader("Test Generator", logLevel);
+        printPipelineModuleHeader("Test Generator");
 
         string[] testArgs = [datasetKey, outputRoot, "yes"];
-        if logLevel == "quiet" { testArgs.push("quiet"); }
-        else if logLevel == "verbose" { testArgs.push("verbose"); }
         error? testError = executeGenerateTests(testArgs);
         if testError is error {
             return testError;
@@ -1041,12 +1041,10 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
 
     boolean docsCompleted = false;
     if runGenerateDocs {
-        printPipelineModuleHeader("Document Generator", logLevel);
+        printPipelineModuleHeader("Document Generator");
 
         string[] docArgs = ["generate-all", datasetKey, outputRoot];
         if autoYes { docArgs.push("yes"); }
-        if logLevel == "quiet" { docArgs.push("quiet"); }
-        else if logLevel == "verbose" { docArgs.push("verbose"); }
 
         error? docsError = executeGenerateDocs(docArgs);
         if docsError is error {
@@ -1060,11 +1058,11 @@ function runPipelineStagesForDataset(string datasetKey, string outputRoot, int e
         extractedMethods, connectorResult.mappedMethodCount,
         runFixCode, fixCompleted, runGenerateTests, testsCompleted, runGenerateExamples, examplesCompleted,
         runGenerateDocs, docsCompleted,
-        connectorResult.codeFixingRan, connectorResult.codeFixingSuccess, logLevel);
+        connectorResult.codeFixingRan, connectorResult.codeFixingSuccess);
 }
 
-function printPipelineModuleHeader(string moduleName, oautils:LogLevel logLevel) {
-    if logLevel == "quiet" {
+function printPipelineModuleHeader(string moduleName) {
+    if oautils:getLogLevel() == "quiet" {
         return;
     }
 
@@ -1076,8 +1074,8 @@ function printPipelineModuleHeader(string moduleName, oautils:LogLevel logLevel)
 }
 
 function confirmPipelineAfterSpec(string datasetKey, string metadataPath, string irPath, string specPath,
-        boolean autoYes, oautils:LogLevel logLevel) returns boolean {
-    if logLevel == "quiet" || autoYes {
+        boolean autoYes) returns boolean {
+    if oautils:getLogLevel() == "quiet" || autoYes {
         return true;
     }
 
@@ -1109,8 +1107,8 @@ function printPipelineFinalSummary(string datasetKey, string metadataPath, strin
     boolean runFixCode, boolean fixCompleted, boolean runGenerateTests, boolean testsCompleted,
     boolean runGenerateExamples, boolean examplesCompleted,
     boolean runGenerateDocs, boolean docsCompleted,
-        boolean connectorInternalFixRan, boolean connectorInternalFixSuccess, oautils:LogLevel logLevel) {
-    if logLevel == "quiet" {
+        boolean connectorInternalFixRan, boolean connectorInternalFixSuccess) {
+    if oautils:getLogLevel() == "quiet" {
         return;
     }
     string sep = createMainSeparator("=", 70);
@@ -1157,9 +1155,9 @@ function parseAnalyzerFlags(string[] args) returns AnalyzerFlags {
     return flags;
 }
 
-function buildAnalyzerConfig(string[] args, string javadocJar, oautils:LogLevel logLevel) returns analyzer:AnalyzerConfig {
+function buildAnalyzerConfig(string[] args, string javadocJar) returns analyzer:AnalyzerConfig {
     analyzer:AnalyzerConfig config = {
-        quietMode: logLevel == "quiet"
+        quietMode: oautils:getLogLevel() == "quiet"
     };
 
     if javadocJar.trim().length() > 0 {
@@ -1581,12 +1579,13 @@ function executeOpenApiCommand(string[] args) returns error? {
     }
 
     if os:getEnv("ANTHROPIC_API_KEY").length() == 0 {
-        oautils:logWarn("ANTHROPIC_API_KEY is not set — AI-powered steps (sanitize, generate-tests, generate-examples, generate-docs) will fail", "normal");
+        oautils:logWarn("ANTHROPIC_API_KEY is not set — AI-powered steps (sanitize, generate-tests, generate-examples, generate-docs) will fail");
     }
 
     string subCommand = args[0];
     string[] subArgs = args.slice(1);
     oautils:LogLevel logLevel = parseOpenApiLogLevel(subArgs);
+    oautils:initLogLevel(logLevel);
     string[] positional = parseOpenApiPositionalArgs(subArgs);
 
     match subCommand {
@@ -1595,49 +1594,49 @@ function executeOpenApiCommand(string[] args) returns error? {
                 io:fprintln(io:stderr, "sanitize: requires <spec-path> <output-dir>");
                 return;
             }
-            return sanitizor:executeSanitizor(positional[0], positional[1], logLevel);
+            return sanitizor:executeSanitizor(positional[0], positional[1]);
         }
         "generate-client" => {
             if positional.length() < 2 {
                 io:fprintln(io:stderr, "generate-client: requires <spec-path> <output-dir>");
                 return;
             }
-            return client_generator:executeClientGen(positional[0], positional[1], logLevel);
+            return client_generator:executeClientGen(positional[0], positional[1]);
         }
         "generate-tests" => {
             if positional.length() < 2 {
                 io:fprintln(io:stderr, "generate-tests: requires <connector-path> <spec-path>");
                 return;
             }
-            return test_generator:executeTestGen("openapi", positional[0], positional[1], logLevel);
+            return test_generator:executeTestGen("openapi", positional[0], positional[1]);
         }
         "generate-examples" => {
             if positional.length() < 1 {
                 io:fprintln(io:stderr, "generate-examples: requires <connector-path>");
                 return;
             }
-            return example_generator:executeExampleGen(positional[0], logLevel);
+            return example_generator:executeExampleGen(positional[0]);
         }
         "generate-docs" => {
             if positional.length() < 2 {
                 io:fprintln(io:stderr, "generate-docs: requires <doc-command> <connector-path>");
                 return;
             }
-            return document_generator:executeDocGen(positional[0], positional[1], logLevel = logLevel);
+            return document_generator:executeDocGen(positional[0], positional[1]);
         }
         "generate-all" => {
             if positional.length() < 1 {
                 io:fprintln(io:stderr, "generate-all: requires <connector-path>");
                 return;
             }
-            return document_generator:executeDocGen("generate-all", positional[0], logLevel = logLevel);
+            return document_generator:executeDocGen("generate-all", positional[0]);
         }
         "fix-code" => {
             if positional.length() < 1 {
                 io:fprintln(io:stderr, "fix-code: requires <connector-path>");
                 return;
             }
-            return fixer:executeCodeFixer(positional[0], logLevel);
+            return fixer:executeCodeFixer(positional[0]);
         }
         "pipeline" => {
             return runOpenApiPipeline(subArgs);
@@ -1728,6 +1727,7 @@ function runOpenApiPipeline(string[] args) returns error? {
     string[] pipelineOptions = args.slice(2);
 
     oautils:LogLevel logLevel = parseOpenApiLogLevel(pipelineOptions);
+    oautils:initLogLevel(logLevel);
     boolean regenerate = false;
 
     foreach string option in pipelineOptions {
@@ -1737,164 +1737,164 @@ function runOpenApiPipeline(string[] args) returns error? {
     }
 
     if regenerate {
-        return runOpenApiRegenerationPipeline(openApiSpec, outputDir, logLevel);
+        return runOpenApiRegenerationPipeline(openApiSpec, outputDir);
     }
 
-    printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, false);
+    printOpenApiPipelineHeader(openApiSpec, outputDir, false);
 
-    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
+    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification");
     string defaultSpecDir = string `${outputDir}/docs/spec`;
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, defaultSpecDir, logLevel);
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, defaultSpecDir);
     if sanitizeResult is error {
         oautils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
         return sanitizeResult;
     }
-    oautils:logInfo("✓ sanitization complete", logLevel);
+    oautils:logInfo("✓ sanitization complete");
     error? sanitationsDocResult = sanitizor:generateSanitationsDoc(
-        openApiSpec, string `${defaultSpecDir}/aligned_ballerina_openapi.json`, defaultSpecDir, logLevel);
+        openApiSpec, string `${defaultSpecDir}/aligned_ballerina_openapi.json`, defaultSpecDir);
     if sanitationsDocResult is error {
-        oautils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
+        oautils:logWarn(string `could not generate sanitations.md: ${sanitationsDocResult.message()}`);
     }
 
-    printOpenApiStepHeader(2, "Generating Ballerina Client", logLevel);
+    printOpenApiStepHeader(2, "Generating Ballerina Client");
     string sanitizedSpec = string `${defaultSpecDir}/aligned_ballerina_openapi.json`;
     string clientPath = string `${outputDir}/ballerina`;
-    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, logLevel);
+    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath);
     if clientResult is error {
-        oautils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`, logLevel);
+        oautils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`);
     } else {
-        oautils:logInfo("✓ client generated", logLevel);
+        oautils:logInfo("✓ client generated");
     }
 
-    printOpenApiStepHeader(3, "Building and Validating Client", logLevel);
-    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, logLevel);
+    printOpenApiStepHeader(3, "Building and Validating Client");
+    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath);
     if oautils:hasCompilationErrors(buildResult) {
         oautils:logError("build validation failed: client contains compilation errors");
         oautils:logError("run 'bal connector openapi fix-code <connector-path>' to resolve");
         return error(string `client build failed: ${buildResult.stderr}`);
     }
-    oautils:logInfo("✓ client built and validated", logLevel);
+    oautils:logInfo("✓ client built and validated");
 
-    printOpenApiStepHeader(4, "Generating Examples", logLevel);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel);
+    printOpenApiStepHeader(4, "Generating Examples");
+    error? exampleResult = example_generator:executeExampleGen(outputDir);
     if exampleResult is error {
-        oautils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`, logLevel);
+        oautils:logWarn(string `example generation failed: ${exampleResult.message()} — continuing`);
     } else {
-        oautils:logInfo("✓ examples generated", logLevel);
+        oautils:logInfo("✓ examples generated");
     }
 
-    printOpenApiStepHeader(5, "Generating Tests", logLevel);
-    error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
+    printOpenApiStepHeader(5, "Generating Tests");
+    error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec);
     if testResult is error {
-        oautils:logWarn(string `test generation failed: ${testResult.message()} — continuing`, logLevel);
+        oautils:logWarn(string `test generation failed: ${testResult.message()} — continuing`);
     } else {
-        oautils:logInfo("✓ tests generated", logLevel);
+        oautils:logInfo("✓ tests generated");
     }
 
-    printOpenApiStepHeader(6, "Generating Documentation", logLevel);
-    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel = logLevel);
+    printOpenApiStepHeader(6, "Generating Documentation");
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir);
     if docResult is error {
-        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
+        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`);
     } else {
-        oautils:logInfo("✓ documentation generated", logLevel);
+        oautils:logInfo("✓ documentation generated");
     }
 
-    printOpenApiPipelineCompletion(outputDir, logLevel);
+    printOpenApiPipelineCompletion(outputDir);
 }
 
-function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir, oautils:LogLevel logLevel) returns error? {
-    printOpenApiPipelineHeader(openApiSpec, outputDir, logLevel, true);
+function runOpenApiRegenerationPipeline(string openApiSpec, string outputDir) returns error? {
+    printOpenApiPipelineHeader(openApiSpec, outputDir, true);
 
-    error? initResult = oautils:initAIService(logLevel);
+    error? initResult = oautils:initAIService();
     if initResult is error {
-        oautils:logWarn("AI service unavailable before sanitations — continuing with available parsing", logLevel);
+        oautils:logWarn("AI service unavailable before sanitations — continuing with available parsing");
     }
 
     string regenSpecDir = string `${outputDir}/docs/spec`;
     string sanitationsPath = string `${regenSpecDir}/sanitations.md`;
-    error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec, logLevel);
+    error? applyResult = sanitizor:applySanitations(sanitationsPath, openApiSpec);
     if applyResult is error {
-        oautils:logWarn(string `could not apply recorded sanitations: ${applyResult.message()} — continuing`, logLevel);
+        oautils:logWarn(string `could not apply recorded sanitations: ${applyResult.message()} — continuing`);
     } else {
-        oautils:logInfo("✓ recorded sanitations applied", logLevel);
+        oautils:logInfo("✓ recorded sanitations applied");
     }
 
-    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification", logLevel);
-    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, regenSpecDir, logLevel);
+    printOpenApiStepHeader(1, "Sanitizing OpenAPI Specification");
+    error? sanitizeResult = sanitizor:executeSanitizor(openApiSpec, regenSpecDir);
     if sanitizeResult is error {
         return sanitizeResult;
     }
 
     string sanitizedSpec = string `${regenSpecDir}/aligned_ballerina_openapi.json`;
-    error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, regenSpecDir, logLevel);
+    error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, regenSpecDir);
     if sanitationsDocResult is error {
-        oautils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`, logLevel);
+        oautils:logWarn(string `could not refresh sanitations.md: ${sanitationsDocResult.message()}`);
     }
 
-    printOpenApiStepHeader(2, "Regenerating Ballerina Client", logLevel);
+    printOpenApiStepHeader(2, "Regenerating Ballerina Client");
     string clientPath = string `${outputDir}/ballerina`;
-    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, logLevel);
+    error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath);
     if clientResult is error {
-        oautils:logWarn(string `client regeneration failed: ${clientResult.message()} — continuing`, logLevel);
+        oautils:logWarn(string `client regeneration failed: ${clientResult.message()} — continuing`);
     }
 
-    printOpenApiStepHeader(3, "Building and Validating Client", logLevel);
-    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath, logLevel);
+    printOpenApiStepHeader(3, "Building and Validating Client");
+    oautils:CommandResult buildResult = oautils:executeBalBuild(clientPath);
     if oautils:hasCompilationErrors(buildResult) {
-        error? fixResult = fixer:executeCodeFixer(clientPath, logLevel);
+        error? fixResult = fixer:executeCodeFixer(clientPath);
         if fixResult is error {
-            oautils:logWarn(string `initial recovery fix failed: ${fixResult.message()}`, logLevel);
+            oautils:logWarn(string `initial recovery fix failed: ${fixResult.message()}`);
         }
 
-        oautils:CommandResult retryBuild = oautils:executeBalBuild(clientPath, logLevel);
+        oautils:CommandResult retryBuild = oautils:executeBalBuild(clientPath);
         if oautils:hasCompilationErrors(retryBuild) {
             error? removeTests = file:remove(clientPath + "/tests", file:RECURSIVE);
             error? removeMock = file:remove(clientPath + "/modules/mock.server", file:RECURSIVE);
             if removeTests is error {
-                oautils:logWarn(string `could not remove old tests: ${removeTests.message()}`, logLevel);
+                oautils:logWarn(string `could not remove old tests: ${removeTests.message()}`);
             }
             if removeMock is error {
-                oautils:logWarn(string `could not remove old mock module: ${removeMock.message()}`, logLevel);
+                oautils:logWarn(string `could not remove old mock module: ${removeMock.message()}`);
             }
 
-            printOpenApiStepHeader(4, "Regenerating Tests for New API Version", logLevel);
-            error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
+            printOpenApiStepHeader(4, "Regenerating Tests for New API Version");
+            error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec);
             if testResult is error {
                 return testResult;
             }
-            retryBuild = oautils:executeBalBuild(clientPath, logLevel);
+            retryBuild = oautils:executeBalBuild(clientPath);
             if oautils:hasCompilationErrors(retryBuild) {
-                error? finalFix = fixer:executeCodeFixer(clientPath, logLevel);
+                error? finalFix = fixer:executeCodeFixer(clientPath);
                 if finalFix is error {
                     return finalFix;
                 }
             }
         }
     } else {
-        printOpenApiStepHeader(4, "Regenerating Tests", logLevel);
-        error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec, logLevel);
+        printOpenApiStepHeader(4, "Regenerating Tests");
+        error? testResult = test_generator:executeOpenApiTestGen(outputDir, sanitizedSpec);
         if testResult is error {
-            oautils:logWarn(string `test regeneration failed: ${testResult.message()}`, logLevel);
+            oautils:logWarn(string `test regeneration failed: ${testResult.message()}`);
         }
     }
 
-    printOpenApiStepHeader(5, "Regenerating Examples", logLevel);
-    error? exampleResult = example_generator:executeExampleGen(outputDir, logLevel);
+    printOpenApiStepHeader(5, "Regenerating Examples");
+    error? exampleResult = example_generator:executeExampleGen(outputDir);
     if exampleResult is error {
-        oautils:logWarn(string `example regeneration failed: ${exampleResult.message()}`, logLevel);
+        oautils:logWarn(string `example regeneration failed: ${exampleResult.message()}`);
     }
 
-    printOpenApiStepHeader(6, "Generating Documentation", logLevel);
-    error? docResult = document_generator:executeDocGen("generate-all", outputDir, logLevel = logLevel);
+    printOpenApiStepHeader(6, "Generating Documentation");
+    error? docResult = document_generator:executeDocGen("generate-all", outputDir);
     if docResult is error {
-        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`, logLevel);
+        oautils:logWarn(string `documentation generation failed: ${docResult.message()}`);
     }
 
-    printOpenApiPipelineCompletion(outputDir, logLevel);
+    printOpenApiPipelineCompletion(outputDir);
 }
 
-function printOpenApiPipelineHeader(string openApiSpec, string outputDir, oautils:LogLevel logLevel, boolean regenerate) {
-    if logLevel == "quiet" {
+function printOpenApiPipelineHeader(string openApiSpec, string outputDir, boolean regenerate) {
+    if oautils:getLogLevel() == "quiet" {
         return;
     }
     io:fprintln(io:stderr, "");
@@ -1903,12 +1903,12 @@ function printOpenApiPipelineHeader(string openApiSpec, string outputDir, oautil
     io:fprintln(io:stderr, string `  output: ${outputDir}`);
 }
 
-function printOpenApiStepHeader(int stepNum, string title, oautils:LogLevel logLevel) {
-    oautils:logStep(stepNum, 6, title, logLevel);
+function printOpenApiStepHeader(int stepNum, string title) {
+    oautils:logStep(stepNum, 6, title);
 }
 
-function printOpenApiPipelineCompletion(string outputDir, oautils:LogLevel logLevel) {
-    oautils:logCompletion(outputDir, logLevel);
+function printOpenApiPipelineCompletion(string outputDir) {
+    oautils:logCompletion(outputDir);
 }
 
 function printOpenApiUsage() {

@@ -4,36 +4,36 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
 
-function setupMockServerModule(string connectorPath, utils:LogLevel logLevel = "normal") returns error? {
+function setupMockServerModule(string connectorPath) returns error? {
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
 
-    utils:logVerbose("adding mock.server module", logLevel);
+    utils:logVerbose("adding mock.server module");
     string command = string `bal add mock.server`;
 
-    utils:CommandResult addResult = utils:executeCommand(command, ballerinaDir, logLevel);
+    utils:CommandResult addResult = utils:executeCommand(command, ballerinaDir);
     if !addResult.success {
         return error("Failed to add mock.server module" + addResult.stderr);
     }
-    utils:logVerbose("✓ mock.server module added", logLevel);
+    utils:logVerbose("✓ mock.server module added");
 
     string mockTestDir = ballerinaDir + "/modules/mock.server/tests";
     if check file:test(mockTestDir, file:EXISTS) {
         check file:remove(mockTestDir, file:RECURSIVE);
-        utils:logVerbose("removed auto-generated tests directory", logLevel);
+        utils:logVerbose("removed auto-generated tests directory");
     }
 
     string mockServerFile = ballerinaDir + "/modules/mock.server/mock.server.bal";
     if check file:test(mockServerFile, file:EXISTS) {
         check file:remove(mockServerFile, file:RECURSIVE);
-        utils:logVerbose("removed auto-generated mock.server.bal", logLevel);
+        utils:logVerbose("removed auto-generated mock.server.bal");
     }
 }
 
-function generateMockServer(string connectorPath, string specPath, utils:LogLevel logLevel = "normal") returns error? {
+function generateMockServer(string connectorPath, string specPath) returns error? {
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     string mockServerDir = ballerinaDir + "/modules/mock.server";
     int operationCount = check countOperationsInSpec(specPath);
-    utils:logVerbose(string `total operations in spec: ${operationCount}`, logLevel);
+    utils:logVerbose(string `total operations in spec: ${operationCount}`);
 
     string absSpecPath = check file:getAbsolutePath(specPath);
     string absMockServerDir = check file:getAbsolutePath(mockServerDir);
@@ -41,16 +41,16 @@ function generateMockServer(string connectorPath, string specPath, utils:LogLeve
     string command;
 
     if operationCount <= MAX_OPERATIONS {
-        utils:logVerbose(string `using all ${operationCount} operations`, logLevel);
+        utils:logVerbose(string `using all ${operationCount} operations`);
         command = string `bal openapi -i ${absSpecPath} -o ${absMockServerDir}`;
     } else {
-        utils:logVerbose(string `filtering from ${operationCount} to ${MAX_OPERATIONS} most useful operations`, logLevel);
+        utils:logVerbose(string `filtering from ${operationCount} to ${MAX_OPERATIONS} most useful operations`);
         string operationsList = check selectOperationsUsingAI(specPath);
-        utils:logVerbose(string `selected operations: ${operationsList}`, logLevel);
+        utils:logVerbose(string `selected operations: ${operationsList}`);
         command = string `bal openapi -i ${absSpecPath} -o ${absMockServerDir} --operations ${operationsList}`;
     }
 
-    utils:CommandResult result = utils:executeCommand(command, ballerinaDir, logLevel);
+    utils:CommandResult result = utils:executeCommand(command, ballerinaDir);
     if !result.success {
         return error("Failed to generate mock server using ballerina openAPI tool" + result.stderr);
     }
@@ -59,13 +59,13 @@ function generateMockServer(string connectorPath, string specPath, utils:LogLeve
     string mockServerPathNew = mockServerDir + "/mock_server.bal";
     if check file:test(mockServerPathOld, file:EXISTS) {
         check file:rename(mockServerPathOld, mockServerPathNew);
-        utils:logVerbose("renamed mock server file", logLevel);
+        utils:logVerbose("renamed mock server file");
     }
 
     string clientPath = mockServerDir + "/client.bal";
     if check file:test(clientPath, file:EXISTS) {
         check file:remove(clientPath, file:RECURSIVE);
-        utils:logVerbose("removed client.bal", logLevel);
+        utils:logVerbose("removed client.bal");
     }
 }
 

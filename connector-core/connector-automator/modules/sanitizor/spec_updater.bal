@@ -174,7 +174,11 @@ function updateOperationSummaryInSpec(map<json> paths, string location, string s
                         map<json> operationMap = <map<json>>operation;
 
                         // Defensive hard cap: 37 characters, regardless of AI prompt compliance.
-                        string cappedSummary = summary;
+                        // Also strip any trailing period before capping.
+                        string cappedSummary = summary.trim();
+                        if cappedSummary.endsWith(".") {
+                            cappedSummary = cappedSummary.substring(0, cappedSummary.length() - 1).trim();
+                        }
                         if cappedSummary.length() > 37 {
                             cappedSummary = cappedSummary.substring(0, 37);
                         }
@@ -259,7 +263,7 @@ function updateOperationIdInSpec(map<json> paths, string location, string operat
 }
 
 // Helper function to update schema references throughout the JSON structure
-function updateSchemaReferences(json jsonData, map<string> nameMapping, utils:LogLevel logLevel = "normal") returns json {
+function updateSchemaReferences(json jsonData, map<string> nameMapping) returns json {
     if (jsonData is map<json>) {
         map<json> resultMap = {};
 
@@ -274,7 +278,7 @@ function updateSchemaReferences(json jsonData, map<string> nameMapping, utils:Lo
                         if (newName is string) {
                             string newRef = "#/components/schemas/" + newName;
                             resultMap[key] = newRef;
-                            utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`, logLevel);
+                            utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`);
                         } else {
                             resultMap[key] = value;
                         }
@@ -282,7 +286,7 @@ function updateSchemaReferences(json jsonData, map<string> nameMapping, utils:Lo
                         resultMap[key] = value;
                     }
                 } else {
-                    resultMap[key] = updateSchemaReferences(value, nameMapping, logLevel);
+                    resultMap[key] = updateSchemaReferences(value, nameMapping);
                 }
             }
         }
@@ -291,7 +295,7 @@ function updateSchemaReferences(json jsonData, map<string> nameMapping, utils:Lo
     } else if (jsonData is json[]) {
         json[] resultArray = [];
         foreach json item in jsonData {
-            resultArray.push(updateSchemaReferences(item, nameMapping, logLevel));
+            resultArray.push(updateSchemaReferences(item, nameMapping));
         }
         return resultArray;
     } else {

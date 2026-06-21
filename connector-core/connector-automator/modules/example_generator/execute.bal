@@ -1,48 +1,49 @@
-import connector_automator.utils;
+import wso2/connector_automator.utils;
 
 import ballerina/file;
 import ballerina/lang.runtime;
 
-public function executeExampleGen(string connectorPath, string examplesDir, utils:LogLevel logLevel = "normal") returns error? {
-    utils:logVerbose(string `connector: ${connectorPath}`, logLevel);
-    utils:logVerbose(string `examples output: ${examplesDir}`, logLevel);
+public function executeExampleGen(string connectorPath, string examplesDir = "") returns error? {
+    string resolvedExamplesDir = examplesDir.length() > 0 ? examplesDir : connectorPath + "/examples";
+    utils:logVerbose(string `connector: ${connectorPath}`);
+    utils:logVerbose(string `examples output: ${resolvedExamplesDir}`);
 
-    utils:logVerbose("analyzing connector", logLevel);
+    utils:logVerbose("analyzing connector");
     ConnectorDetails|error details = analyzeConnector(connectorPath);
     if details is error {
         utils:logError(string `connector analysis failed: ${details.message()}`);
         return details;
     }
-    utils:logInfo(string `✓ connector: ${details.connectorName} (${details.apiCount} operations)`, logLevel);
+    utils:logInfo(string `✓ connector: ${details.connectorName} (${details.apiCount} operations)`);
 
-    utils:logVerbose("initializing AI generator", logLevel);
+    utils:logVerbose("initializing AI generator");
     error? initResult = initExampleGenerator();
     if initResult is error {
         utils:logError(string `AI initialization failed: ${initResult.message()}`);
         return error("AI generator initialization failed: " + initResult.message());
     }
-    utils:logVerbose("✓ AI generator initialized", logLevel);
+    utils:logVerbose("✓ AI generator initialized");
 
-    utils:logVerbose("packing connector to local repo", logLevel);
-    error? packResult = packAndPushConnector(connectorPath, logLevel);
+    utils:logVerbose("packing connector to local repo");
+    error? packResult = packAndPushConnector(connectorPath);
     if packResult is error {
         utils:logError(string `failed to prepare connector: ${packResult.message()}`);
         return packResult;
     }
-    utils:logVerbose("✓ connector packed", logLevel);
+    utils:logVerbose("✓ connector packed");
 
     int numExamples = numberOfExamples(details.apiCount);
-    utils:logVerbose(string `generating ${numExamples} example${numExamples == 1 ? "" : "s"}`, logLevel);
+    utils:logVerbose(string `generating ${numExamples} example${numExamples == 1 ? "" : "s"}`);
 
     string[] usedFunctionNames = [];
     int successCount = 0;
 
     foreach int i in 1 ... numExamples {
-        utils:logVerbose(string `[example ${i}/${numExamples}] generating use case`, logLevel);
+        utils:logVerbose(string `[example ${i}/${numExamples}] generating use case`);
 
         json|error useCaseResponse = generateUseCaseAndFunctions(details, usedFunctionNames);
         if useCaseResponse is error {
-            utils:logWarn(string `failed to generate use case for example ${i}: ${useCaseResponse.message()}`, logLevel);
+            utils:logWarn(string `failed to generate use case for example ${i}: ${useCaseResponse.message()}`);
             continue;
         }
 
@@ -57,59 +58,59 @@ public function executeExampleGen(string connectorPath, string examplesDir, util
                 }
             }
         } else {
-            utils:logWarn(string `invalid function list for example ${i} — skipping`, logLevel);
+            utils:logWarn(string `invalid function list for example ${i} — skipping`);
             continue;
         }
 
         usedFunctionNames.push(...functionNames);
-        utils:logVerbose(string `  use case selected (${functionNames.length()} operations)`, logLevel);
+        utils:logVerbose(string `  use case selected (${functionNames.length()} operations)`);
 
         string|error targetedContext = extractTargetedContext(details, functionNames);
         if targetedContext is error {
-            utils:logWarn(string `failed to extract context for example ${i}: ${targetedContext.message()}`, logLevel);
+            utils:logWarn(string `failed to extract context for example ${i}: ${targetedContext.message()}`);
             continue;
         }
 
         string|error generatedCode = generateExampleCode(details, useCase, targetedContext);
         if generatedCode is error {
-            utils:logWarn(string `failed to generate code for example ${i}: ${generatedCode.message()}`, logLevel);
+            utils:logWarn(string `failed to generate code for example ${i}: ${generatedCode.message()}`);
             continue;
         }
 
         string|error exampleNameResult = generateExampleName(useCase);
         string exampleName;
         if exampleNameResult is error {
-            utils:logVerbose(string `  name generation failed, using fallback: ${exampleNameResult.message()}`, logLevel);
+            utils:logVerbose(string `  name generation failed, using fallback: ${exampleNameResult.message()}`);
             exampleName = "example_" + i.toString();
         } else {
             exampleName = exampleNameResult;
         }
 
-        error? writeResult = writeExampleToFile(examplesDir, exampleName, useCase, generatedCode,
+        error? writeResult = writeExampleToFile(resolvedExamplesDir, exampleName, useCase, generatedCode,
             details.connectorOrg, details.connectorName, details.connectorVersion, details.connectorDistribution);
         if writeResult is error {
-            utils:logWarn(string `failed to write example ${i}: ${writeResult.message()}`, logLevel);
+            utils:logWarn(string `failed to write example ${i}: ${writeResult.message()}`);
             continue;
         }
 
         runtime:sleep(10);
 
-        string exampleDir = examplesDir + "/" + exampleName;
-        error? fixResult = fixExampleCode(exampleDir, exampleName, logLevel);
+        string exampleDir = resolvedExamplesDir + "/" + exampleName;
+        error? fixResult = fixExampleCode(exampleDir, exampleName);
         if fixResult is error {
-            utils:logWarn(string `compilation fix failed for ${exampleName}: ${fixResult.message()} — may need manual review`, logLevel);
+            utils:logWarn(string `compilation fix failed for ${exampleName}: ${fixResult.message()} — may need manual review`);
         } else {
-            utils:logVerbose(string `  ✓ compilation errors fixed`, logLevel);
+            utils:logVerbose(string `  ✓ compilation errors fixed`);
         }
 
         successCount += 1;
-        utils:logInfo(string `✓ example ${i}/${numExamples}: ${exampleName}`, logLevel);
+        utils:logInfo(string `✓ example ${i}/${numExamples}: ${exampleName}`);
     }
 
     if successCount < numExamples {
-        utils:logWarn(string `${successCount}/${numExamples} examples succeeded`, logLevel);
+        utils:logWarn(string `${successCount}/${numExamples} examples succeeded`);
     } else {
-        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${examplesDir}/`, logLevel);
+        utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${resolvedExamplesDir}/`);
     }
 }
 
