@@ -2,4 +2,4 @@
 id = "connector"
 
 [[dependency]]
-path = "../connector-cli/build/libs/connector-tool-0.1.0.jar"
+path = "../connector-cli/build/libs/connector-tool-0.1.0-SNAPSHOT.jar"

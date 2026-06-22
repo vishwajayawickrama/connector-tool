@@ -2,3 +2,7 @@
 org = "ballerina"
 name = "connector_tool"
 version = "0.1.0"
+authors = ["Ballerina"]
+keywords = ["connector", "connector tool", "connector generator"]
+license = ["Apache-2.0"]
+distribution = "2201.13.0"
