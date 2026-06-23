@@ -1,18 +1,33 @@
+/*
+ * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import org.apache.tools.ant.taskdefs.condition.Os
 
 plugins {
-    id 'base'
+    id 'io.ballerina.plugin'
 }
 
 description = 'Ballerina - Connector Tool'
 
-// io.ballerina.plugin is not used here because it is distributed only through
-// GitHub Packages (ballerina-platform), which requires packageUser / packagePAT
-// credentials that are not available for open-source contributors locally.
-// The equivalent tasks (updateTomlFiles, balPack, publishToLocal, createArtifactZip)
-// are implemented directly using exec tasks and the system `bal` installation.
-
+def packageName = "connector_tool"
+def packageOrg = "ballerina"
 def tomlVersion = stripBallerinaExtensionVersion("${project.version}")
+
 def ballerinaTomlFilePlaceHolder = new File("${project.rootDir}/config/resources/Ballerina.toml")
 def balToolTomlFilePlaceHolder = new File("${project.rootDir}/config/resources/BalTool.toml")
 def ballerinaTomlFile = new File("$project.projectDir/Ballerina.toml")
@@ -30,6 +45,13 @@ def stripBallerinaExtensionVersion(String extVersion) {
     } else {
         return extVersion.replace("${project.ext.snapshotVersion}", "")
     }
+}
+
+ballerina {
+    packageOrganization = packageOrg
+    module = packageName
+    langVersion = ballerinaLangVersion
+    testCoverageParam = "--code-coverage --coverage-format=xml"
 }
 
 task updateTomlFiles {
@@ -55,78 +77,9 @@ task commitTomlFiles {
     }
 }
 
-task balPack {
-    description = 'Pack the Ballerina tool package.'
-    group = 'build'
-    dependsOn updateTomlFiles
-    doLast {
-        project.exec {
-            workingDir project.projectDir
-            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                commandLine 'cmd', '/c', 'bal pack'
-            } else {
-                commandLine 'sh', '-c', 'bal pack'
-            }
-        }
-    }
-}
-
-task publishToLocal {
-    description = 'Pack and push the Ballerina tool package to the local Ballerina repository.'
-    group = 'publishing'
-    dependsOn balPack
-    doLast {
-        project.exec {
-            workingDir project.projectDir
-            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                commandLine 'cmd', '/c', 'bal push --repository=local'
-            } else {
-                commandLine 'sh', '-c', 'bal push --repository=local'
-            }
-        }
-    }
-}
-
-task createArtifactZip {
-    description = 'Copy the packed .bala and rename it to .zip for Maven publishing.'
-    group = 'build'
-    dependsOn balPack
-    doLast {
-        def balaFile = fileTree(dir: "$project.projectDir/target/bala", include: '**/*.bala').singleFile
-        copy {
-            from balaFile
-            into file("$project.buildDir/libs")
-            rename { "${property('artifactId')}-${project.version}.zip" }
-        }
-    }
-}
-
-publishing {
-    publications {
-        maven(MavenPublication) {
-            artifactId = property('artifactId')
-            artifact(file("$project.buildDir/libs/${property('artifactId')}-${project.version}.zip")) {
-                extension = 'zip'
-                builtBy createArtifactZip
-            }
-        }
-    }
-    repositories {
-        if (project.hasProperty('packageUser') && project.hasProperty('packagePAT')) {
-            maven {
-                name = 'GitHubPackages'
-                url = uri('https://maven.pkg.github.com/ballerina-platform/connector-tool')
-                credentials {
-                    username = packageUser
-                    password = packagePAT
-                }
-            }
-        }
-    }
+test {
+    enabled = false
 }
 
 updateTomlFiles.dependsOn ':connector-cli:shadowJar'
-build.dependsOn balPack
-build.dependsOn 'generatePomFileForMavenPublication'
-publishToMavenLocal.dependsOn build
-publish.dependsOn build
+build.dependsOn unpackJballerinaTools

@@ -1,0 +1,75 @@
+name: PR build
+
+on:
+  pull_request:
+
+jobs:
+  ubuntu-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21.0.3
+          cache: gradle
+
+      - name: Get Ballerina Version
+        run: |
+          BAL_VERSION=$(grep -w 'ballerinaLangVersion' gradle.properties | cut -d= -f2)
+          if [ -z "$BAL_VERSION" ]; then
+            BAL_VERSION="latest"
+          fi
+          echo "BAL_VERSION=$BAL_VERSION" >> $GITHUB_ENV
+          echo "Ballerina Version: $BAL_VERSION"
+
+      - name: Set Up Ballerina
+        uses: ballerina-platform/setup-ballerina@v1.1.4
+        with:
+          version: ${{ env.BAL_VERSION }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        env:
+          packageUser: ${{ github.actor }}
+          packagePAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./gradlew clean build --stacktrace --scan --console=plain --no-daemon
+
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21.0.3
+          cache: gradle
+
+      - name: Get Ballerina Version
+        shell: bash
+        run: |
+          BAL_VERSION=$(grep -w 'ballerinaLangVersion' gradle.properties | cut -d= -f2)
+          if [ -z "$BAL_VERSION" ]; then
+            BAL_VERSION="latest"
+          fi
+          echo "BAL_VERSION=$BAL_VERSION" >> $GITHUB_ENV
+          echo "Ballerina Version: $BAL_VERSION"
+
+      - name: Set Up Ballerina
+        uses: ballerina-platform/setup-ballerina@v1.1.4
+        with:
+          version: ${{ env.BAL_VERSION }}
+
+      - name: Build with Gradle
+        env:
+          packageUser: ${{ github.actor }}
+          packagePAT: ${{ secrets.GITHUB_TOKEN }}
+          JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF8
+        run: ./gradlew.bat clean build --stacktrace --scan --console=plain --no-daemon

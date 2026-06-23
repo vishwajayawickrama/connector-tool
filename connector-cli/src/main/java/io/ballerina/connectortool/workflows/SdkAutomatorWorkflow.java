@@ -1,29 +1,29 @@
 package io.ballerina.connectortool.workflows;
 
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.List;
-
+import io.ballerina.cli.BLauncherCmd;
 import io.ballerina.connectortool.BaseCmd;
 import io.ballerina.connectortool.exceptions.CliException;
 import io.ballerina.connectortool.spi.ConnectorWorkflow;
-import io.ballerina.connectortool.utils.Utils;
-import io.ballerina.cli.BLauncherCmd;
-import io.ballerina.runtime.api.values.BArray;
-import picocli.CommandLine;
 import io.ballerina.connectortool.utils.BallerinaRuntimeUtils;
 import io.ballerina.connectortool.utils.ProcessUtils;
+import io.ballerina.connectortool.utils.Utils;
 import io.ballerina.runtime.api.utils.StringUtils;
+import io.ballerina.runtime.api.values.BArray;
+import picocli.CommandLine;
+
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.List;
 
 @CommandLine.Command(
     name = "sdk",
     description = "Automate Ballerina connector generation and maintenance from Java SDKs.")
 public final class SdkAutomatorWorkflow implements ConnectorWorkflow {
 
-    private final String ORG = "wso2";
-    private final String MODULE = "connector_automator";
-    private final String VERSION = "0";
-    private final String NAME = "sdk";
+    private static final String ORG = "wso2";
+    private static final String MODULE = "connector_automator";
+    private static final String VERSION = "0";
+    private static final String NAME = "sdk";
     private PrintStream outStream;
     private PrintStream errorStream;
     private boolean exitWhenFinish = true;
@@ -49,7 +49,8 @@ public final class SdkAutomatorWorkflow implements ConnectorWorkflow {
     @Override
     public void execute() {
         if (baseCmd.helpFlag) {
-            String commandUsageInfo = BLauncherCmd.getCommandUsageInfo("connector-" + NAME, SdkAutomatorWorkflow.class.getClassLoader());
+            String commandUsageInfo = BLauncherCmd.getCommandUsageInfo(
+                    "connector-" + NAME, SdkAutomatorWorkflow.class.getClassLoader());
             outStream.println(commandUsageInfo);
             return;
         }

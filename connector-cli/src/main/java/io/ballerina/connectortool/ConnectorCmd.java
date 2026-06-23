@@ -1,11 +1,10 @@
 package io.ballerina.connectortool;
 
-import java.io.PrintStream;
-
-import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import io.ballerina.cli.BLauncherCmd;
+import io.ballerina.connectortool.spi.ConnectorWorkflow;
 import picocli.CommandLine;
 
+import java.io.PrintStream;
 import java.util.ServiceLoader;
 
 @CommandLine.Command(

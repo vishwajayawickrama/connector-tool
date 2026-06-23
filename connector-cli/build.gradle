@@ -1,51 +1,58 @@
+/*
+ * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 plugins {
     id 'java'
-    id 'com.gradleup.shadow'
+    id 'com.github.johnrengelman.shadow'
     id 'com.github.spotbugs'
     id 'jacoco'
 }
 
+def javaRelease = project.property('javaVersion') as int
+
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(javaRelease)
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.release = 21
-}
-
-def resolveBallerinaHome = {
-    def configuredHome = providers.gradleProperty('ballerina.home')
-            .orElse(providers.environmentVariable('BALLERINA_HOME'))
-            .orNull
-    if (configuredHome) {
-        return configuredHome
-    }
-
-    return providers.exec {
-        commandLine 'bal', 'home'
-    }.standardOutput.asText.get().trim()
-}
-
-def ballerinaHome = resolveBallerinaHome()
-def ballerinaLibDir = file("${ballerinaHome}/bre/lib")
-
-repositories {
-    flatDir {
-        dirs 'libs',
-                '../connector-core/connector-automator/target/bin'
-    }
+    options.release = javaRelease
 }
 
 dependencies {
-    compileOnly fileTree(dir: ballerinaLibDir, include: ['ballerina-cli-*.jar', 'ballerina-lang-*.jar',
-                                                         'ballerina-rt-*.jar', 'picocli-*.jar'])
-    implementation fileTree(dir: ballerinaLibDir, include: ['jackson-annotations-*.jar', 'jackson-core-*.jar',
-                                                            'jackson-databind-*.jar',
-                                                            'jackson-dataformat-yaml-*.jar',
-                                                            'snakeyaml-*.jar'])
-    runtimeOnly ':connector_automator'
+    compileOnly "org.ballerinalang:ballerina-lang:${ballerinaLangVersion}"
+    compileOnly "org.ballerinalang:ballerina-parser:${ballerinaLangVersion}"
+    compileOnly "org.ballerinalang:formatter-core:${ballerinaLangVersion}"
+    compileOnly "org.ballerinalang:ballerina-cli:${ballerinaLangVersion}"
+    compileOnly "org.ballerinalang:ballerina-tools-api:${ballerinaLangVersion}"
+    compileOnly "org.ballerinalang:ballerina-runtime:${ballerinaLangVersion}"
+    compileOnly "org.ballerinalang:ballerina-rt:${ballerinaLangVersion}"
+    compileOnly "info.picocli:picocli:${picocliVersion}"
+
+
+    implementation "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-core:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${jacksonVersion}"
+    implementation "org.yaml:snakeyaml:2.2"
+
+    runtimeOnly project(path: ':connector-core', configuration: 'automatorArtifact')
 }
 
 jar {
@@ -70,7 +77,6 @@ assemble.dependsOn shadowJar
 
 spotbugs {
     effort = com.github.spotbugs.snom.Effort.MAX
-    ignoreFailures = true
 }
 
 spotbugsMain {
@@ -79,26 +85,20 @@ spotbugsMain {
     }
 }
 
-tasks.withType(Checkstyle).configureEach {
-    dependsOn ':config:checkstyle:downloadCheckstyleRuleFiles'
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
 }
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifactId = property('artifactId')
-            artifact shadowJar
-        }
-    }
-    repositories {
-        if (project.hasProperty('packageUser') && project.hasProperty('packagePAT')) {
-            maven {
-                url = 'https://maven.pkg.github.com/ballerina-platform/connector-tool'
-                credentials {
-                    username = packageUser
-                    password = packagePAT
-                }
-            }
-        }
-    }
+test {
+    finalizedBy jacocoTestReport
 }
+
+tasks.withType(Checkstyle).configureEach {
+    dependsOn ':config:checkstyle:downloadCheckstyleRuleFiles'
+    exclude '**/module-info.java'
+}
+

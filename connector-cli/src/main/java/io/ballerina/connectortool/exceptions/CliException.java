@@ -36,7 +36,8 @@ public class CliException extends RuntimeException {
 
     public String getFormattedMessage() {
         if (option != null && !option.isEmpty()) {
-            return "bal: error: '" + option + "': " + whatWentWrong + (subject != null && !subject.isEmpty() ? ": " + subject : "");
+            return "bal: error: '" + option + "': " + whatWentWrong
+                    + (subject != null && !subject.isEmpty() ? ": " + subject : "");
         } else {
             return "bal: error: " + whatWentWrong + (subject != null && !subject.isEmpty() ? ": " + subject : "");
         }

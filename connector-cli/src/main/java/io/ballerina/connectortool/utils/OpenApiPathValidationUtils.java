@@ -27,7 +27,8 @@ public final class OpenApiPathValidationUtils {
         PathChecks.requireRegularFile(specPath, option);
         PathChecks.requireReadable(specPath, option);
 
-        String fileName = specPath.getFileName().toString().toLowerCase(Locale.ROOT);
+        Path fileNamePart = specPath.getFileName();
+        String fileName = fileNamePart != null ? fileNamePart.toString().toLowerCase(Locale.ROOT) : "";
         boolean jsonSpec = fileName.endsWith(".json");
         boolean yamlSpec = fileName.endsWith(".yaml") || fileName.endsWith(".yml");
         if (!jsonSpec && !yamlSpec) {

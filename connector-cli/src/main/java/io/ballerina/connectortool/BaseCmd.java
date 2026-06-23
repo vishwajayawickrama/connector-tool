@@ -1,8 +1,8 @@
 package io.ballerina.connectortool;
 
-import java.io.PrintStream;
-
 import picocli.CommandLine;
+
+import java.io.PrintStream;
 
 public class BaseCmd {
 

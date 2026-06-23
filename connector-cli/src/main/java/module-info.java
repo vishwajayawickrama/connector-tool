@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com)
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -16,15 +16,17 @@
  * under the License.
  */
 
-plugins {
-    id 'de.undercouch.download'
-}
+module io.ballerina.connectortool {
+    requires info.picocli;
+    requires io.ballerina.cli;
+    requires io.ballerina.tools.api;
+    requires io.ballerina.lang;
+    requires io.ballerina.runtime;
+    requires com.fasterxml.jackson.core;
+    requires com.fasterxml.jackson.databind;
+    requires com.fasterxml.jackson.dataformat.yaml;
 
-task downloadCheckstyleRuleFiles(type: Download) {
-    src([
-        'https://raw.githubusercontent.com/wso2/code-quality-tools/v1.4/checkstyle/jdk-17/checkstyle.xml',
-        'https://raw.githubusercontent.com/wso2/code-quality-tools/v1.4/checkstyle/jdk-17/suppressions.xml'
-    ])
-    dest project.projectDir
-    overwrite false
+    exports io.ballerina.connectortool;
+
+    uses io.ballerina.connectortool.spi.ConnectorWorkflow;
 }

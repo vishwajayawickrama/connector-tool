@@ -1,15 +1,15 @@
 package io.ballerina.connectortool.utils;
 
+import io.ballerina.runtime.api.Module;
+import io.ballerina.runtime.api.Runtime;
 import io.ballerina.runtime.api.creators.TypeCreator;
 import io.ballerina.runtime.api.creators.ValueCreator;
 import io.ballerina.runtime.api.types.ArrayType;
 import io.ballerina.runtime.api.types.PredefinedTypes;
+import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.values.BArray;
 import io.ballerina.runtime.api.values.BError;
 import io.ballerina.runtime.api.values.BString;
-import io.ballerina.runtime.api.utils.StringUtils;
-import io.ballerina.runtime.api.Module;
-import io.ballerina.runtime.api.Runtime;
 
 public class BallerinaRuntimeUtils {
 
@@ -44,10 +44,12 @@ public class BallerinaRuntimeUtils {
             BString arg = args.size() > 0 ? args.getBString(0) : StringUtils.fromString("");
             Object result = runtime.callFunction(balModule, "main", null, arg);
             if (result instanceof BError error) {
-                System.err.println("Error occurred while running " + module + ": " + error.getErrorMessage());
+                throw new RuntimeException(error.getErrorMessage().toString());
             }
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
-            System.err.println("Error occurred while running " + module + ": " + e.getMessage());
+            throw new RuntimeException("Error occurred while running " + module + ": " + e.getMessage(), e);
         } finally {
             if (runtimeStarted && runtime != null) {
                 runtime.stop();
@@ -55,7 +57,8 @@ public class BallerinaRuntimeUtils {
         }
     }
 
-    public static void callBallerinaRuntimeApiWithMultipleArgs(String org, String module, String version, BArray args, int expectedCount) {
+    public static void callBallerinaRuntimeApiWithMultipleArgs(
+            String org, String module, String version, BArray args, int expectedCount) {
         Runtime runtime = null;
         boolean runtimeStarted = false;
         try {
@@ -73,10 +76,12 @@ public class BallerinaRuntimeUtils {
 
             Object result = runtime.callFunction(balModule, "main", null, functionArgs);
             if (result instanceof BError error) {
-                System.err.println("Error occurred while running " + module + ": " + error.getErrorMessage());
+                throw new RuntimeException(error.getErrorMessage().toString());
             }
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
-            System.err.println("Error occurred while running " + module + ": " + e.getMessage());
+            throw new RuntimeException("Error occurred while running " + module + ": " + e.getMessage(), e);
         } finally {
             if (runtimeStarted && runtime != null) {
                 runtime.stop();
@@ -84,7 +89,8 @@ public class BallerinaRuntimeUtils {
         }
     }
 
-    public static void callBallerinaRunteimAPiWithName(String org, String module, String version, String name, BArray args) {
+    public static void callBallerinaRunteimAPiWithName(
+            String org, String module, String version, String name, BArray args) {
         Runtime runtime = null;
         boolean runtimeStarted = false;
         try {
@@ -98,10 +104,12 @@ public class BallerinaRuntimeUtils {
 
             Object result = runtime.callFunction(balModule, "main", null, workflowArgs);
             if (result instanceof BError error) {
-                System.err.println("Error occurred while running connector automator: " + error.getErrorMessage());
+                throw new RuntimeException(error.getErrorMessage().toString());
             }
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
-            System.err.println("Error occurred while running connector automator: " + e.getMessage());
+            throw new RuntimeException("Error occurred while running connector automator: " + e.getMessage(), e);
         } finally {
             if (runtimeStarted && runtime != null) {
                 runtime.stop();

@@ -14,7 +14,8 @@ public final class ExamplesOutputPathValidationUtils {
         PathChecks.requireExists(path, "--example-dir");
         PathChecks.requireDirectory(path, "--example-dir");
         PathChecks.requireWritable(path, "--example-dir");
-        String lastName = path.getFileName().toString();
+        Path fileNamePart = path.getFileName();
+        String lastName = fileNamePart != null ? fileNamePart.toString() : "";
         if (lastName.equals("example") || lastName.equals("examples")) {
             return path;
         }

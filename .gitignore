@@ -29,3 +29,4 @@ docs/finding/
 
 # Local agent instructions, not shared via git
 CLAUDE.md
+connector-tool/docker.env
