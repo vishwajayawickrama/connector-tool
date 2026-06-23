@@ -332,7 +332,11 @@ public function renameInlineResponseSchemasBatchWithRetry(string specFilePath, i
                     }
                 } else {
                     utils:logWarn(string `invalid schema name generated for '${response.originalName}': '${newName}', using fallback`);
-                    string fallbackBaseName = "Schema" + response.originalName.substring(14);
+                    string suffix = response.originalName;
+                    if response.originalName.startsWith("InlineResponse") && response.originalName.length() > 14 {
+                        suffix = response.originalName.substring(14);
+                    }
+                    string fallbackBaseName = "Schema" + suffix;
                     string fallbackName = fallbackBaseName;
                     int counter = 1;
                     while (isNameTaken(fallbackName, allExistingNames, nameMapping)) {

@@ -166,6 +166,10 @@ public function writeExampleToFile(string examplesDir, string exampleName, strin
     // Create examples directory if it doesn't exist
     check file:createDir(examplesDir, file:RECURSIVE);
 
+    if exampleName.includes("..") || exampleName.includes("/") || exampleName.includes("\\") {
+        return error(string `Invalid example name '${exampleName}'`);
+    }
+
     // Use the provided example name directly
     string exampleDir = examplesDir + "/" + exampleName;
 

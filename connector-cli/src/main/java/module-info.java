@@ -29,4 +29,7 @@ module io.ballerina.connectortool {
     exports io.ballerina.connectortool;
 
     uses io.ballerina.connectortool.spi.ConnectorWorkflow;
+    provides io.ballerina.connectortool.spi.ConnectorWorkflow
+        with io.ballerina.connectortool.workflows.OpenApiAutomatorWorkflow,
+             io.ballerina.connectortool.workflows.SdkAutomatorWorkflow;
 }
