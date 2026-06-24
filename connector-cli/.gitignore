@@ -3,6 +3,7 @@
 build/
 
 # Java build outputs
+bin/
 *.class
 *.jar
 

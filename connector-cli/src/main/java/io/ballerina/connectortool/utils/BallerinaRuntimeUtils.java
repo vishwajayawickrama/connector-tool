@@ -1,107 +1,54 @@
+/*
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package io.ballerina.connectortool.utils;
 
 import io.ballerina.runtime.api.Module;
 import io.ballerina.runtime.api.Runtime;
-import io.ballerina.runtime.api.creators.TypeCreator;
-import io.ballerina.runtime.api.creators.ValueCreator;
-import io.ballerina.runtime.api.types.ArrayType;
-import io.ballerina.runtime.api.types.PredefinedTypes;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.values.BArray;
 import io.ballerina.runtime.api.values.BError;
-import io.ballerina.runtime.api.values.BString;
 
+/**
+ * Utility methods for invoking Ballerina connector-automator workflow functions
+ * from the JVM via the Ballerina runtime API.
+ */
 public class BallerinaRuntimeUtils {
 
-    public static BArray addToFront(BArray original, String newValue) {
-        ArrayType stringArrayType = TypeCreator.createArrayType(PredefinedTypes.TYPE_STRING);
-        BArray newArray = ValueCreator.createArrayValue(stringArrayType);
-
-        newArray.add(0, StringUtils.fromString(newValue));
-
-        for (int i = 0; i < original.size(); i++) {
-            newArray.add(i + 1, original.get(i));
-        }
-
-        return newArray;
-    }
-
-    public static void callBallerinaRuntimeApiWithSingleArg(String org, String module, String version, BArray args) {
-        Runtime runtime = null;
-        boolean runtimeStarted = false;
-        try {
-            Module balModule = new Module(org, module, version);
-            runtime = Runtime.from(balModule);
-
-            runtime.init();
-            runtime.start();
-            runtimeStarted = true;
-
-            BString arg = args.size() > 0 ? args.getBString(0) : StringUtils.fromString("");
-            Object result = runtime.callFunction(balModule, "main", null, arg);
-            if (result instanceof BError error) {
-                throw new RuntimeException(error.getErrorMessage().toString());
-            }
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("Error occurred while running " + module + ": " + e.getMessage(), e);
-        } finally {
-            if (runtimeStarted && runtime != null) {
-                runtime.stop();
-            }
-        }
-    }
-
-    public static void callBallerinaRuntimeApiWithMultipleArgs(
-            String org, String module, String version, BArray args, int expectedCount) {
-        Runtime runtime = null;
-        boolean runtimeStarted = false;
-        try {
-            Module balModule = new Module(org, module, version);
-            runtime = Runtime.from(balModule);
-
-            runtime.init();
-            runtime.start();
-            runtimeStarted = true;
-
-            Object[] functionArgs = new Object[expectedCount];
-            for (int i = 0; i < expectedCount; i++) {
-                functionArgs[i] = i < args.size() ? args.getBString(i) : StringUtils.fromString("");
-            }
-
-            Object result = runtime.callFunction(balModule, "main", null, functionArgs);
-            if (result instanceof BError error) {
-                throw new RuntimeException(error.getErrorMessage().toString());
-            }
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("Error occurred while running " + module + ": " + e.getMessage(), e);
-        } finally {
-            if (runtimeStarted && runtime != null) {
-                runtime.stop();
-            }
-        }
-    }
+    private static final String ORG = "wso2";
+    private static final String MODULE = "connector_automator";
+    private static final String VERSION = "0";
 
     /**
-     * Call a named Ballerina function whose single parameter is a {@code string[]} (BArray).
-     * Throws {@link RuntimeException} on {@code BError} or any unexpected exception so the
-     * Java caller can propagate exit-code failures (same contract as {@link #callBallerinaFunction}).
+     * Invokes the {@code runSdkWorkflow} Ballerina function with the provided arguments.
+     *
+     * @param args string array of CLI arguments forwarded to the SDK workflow
+     * @throws RuntimeException if the function returns a {@code BError} or an unexpected exception occurs
      */
-    public static void callBallerinaFunctionWithBArray(String org, String module, String version,
-            String functionName, BArray args) {
+    public static void runSdkWorkflow(BArray args) {
         Runtime runtime = null;
-        boolean runtimeStarted = false;
         try {
-            Module balModule = new Module(org, module, version);
+            Module balModule = new Module(ORG, MODULE, VERSION);
             runtime = Runtime.from(balModule);
             runtime.init();
             runtime.start();
-            runtimeStarted = true;
 
-            Object result = runtime.callFunction(balModule, functionName, null, args);
+            Object result = runtime.callFunction(balModule, "runSdkWorkflow", null, args);
             if (result instanceof BError error) {
                 throw new RuntimeException(error.getErrorMessage().toString());
             }
@@ -110,26 +57,39 @@ public class BallerinaRuntimeUtils {
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage(), e);
         } finally {
-            if (runtimeStarted && runtime != null) {
+            if (runtime != null) {
                 runtime.stop();
             }
         }
     }
 
-    public static void callBallerinaFunction(String org, String module, String version,
-            String functionName, String inputPath, String outputPath, String logLevel,
+    /**
+     * Invokes the {@code runOpenApiGenerationWorkflow} Ballerina function with the OpenAPI pipeline arguments.
+     *
+     * @param inputPath      path to the OpenAPI specification file, or empty string when not required
+     * @param outputPath     path to the Ballerina connector project
+     * @param logLevel       one of {@code "quiet"}, {@code "normal"}, or {@code "verbose"}
+     * @param examplesDir    output directory for generated examples
+     * @param excludedStages comma-separated list of pipeline stages to skip
+     * @param specDir        directory where aligned spec artefacts are stored
+     * @param license        path to a license header file, or empty string to use the default
+     * @param tags           comma-separated OpenAPI tags to filter during client generation
+     * @param operations     comma-separated OpenAPI operation IDs to filter during client generation
+     * @param clientMethod   {@code "remote"} to generate remote methods, or empty string for resource methods
+     * @param interactiveArg {@code "interactive"} to pause between stages, or empty string for unattended mode
+     * @throws RuntimeException if the function returns a {@code BError} or an unexpected exception occurs
+     */
+    public static void runOpenApiWorkflow(String inputPath, String outputPath, String logLevel,
             String examplesDir, String excludedStages, String specDir, String license,
             String tags, String operations, String clientMethod, String interactiveArg) {
         Runtime runtime = null;
-        boolean runtimeStarted = false;
         try {
-            Module balModule = new Module(org, module, version);
+            Module balModule = new Module(ORG, MODULE, VERSION);
             runtime = Runtime.from(balModule);
             runtime.init();
             runtime.start();
-            runtimeStarted = true;
 
-            Object result = runtime.callFunction(balModule, functionName, null,
+            Object result = runtime.callFunction(balModule, "runOpenApiGenerationWorkflow", null,
                     StringUtils.fromString(inputPath), StringUtils.fromString(outputPath),
                     StringUtils.fromString(logLevel), StringUtils.fromString(examplesDir),
                     StringUtils.fromString(excludedStages), StringUtils.fromString(specDir),
@@ -144,7 +104,7 @@ public class BallerinaRuntimeUtils {
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage(), e);
         } finally {
-            if (runtimeStarted && runtime != null) {
+            if (runtime != null) {
                 runtime.stop();
             }
         }

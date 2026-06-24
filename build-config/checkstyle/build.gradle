@@ -25,6 +25,8 @@ task downloadCheckstyleRuleFiles(type: Download) {
         'https://raw.githubusercontent.com/wso2/code-quality-tools/v1.4/checkstyle/jdk-17/checkstyle.xml',
         'https://raw.githubusercontent.com/wso2/code-quality-tools/v1.4/checkstyle/jdk-17/suppressions.xml'
     ])
-    dest project.projectDir
+    dest buildDir
     overwrite false
+    onlyIfNewer true
 }
+
