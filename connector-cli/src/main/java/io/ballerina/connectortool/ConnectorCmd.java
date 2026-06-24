@@ -25,14 +25,14 @@ import picocli.CommandLine;
 import java.io.PrintStream;
 import java.util.ServiceLoader;
 
-@CommandLine.Command(
-        name = "connector",
-        description = "Centralized CLI tool to generate and maintain Ballerina connector assets."
-)
 /**
  * Root {@code bal connector} command that discovers and registers workflow subcommands
  * ({@code openapi}, {@code sdk}) via the {@link ConnectorWorkflow} SPI.
  */
+@CommandLine.Command(
+        name = "connector",
+        description = "Centralized CLI tool to generate and maintain Ballerina connector assets."
+)
 public class ConnectorCmd implements BLauncherCmd {
 
     private static final String COMMAND_NAME = "connector";

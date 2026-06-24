@@ -22,8 +22,8 @@ import io.ballerina.connectortool.exceptions.CliException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Validates pipeline stage exclusions for the {@code bal connector openapi} workflow.
@@ -32,24 +32,41 @@ public final class OpenApiStageValidationUtils {
 
     private OpenApiStageValidationUtils() {}
 
-    private static final Set<String> VALID_STAGES = Set.of("sanitize", "client", "tests", "examples", "docs");
+    /** The set of pipeline stages that may be excluded via {@code -x/--exclude}. */
+    public enum ValidStages {
+        SANITIZE,
+        CLIENT,
+        TESTS,
+        EXAMPLES,
+        DOCS
+    }
 
     /**
-     * Validates all stage-related concerns in order:
+     * Validates all stage-related concerns and returns the comma-separated lowercase stage names
+     * to forward to Ballerina. Validation order:
      * 1. Unknown stage names → exit 2
      * 2. All stages excluded → exit 2
      * 3. sanitize excluded but aligned spec missing in specDirPath → exit 1
      * 4. client excluded but client.bal missing in outputPath → exit 1
+     *
+     * @param excludedStages raw stage names from {@code -x/--exclude} CLI options
+     * @param outputPath     resolved Ballerina project directory
+     * @param specDirPath    resolved spec directory ({@code docs/spec})
+     * @return comma-separated lowercase stage names to pass to the Ballerina runtime
+     * @throws CliException if any validation check fails
      */
-    public static void validate(List<String> excludedStages, Path outputPath, Path specDirPath) {
+    public static String resolve(List<String> excludedStages, Path outputPath, Path specDirPath) {
         for (String stage : excludedStages) {
-            if (!VALID_STAGES.contains(stage)) {
+            try {
+                ValidStages.valueOf(stage.toUpperCase());
+            } catch (IllegalArgumentException e) {
                 throw new CliException("unknown stage '" + stage + "'", 2,
                         "-x", "valid stages: sanitize, client, tests, examples, docs");
             }
         }
 
-        if (excludedStages.containsAll(VALID_STAGES)) {
+        if (Arrays.stream(ValidStages.values())
+                .allMatch(s -> excludedStages.contains(s.name().toLowerCase()))) {
             throw new CliException("all pipeline stages excluded — nothing to run", 2);
         }
 
@@ -68,10 +85,16 @@ public final class OpenApiStageValidationUtils {
                         "-x", clientBal + " — run without -x client to generate it first");
             }
         }
+
+        return String.join(",", excludedStages);
     }
 
     /**
-     * Returns true when the raw input spec (-i) is required, i.e. when sanitize is not excluded.
+     * Returns {@code true} when the raw input spec ({@code -i}) is required,
+     * i.e. when the {@code sanitize} stage is not excluded.
+     *
+     * @param excludedStages raw stage names from {@code -x/--exclude} CLI options
+     * @return {@code true} if {@code -i} must be provided
      */
     public static boolean isSpecRequired(List<String> excludedStages) {
         return !excludedStages.contains("sanitize");

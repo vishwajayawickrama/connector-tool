@@ -130,7 +130,7 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
 
             Path ballerinaProjectPath = BallerinaProjectPathValidationUtils.resolve(outputPath);
             Path specDirPath = SpecDirResolutionUtils.resolve(specDir);
-            OpenApiStageValidationUtils.validate(excludedStages, ballerinaProjectPath, specDirPath);
+            String excludedArg = OpenApiStageValidationUtils.resolve(excludedStages, ballerinaProjectPath, specDirPath);
 
             Path openApiSpecPath = null;
             if (OpenApiStageValidationUtils.isSpecRequired(excludedStages)) {
@@ -138,8 +138,6 @@ public final class OpenApiAutomatorWorkflow implements ConnectorWorkflow {
             }
 
             Path resolvedExamplesDir = ExamplesOutputPathValidationUtils.resolve(exampleDir);
-
-            String excludedArg = String.join(",", excludedStages);
             String licenseArg = licensePath != null ? Path.of(licensePath).toAbsolutePath().normalize().toString() : "";
             String tagsArg = String.join(",", tags);
             String operationsArg = String.join(",", operations);

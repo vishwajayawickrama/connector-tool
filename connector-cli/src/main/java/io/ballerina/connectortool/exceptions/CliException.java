@@ -18,6 +18,13 @@
 
 package io.ballerina.connectortool.exceptions;
 
+/**
+ * Unchecked exception thrown when a CLI validation or precondition check fails.
+ *
+ * <p>Carries a human-readable description, an optional option name, an optional detail,
+ * and a process exit code so the top-level command handler can emit a consistent error
+ * message and terminate with the correct code.
+ */
 public class CliException extends RuntimeException {
     private final String option;
     private final String description;
@@ -63,6 +70,11 @@ public class CliException extends RuntimeException {
         this.exitCode = exitCode;
     }
 
+    /**
+     * Returns the user-facing error string in the form:
+     * {@code bal: error: '<option>': <description>: <detail>}
+     * (option and detail are omitted when absent).
+     */
     public String getFormattedMessage() {
         if (option != null && !option.isEmpty()) {
             return "bal: error: '" + option + "': " + description
@@ -72,6 +84,7 @@ public class CliException extends RuntimeException {
         }
     }
 
+    /** Returns the process exit code associated with this error. */
     public int getExitCode() {
         return exitCode;
     }
