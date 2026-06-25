@@ -39,9 +39,9 @@ tasks.register('buildNative') {
         project.exec {
             workingDir "${project.projectDir}/connector-automator/modules/sdkanalyzer/native"
             if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                commandLine 'cmd', '/c', 'gradlew.bat build --no-daemon'
+                commandLine 'cmd', '/c', "gradlew.bat build --no-daemon -PballerinaLangVersion=${ballerinaLangVersion}"
             } else {
-                commandLine 'sh', '-c', './gradlew build --no-daemon'
+                commandLine 'sh', '-c', "./gradlew build --no-daemon -PballerinaLangVersion=${ballerinaLangVersion}"
             }
         }
     }
