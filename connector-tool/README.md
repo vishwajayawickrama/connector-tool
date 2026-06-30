@@ -1,8 +1,5 @@
 # Ballerina Connector Tool
 
-[![GitHub Last Commit](https://img.shields.io/github/last-commit/ballerina-platform/connector-tool.svg)](https://github.com/ballerina-platform/connector-tool/commits/main)
-[![GitHub issues](https://img.shields.io/github/issues/ballerina-platform/connector-tool.svg?label=Open%20Issues)](https://github.com/ballerina-platform/connector-tool/issues)
-
 `bal connector` is a Ballerina CLI tool that automates the generation and maintenance of Ballerina
 connectors from OpenAPI specifications and Java SDKs. It runs AI-assisted, multi-stage pipelines —
 sanitizing contracts, generating clients, repairing compilation errors, and producing tests, examples,
