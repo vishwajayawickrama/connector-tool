@@ -297,12 +297,12 @@ public function runOpenApiRegenerationWorkflow(string openApiSpec, string output
                 if utils:hasCompilationErrors(buildResult) {
                     utils:logVerbose("applying final fix pass on client-only codebase");
                     code_fixer:FixResult|code_fixer:BallerinaFixerError finalFixResult = code_fixer:fixAllErrors(clientPath, true);
-                    boolean stillFailing = finalFixResult is code_fixer:BallerinaFixerError
-                        || (finalFixResult is code_fixer:FixResult && finalFixResult.errorsRemaining > 0);
-                    if stillFailing {
+                    utils:logVerbose(string `final fix pass complete: ${finalFixResult is code_fixer:BallerinaFixerError ? "fixer error" : "ok"}`);
+                    buildResult = utils:executeBalBuild(clientPath);
+                    if utils:hasCompilationErrors(buildResult) {
                         utils:logError("regeneration halted: client has unresolvable compilation errors");
                         utils:logError(string `inspect the generated client at: ${clientPath}`);
-                        return error("client build failed after all recovery attempts");
+                        return error(string `client build failed after all recovery attempts: ${buildResult.stderr}`);
                     }
                 }
                 utils:logWarn("stale tests removed — tests stage will regenerate them");
