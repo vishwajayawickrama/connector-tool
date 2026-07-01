@@ -574,10 +574,12 @@ function packAndPushConnector(string connectorPath) returns error? {
     if packExitCode != 0 {
         oautils:logVerbose("'bal pack' failed — attempting automated fixes before retry");
 
-        code_fixer:FixResult|code_fixer:BallerinaFixerError javaFixResult =
-            code_fixer:fixJavaNativeAdaptorErrors(connectorPath, true);
-        if javaFixResult is code_fixer:BallerinaFixerError {
-            return error("'bal pack' failed and Java native auto-fix failed", javaFixResult);
+        if hasJavaNativeInterop(connectorPath) {
+            code_fixer:FixResult|code_fixer:BallerinaFixerError javaFixResult =
+                code_fixer:fixJavaNativeAdaptorErrors(connectorPath, true);
+            if javaFixResult is code_fixer:BallerinaFixerError {
+                return error("'bal pack' failed and Java native auto-fix failed", javaFixResult);
+            }
         }
 
         code_fixer:FixResult|code_fixer:BallerinaFixerError balFixResult =
@@ -637,22 +639,22 @@ function runShellInDir(string workingDir, string shellCommand) returns int|error
     return exitCode;
 }
 
-function prepareNativeInteropForPack(string connectorPath, string ballerinaDir) returns error? {
+function hasJavaNativeInterop(string connectorPath) returns boolean {
     boolean|error hasBuildGradle = file:test(connectorPath + "/build.gradle", file:EXISTS);
     boolean|error hasNativeBuildGradle = file:test(connectorPath + "/native/build.gradle", file:EXISTS);
     boolean nativeRequired = (hasBuildGradle is boolean && hasBuildGradle) ||
-                            (hasNativeBuildGradle is boolean && hasNativeBuildGradle);
+                             (hasNativeBuildGradle is boolean && hasNativeBuildGradle);
     if !nativeRequired {
-        return;
+        return false;
     }
-
-    // A build.gradle alone does not mean native Java source exists (e.g. OpenAPI connectors
-    // may inherit one from a parent directory). Only proceed if Java source files are present.
     boolean|error hasNativeSrc = file:test(connectorPath + "/native/src", file:EXISTS);
     boolean|error hasTopLevelSrc = file:test(connectorPath + "/src/main/java", file:EXISTS);
-    boolean javaSourceExists = (hasNativeSrc is boolean && hasNativeSrc) ||
-                                (hasTopLevelSrc is boolean && hasTopLevelSrc);
-    if !javaSourceExists {
+    return (hasNativeSrc is boolean && hasNativeSrc) ||
+           (hasTopLevelSrc is boolean && hasTopLevelSrc);
+}
+
+function prepareNativeInteropForPack(string connectorPath, string ballerinaDir) returns error? {
+    if !hasJavaNativeInterop(connectorPath) {
         return;
     }
 
