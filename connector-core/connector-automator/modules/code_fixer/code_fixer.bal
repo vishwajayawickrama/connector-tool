@@ -243,7 +243,7 @@ function isEligibleBallerinaSourcePath(string path) returns boolean {
         return false;
     }
     return lower.endsWith("client.bal") || lower.endsWith("types.bal") || lower.endsWith("main.bal") || lower.endsWith("test.bal")
-        || lower.endsWith("mock_server.bal");
+        || lower.endsWith("mock_service.bal");
 }
 
 function isInteropClassNotFoundError(CompilationError err) returns boolean {
@@ -558,12 +558,6 @@ function getTypeContextForFile(string projectPath, string filePath) returns stri
     string|io:Error typesContent = io:fileReadString(projectPath + "/types.bal");
     if typesContent is string {
         contextParts.push("FULL TYPES DEFINITIONS (types.bal):\n" + typesContent);
-    }
-    if filePath.includes("mock") {
-        string|io:Error mockTypes = io:fileReadString(projectPath + "/modules/mock.server/types.bal");
-        if mockTypes is string {
-            contextParts.push("MOCK TYPES DEFINITIONS:\n" + mockTypes);
-        }
     }
     string|io:Error clientContent = io:fileReadString(projectPath + "/client.bal");
     if clientContent is string {
