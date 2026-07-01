@@ -77,6 +77,12 @@ Before writing the code, think through this systematically:
    - Is this example clear and educational?
    - Does it demonstrate real-world usage patterns?
    - Will a developer understand how to adapt this for their needs?
+
+6. **Compilation check:**
+   - Have I used only field names that appear explicitly in ${backTick}<RELEVANT_CODE_DEFINITIONS>${backTick}?
+   - For any field whose declared type contains ${backTick}|record {}${backTick}, have I added an explicit type cast (${backTick}<TypeName>{ ... }${backTick})?
+   - Have I used Ballerina field names (not ${backTick}@jsondata:Name${backTick} annotation values)?
+   - Are my imports exactly the two required ones (${backTick}ballerina/io${backTick} and the connector import)?
 </REFLECTION_PHASE>
 
 <BALLERINA_EXAMPLE_GUIDELINES>
@@ -104,6 +110,16 @@ Before writing the code, think through this systematically:
 - Demonstrate error handling where appropriate
 - Make the code self-explanatory and educational
 </BALLERINA_EXAMPLE_GUIDELINES>
+
+<COMPILATION_SAFETY>
+**Do not invent record fields.** Only set fields that are explicitly declared in the type definitions inside ${backTick}<RELEVANT_CODE_DEFINITIONS>${backTick}. Setting a field that does not exist in the record causes a compilation error.
+
+**Use Ballerina field names, not JSON annotation values.** When a record field is annotated with ${backTick}@jsondata:Name {value: "json_name"}${backTick}, the annotation controls JSON serialization only. In Ballerina code you MUST use the identifier on the line below the annotation (the Ballerina field name), NOT the value inside the annotation. For example, if the type has ${backTick}@jsondata:Name {value: "tweet_count"}${backTick} above ${backTick}int tweetCount${backTick}, write ${backTick}tweetCount: 42${backTick} in code — never ${backTick}"tweet_count": 42${backTick}.
+
+**Explicit type cast for ${backTick}Type|record {}${backTick} union fields.** Before writing any record literal, check ${backTick}<RELEVANT_CODE_DEFINITIONS>${backTick} for fields whose declared type contains ${backTick}|record {}${backTick}. Every such field requires an explicit type cast: write ${backTick}fieldName: <SomeType>{ ... }${backTick}, never a bare ${backTick}fieldName: { ... }${backTick}. A bare mapping constructor for a ${backTick}Type|record {}${backTick} field is ambiguous and will not compile. Apply this rule at every nesting level.
+
+**Imports are fixed.** The only allowed imports are ${backTick}import ballerina/io;${backTick} and ${backTick}import ${details.connectorOrg}/${details.connectorName};${backTick}. Do not add ${backTick}import ballerina/http;${backTick} or any other import — all connector types are accessed through the connector module alias (${backTick}${moduleAlias(details.connectorName)}:${backTick}).
+</COMPILATION_SAFETY>
 
 <OUTPUT_FORMATTING_RULES>
 - **Your entire response must be raw Ballerina code.**

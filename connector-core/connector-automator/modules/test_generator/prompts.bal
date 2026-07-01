@@ -71,11 +71,11 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
       SearchCount count = {"tweet_count": 42, ...};
       ✗ Uses the JSON annotation value — will NOT compile (BCE2066)
 
-    **CRITICAL — ${backtick}Type|record {}${backtick} union fields (BCE2523):**
+    **CRITICAL — ${backtick}Type|record {}${backtick} union fields require explicit type casts:**
     Before writing any mock data, scan ${backtick}<AVAILABLE_TYPES>${backtick} for fields whose declared type contains ${backtick}|record {}${backtick}. Every such field requires an explicit type cast on any mapping constructor assigned to it.
 
       fieldName: <SomeType>{ ... }    ✓ unambiguous — compiles
-      fieldName: { ... }              ✗ BCE2523 ambiguous type — will NOT compile
+      fieldName: { ... }              ✗ ambiguous type — will NOT compile
 
     Example — given in types.bal:
       MicrosoftGraphIdleSessionSignOut|record {} idleSessionSignOut?;
@@ -90,6 +90,23 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
       idleSessionSignOut: {warnAfterInSeconds: 3300.0, ...}
 
     This rule applies at every nesting level — if ${backtick}SomeType${backtick} itself contains ${backtick}|record {}${backtick} fields, cast those inner values too.
+
+    **CRITICAL — ${backtick}AnydataDefault${backtick} / ${backtick}http:DefaultStatusCodeResponse${backtick} return types need a ${backtick}status${backtick} field:**
+    Some resource functions have a return type of bare ${backtick}AnydataDefault${backtick} (not in a union with a success type). ${backtick}AnydataDefault${backtick} spreads ${backtick}*http:DefaultStatusCodeResponse${backtick}, which has a required, non-defaultable field ${backtick}readonly DefaultStatus status${backtick}. You MUST include this field in every return literal — omitting it causes a missing-required-field error.
+
+    Wrong (missing required ${backtick}status${backtick} field — will NOT compile):
+      return { body: "some value" };
+
+    Correct (include ${backtick}status: new (200)${backtick} — or the appropriate HTTP code):
+      return { status: new (200), body: "some value" };
+
+    If the resource is meant to indicate a non-200 result, use the matching code (e.g. ${backtick}new (404)${backtick}, ${backtick}new (500)${backtick}). For a generic mock that just needs to compile, ${backtick}new (200)${backtick} is the correct default.
+
+    **CRITICAL — Preserve all existing import statements:**
+    The template already contains ${backtick}import ballerina/http;${backtick} (and possibly ${backtick}import ballerina/log;${backtick}). Copy every import line from the template into your output exactly as-is. Never remove or omit an existing import — doing so makes every ${backtick}http:${backtick} symbol undefined.
+
+    **CRITICAL — Never redeclare a resource function:**
+    The template defines a fixed set of resource function signatures (HTTP method + path). Your output must contain each signature exactly once. Do NOT write a new ${backtick}resource function${backtick} declaration for a path that already exists in the template — duplicating a signature causes a redeclared-symbol error. Your only job is to fill in the body of each existing stub.
 
     **Example of a well-implemented resource function:**
     ${tripleBacktick}ballerina
@@ -152,7 +169,9 @@ This connector uses resource methods. Use the resource path syntax from the mock
             * For responses that return an array, I must check if the array is not empty: ${backtick}test:assertTrue(response.data.length() > 0);${backtick}. Using ${backtick}!is ()${backtick} on an array will fail.
             * Where applicable, I will also assert that the ${backtick}errors${backtick} field is nil: ${backtick}test:assertTrue(response?.errors is ());${backtick}.
     5.  **Completeness and Correctness:** I must ensure all necessary imports (${backtick}ballerina/os${backtick}, ${backtick}ballerina/test${backtick}, etc.) are present and that the entire file is syntactically correct and ready to compile.
-    6.  **${backtick}Type|record {}${backtick} union fields (BCE2523):** Before writing any payload or variable, I must scan ${backtick}<FULL_TYPES_DEFINITIONS>${backtick} for fields whose declared type contains ${backtick}|record {}${backtick}. Every such field requires an explicit type cast on any mapping constructor assigned to it. A bare ${backtick}{ ... }${backtick} literal for a ${backtick}Type|record {}${backtick} field will NOT compile — I must always write ${backtick}fieldName: <SomeType>{ ... }${backtick}. This rule applies at every nesting level.
+    6.  **Avoid ambiguous type on ${backtick}Type|record {}${backtick} union fields:** Before writing any payload or variable, I must scan ${backtick}<FULL_TYPES_DEFINITIONS>${backtick} for fields whose declared type contains ${backtick}|record {}${backtick}. Every such field requires an explicit type cast on any mapping constructor assigned to it. A bare ${backtick}{ ... }${backtick} literal for a ${backtick}Type|record {}${backtick} field will NOT compile — I must always write ${backtick}fieldName: <SomeType>{ ... }${backtick}. This rule applies at every nesting level.
+    7.  **Include ${backtick}import ballerina/http;${backtick} when needed:** If I use any ${backtick}http:${backtick}-prefixed identifier anywhere in the file (e.g. ${backtick}http:BearerTokenConfig${backtick}, ${backtick}http:Response${backtick}, ${backtick}http:NoContent${backtick}), I MUST add ${backtick}import ballerina/http;${backtick} at the top of the file. Omitting it makes every such reference undefined.
+    8.  **Only use type names visible in the provided context:** Every type name I use for client configuration, auth, or connection setup MUST appear verbatim in ${backtick}<CLIENT_INIT_METHOD>${backtick} or ${backtick}<REFERENCED_TYPE_DEFINITIONS>${backtick}. I must NOT use bare stdlib names like ${backtick}BearerTokenConfig${backtick} or ${backtick}OAuth2RefreshTokenGrantConfig${backtick} — these appear only inside a connector-level wrapper (${backtick}ConnectionConfig${backtick}, ${backtick}ApiKeysConfig${backtick}, etc.) in the provided context. I must use the wrapper type, not the inner stdlib type.
 
     **Phase 2: Execution**
 
@@ -184,9 +203,10 @@ ${methodSignaturesSection}
     **Requirements:**
     1.  **Complete File:** Your response must be a single, raw, and complete Ballerina source code file. Do not include any code fences in the response.
     2.  **Copyright Header:** The generated file must start with the standard Ballerina copyright header.
-    3.  **Imports:** Include ${backtick}import ballerina/os;${backtick} and ${backtick}import ballerina/test;${backtick}.
+    3.  **Imports:** Include ${backtick}import ballerina/os;${backtick} and ${backtick}import ballerina/test;${backtick}. Add ${backtick}import ballerina/http;${backtick} if — and only if — you use any ${backtick}http:${backtick}-prefixed identifier in the file.
     4.  **Environment Setup:** Implement ${backtick}final${backtick} variables for ${backtick}isLiveServer${backtick}, ${backtick}serviceUrl${backtick}, and any necessary credentials using ${backtick}os:getEnv${backtick}. The mock server URL must be ${backtick}http://localhost:9090/v1${backtick}.
     5.  **Correct Client Initialization:** You MUST use the provided ${backtick}<CLIENT_INIT_METHOD>${backtick} and ${backtick}<REFERENCED_TYPE_DEFINITIONS>${backtick} to correctly initialize the client.
+    5a. **Type names from context only:** All types used for client initialization must appear verbatim in ${backtick}<CLIENT_INIT_METHOD>${backtick} or ${backtick}<REFERENCED_TYPE_DEFINITIONS>${backtick}. Do not reference bare stdlib type names (${backtick}BearerTokenConfig${backtick}, ${backtick}OAuth2RefreshTokenGrantConfig${backtick}, etc.) — use the connector-level wrapper types the provided context defines.
     6.  **Full Test Coverage:** Generate a test function for each resource endpoint in the mock server.
     7.  **Correct Method Invocation Syntax:** ${analysis.methodType == "remote" ? "Use REMOTE method syntax (->methodName())" : "Use resource method syntax (->/path)"}.
     8.  **Smart Assertions:** Each test must contain assertions. Use ${backtick}test:assertTrue(response.data.length() > 0);${backtick} for arrays and ${backtick}test:assertTrue(response?.data !is ());${backtick} for records. Also, check that the ${backtick}errors${backtick} field is nil where appropriate.
