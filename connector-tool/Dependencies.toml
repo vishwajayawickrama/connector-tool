@@ -10,7 +10,7 @@ distribution-version = "2201.13.4"
 [[package]]
 org = "ballerina"
 name = "connector_tool"
-version = "0.1.0"
+version = "0.1.1"
 modules = [
 	{org = "ballerina", packageName = "connector_tool", moduleName = "connector_tool"}
 ]
