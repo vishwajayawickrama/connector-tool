@@ -1,78 +1,140 @@
 # Ballerina Connector Tool
 
-`bal connector` is a Ballerina CLI tool that automates the generation and maintenance of Ballerina
-connectors from OpenAPI specifications and Java SDKs. It runs AI-assisted, multi-stage pipelines —
-sanitizing contracts, generating clients, repairing compilation errors, and producing tests, examples,
-and documentation — so that a complete, ready-to-use connector project comes out the other end with a
-single command. The tool uses Anthropic Claude (via `ballerinax/ai.anthropic`) for spec cleanup, code
-repair, example writing, and documentation, and requires an `ANTHROPIC_API_KEY` to run.
+`bal connector` is a Ballerina CLI tool that automates the generation of Ballerina connectors from
+OpenAPI specifications and Java SDKs. It runs AI-assisted pipelines — sanitizing contracts,
+generating clients, repairing compilation errors, and producing tests, examples, and documentation —
+so that a complete, ready-to-use connector project comes out the other end with a single command.
+The tool uses Anthropic Claude for spec cleanup, code repair, example writing, and documentation.
+
+## Prerequisites
+
+- [Ballerina Swan Lake](https://ballerina.io/downloads/) `2201.13.0` or later
+- OpenJDK 21
+- An [Anthropic API key](https://console.anthropic.com/) exported as `ANTHROPIC_API_KEY`
 
 ```bash
-bal connector openapi -i ./openapi.yaml
+export ANTHROPIC_API_KEY=<your-key>
 ```
 
-## Building from the Source
+## Installation
 
-### Setting Up the Prerequisites
+```bash
+bal tool pull connector
+```
 
-1. OpenJDK 21 ([Adopt OpenJDK](https://adoptopenjdk.net/) or any other OpenJDK distribution)
+## Commands
 
-   >**Info:** You can also use [Oracle JDK](https://www.oracle.com/java/technologies/javase-downloads.html).
-   Set the `JAVA_HOME` environment variable to the pathname of the directory into which you installed JDK.
+### `bal connector openapi`
 
-2. [Ballerina Swan Lake](https://ballerina.io/downloads/) `2201.13.1` or later
+Generates a Ballerina connector from an OpenAPI specification.
 
-3. Set your Anthropic API key:
+**Synopsis**
 
-   ```bash
-   export ANTHROPIC_API_KEY=<your-api-key>
-   ```
+```
+bal connector openapi -i <spec-file> [-o <output-dir>] [options...]
+```
 
-### Building the Source
+**Options**
 
-The tool is built in three layers. Execute the following commands in order from the repository root.
+| Option | Description | Required |
+|--------|-------------|----------|
+| `-i`, `--input` | Path to the OpenAPI specification file | Yes |
+| `-o`, `--output` | Output directory for the connector workspace (default: current directory) | No |
+| `-x`, `--exclude` | Exclude a pipeline stage. Repeatable. Values: `sanitize`, `client`, `tests`, `examples`, `docs` | No |
+| `-t`, `--tags` | Include only operations with this OpenAPI tag. Repeatable. | No |
+| `--operations` | Include only these operation IDs. Repeatable. | No |
+| `--remote` | Generate client methods as `remote` instead of resource methods | No |
+| `--license` | Path to a license header file for generated source files | No |
+| `--example-dir` | Output directory for generated examples (default: `<output>/examples`) | No |
+| `--spec-dir` | Directory for the aligned spec and `sanitations.md` (default: `<output>/docs/spec`) | No |
+| `--interactive` | Pause after each pipeline stage for manual review | No |
+| `-v`, `--verbose` | Show detailed diagnostic output | No |
+| `-q`, `--quiet` | Suppress all output except errors | No |
 
-1. Build the native SDK analyzer JAR:
+**Pipeline stages**
 
-        cd connector-core/connector-automator/modules/sdkanalyzer/native
-        ./gradlew build
-        cd -
+The pipeline runs these stages in order. Any stage can be skipped with `-x <stage>`.
 
-2. Pack the Ballerina automation package:
+| Stage | What it does |
+|-------|-------------|
+| `sanitize` | Flatten, align, and AI-improve the OpenAPI spec; record sanitations |
+| `client` | Generate Ballerina client, types, and utils; fix compilation errors |
+| `tests` | Generate mock service and AI-assisted connector tests |
+| `examples` | Generate AI-assisted usage examples |
+| `docs` | Generate README documentation |
 
-        cd connector-core/connector-automator
-        bal pack
-        cd -
+---
 
-3. Build the CLI shadow JAR:
+### `bal connector sdk`
 
-        cd connector-cli
-        ./gradlew shadowJar
-        cd -
+Generates a Ballerina connector wrapping a Java SDK.
 
-### Installing Locally
+**Synopsis**
 
-After building, install the tool into your local Ballerina distribution:
+```
+bal connector sdk <command> <sdk-ref> <output-dir> [options...]
+bal connector sdk <command> <output-dir> [options...]
+```
 
-        cd connector-tool
-        bal pack
-        bal push --repository=local
-        bal tool pull connector:0.1.0 --repository=local
+`<sdk-ref>` is a Maven coordinate (`group:artifact` or `group:artifact:version`) or a local
+dataset key resolved from `test-jars/<key>.jar` + `test-jars/<key>-javadoc.jar`.
 
-Once installed, `bal connector` is available as a top-level Ballerina CLI command.
+**Commands**
 
-## Contributing to Ballerina
+| Command | Description |
+|---------|-------------|
+| `pipeline` | Full workflow: SDK analysis → spec generation → connector codegen → fixes → tests/examples/docs |
+| `analyze` | Analyze the Java SDK and write metadata under the output root |
+| `generate` | Generate API spec and IR from analyzer metadata |
+| `connector` | Generate Ballerina client, types, and native adapter |
+| `fix-code` | Fix Java native adapter and Ballerina compilation errors |
+| `fix-report-only` | Run code fixer diagnostics without applying fixes |
+| `generate-tests` | Generate live integration tests |
+| `generate-examples` | Generate AI-assisted usage examples |
+| `generate-docs` | Generate README documentation |
 
-As an open-source project, Ballerina welcomes contributions from the community.
+**Options**
 
-For more information, go to the [contribution guidelines](https://github.com/ballerina-platform/ballerina-lang/blob/master/CONTRIBUTING.md).
+| Option | Description |
+|--------|-------------|
+| `--fix-iterations=<n>` | Maximum code fixer iterations (default: 3) |
+| `--skip-fix` | Skip the code fixing phase |
+| `--skip-tests` | Skip test generation |
+| `--skip-examples` | Skip example generation |
+| `--skip-docs` | Skip documentation generation |
+| `--no-thinking` | Disable extended LLM reasoning during spec generation |
+| `-y`, `--yes` | Auto-confirm all pipeline checkpoints |
+| `-v`, `--verbose` | Show detailed diagnostic output |
+| `-q`, `--quiet` | Suppress all output except errors |
 
-## Code of Conduct
+## Examples
 
-All contributors are encouraged to read the [Ballerina Code of Conduct](https://ballerina.io/code-of-conduct).
+Generate a connector from an OpenAPI specification:
+
+```bash
+bal connector openapi -i ./openapi.yaml -o ./my-connector
+```
+
+Skip the sanitize stage when the spec is already aligned:
+
+```bash
+bal connector openapi -i ./openapi.yaml -x sanitize
+```
+
+Generate only the client and tests, skip examples and docs:
+
+```bash
+bal connector openapi -i ./openapi.yaml -x examples -x docs
+```
+
+Generate a connector from a Maven SDK:
+
+```bash
+bal connector sdk pipeline com.example:my-sdk:1.0.0 ./my-connector
+```
 
 ## Useful Links
 
-* Discuss code changes to Ballerina projects on [ballerina-dev@googlegroups.com](mailto:ballerina-dev@googlegroups.com).
-* Chat live with the community via the [Discord server](https://discord.gg/ballerinalang).
-* Post technical questions on Stack Overflow with the [#ballerina](https://stackoverflow.com/questions/tagged/ballerina) tag.
+- Discuss code changes on [ballerina-dev@googlegroups.com](mailto:ballerina-dev@googlegroups.com)
+- Chat live with the community on [Discord](https://discord.gg/ballerinalang)
+- Post technical questions on [Stack Overflow](https://stackoverflow.com/questions/tagged/ballerina) with the `#ballerina` tag
