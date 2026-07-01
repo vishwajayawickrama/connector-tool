@@ -27,7 +27,7 @@ function analyzeConnectorForTests(string connectorPath, string[]? operationIds =
     string packageName = extractPackageName(tomlContent);
 
     // Read mock server content
-    string mockServerContent = check io:fileReadString(ballerinaDir + "/modules/mock.server/mock_server.bal");
+    string mockServerContent = check io:fileReadString(ballerinaDir + "/tests/mock_service.bal");
 
     // Read client.bal to extract the init method
     string clientContent = check io:fileReadString(ballerinaDir + "/client.bal");

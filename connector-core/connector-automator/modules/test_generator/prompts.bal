@@ -31,7 +31,7 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
 
     **Phase 2: Execution**
 
-    Now, based on my reflection, I will generate the complete ${backtick}mock_server.bal${backtick} file. I will follow these instructions with extreme precision.
+    Now, based on my reflection, I will generate the complete ${backtick}mock_service.bal${backtick} file. I will follow these instructions with extreme precision.
 
     **Critically Important:**
     - Your response MUST be a complete, raw Ballerina source code file.
@@ -51,7 +51,8 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
     1.  **Copyright Header:** The generated file must start with the exact copyright header from the template.
     2.  **HTTP Listener:** The service must be attached to a globally defined ${backtick}http:Listener ep0 = new (9090);${backtick}.
     3.  **NO ${backtick}init${backtick} FUNCTION:** You must not include any ${backtick}init${backtick} function. The service definition attached to the listener is the complete server configuration.
-    4.  **Complete All Functions:** Implement the body for every resource function.
+    4.  **Types are already in scope:** The mock service lives in the connector's ${backtick}tests/${backtick} directory. All types from the root package ${backtick}types.bal${backtick} are already available — do NOT add any import statements for them. The only imports allowed are ${backtick}ballerina/http${backtick} and ${backtick}ballerina/log${backtick} (and only if actually used).
+    5.  **Complete All Functions:** Implement the body for every resource function.
     5.  **Realistic & Type-Correct Data:** Use believable data for all fields. Return values must use Ballerina mapping constructor expressions with **Ballerina field names** (unquoted identifiers), NOT JSON-style string keys. The data must strictly adhere to the function's return type signature as defined in the provided types.
     6.  **Preserve Doc Comments:** All documentation comments (${backtick}# ...${backtick}) above the resource functions in the template must be preserved.
 
@@ -100,7 +101,7 @@ function createMockServerPrompt(string mockServerTemplate, string types) returns
     }
     ${tripleBacktick}
 
-    Now, generate the complete and final ${backtick}mock_server.bal${backtick} file.
+    Now, generate the complete and final ${backtick}mock_service.bal${backtick} file.
 `;
 }
 
@@ -183,7 +184,7 @@ ${methodSignaturesSection}
     **Requirements:**
     1.  **Complete File:** Your response must be a single, raw, and complete Ballerina source code file. Do not include any code fences in the response.
     2.  **Copyright Header:** The generated file must start with the standard Ballerina copyright header.
-    3.  **Imports:** Include ${backtick}import ballerina/os;${backtick}, ${backtick}import ballerina/test;${backtick}, and the mock server import: ${backtick}import ${analysis.packageName}.mock.server as _;${backtick}.
+    3.  **Imports:** Include ${backtick}import ballerina/os;${backtick} and ${backtick}import ballerina/test;${backtick}.
     4.  **Environment Setup:** Implement ${backtick}final${backtick} variables for ${backtick}isLiveServer${backtick}, ${backtick}serviceUrl${backtick}, and any necessary credentials using ${backtick}os:getEnv${backtick}. The mock server URL must be ${backtick}http://localhost:9090/v1${backtick}.
     5.  **Correct Client Initialization:** You MUST use the provided ${backtick}<CLIENT_INIT_METHOD>${backtick} and ${backtick}<REFERENCED_TYPE_DEFINITIONS>${backtick} to correctly initialize the client.
     6.  **Full Test Coverage:** Generate a test function for each resource endpoint in the mock server.
@@ -202,7 +203,6 @@ ${methodSignaturesSection}
 
     import ballerina/os;
     import ballerina/test;
-    import organization/twitter.mock.server as _;
 
     final boolean isLiveServer = os:getEnv("IS_LIVE_SERVER") == "true";
     final string token = isLiveServer ? os:getEnv("TWITTER_TOKEN") : "test_token";
