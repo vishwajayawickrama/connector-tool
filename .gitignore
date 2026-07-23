@@ -25,7 +25,10 @@ connector-core/.gradle/
 connector-core/build/
 
 # Local documentation and investigation notes
-/docs/
+/docs/*
+!/docs/openapi-workflow-reference.md
+!/docs/openapi-workflow/
+!/docs/openapi-workflow/**
 
 # Local agent instructions, not shared via git
 CLAUDE.md
