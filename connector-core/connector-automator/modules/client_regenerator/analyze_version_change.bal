@@ -38,6 +38,11 @@ const int CHUNK_SIZE = 50000;
 // 10 chunks = 500 KB — enough to capture all API-surface changes in practice.
 const int MAX_CHUNKS = 10;
 
+/// Structured semantic-version analysis returned for generated source changes.
+///
+/// `changeType` is `MAJOR`, `MINOR`, or `PATCH`; `confidence` is `HIGH`,
+/// `MEDIUM`, or `LOW`. The arrays contain concrete classified changes and
+/// `summary` contains a concise explanation.
 public type AnalysisResult record {|
     string changeType;
     string[] breakingChanges;
@@ -163,6 +168,13 @@ ${JSON_SCHEMA}`;
     return parseAnalysisResponse(content);
 }
 
+/// Analyzes a client/types source diff and classifies the required version bump.
+///
+/// Empty input, missing AI configuration, failed model calls, and invalid model
+/// responses are returned as errors.
+///
+/// + sourceDiff - Filename-labelled source diff to classify
+/// + return - Structured change classification or an analysis error
 public function analyzeVersionChange(string sourceDiff) returns AnalysisResult|error {
     if sourceDiff.trim().length() == 0 {
         return error("Source diff is empty");
@@ -194,6 +206,10 @@ function formatNoVersionChangeAnalysis() returns string {
 No client/types changes; no version bump required`;
 }
 
+/// Prints a human-readable version analysis to the configured summary output.
+///
+/// + analysis - Analysis result to report
+/// + recommendedVersion - Optional version calculated from the package version
 public function printVersionChangeAnalysis(AnalysisResult analysis, string recommendedVersion = "") {
     utils:printOutput(formatVersionChangeAnalysis(analysis, recommendedVersion));
 }
@@ -202,8 +218,13 @@ function printNoVersionChangeAnalysis() {
     utils:printOutput(formatNoVersionChangeAnalysis());
 }
 
-// Accepts a file path so the diff is never passed as a shell argument,
-// avoiding the OS ARG_MAX limit for large connectors (e.g. Asana).
+/// Reads a diff file, analyzes it, prints the result, and writes analysis_result.json.
+///
+/// The file path avoids passing large diffs as shell arguments. File-read,
+/// analysis, and output-write failures are returned to the caller.
+///
+/// + diffFilePath - Path to the source diff file
+/// + return - An error when reading, analyzing, or writing the result fails
 public function main(string diffFilePath) returns error? {
     utils:logInfo(string `reading diff from file: ${diffFilePath}`);
     string sourceDiffContent = check io:fileReadString(diffFilePath);

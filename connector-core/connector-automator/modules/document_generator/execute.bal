@@ -116,6 +116,7 @@ function generateAllReadmes(string connectorPath, string[] excluded) returns err
 }
 
 function genBallerinaReadme(string connectorPath) returns error? {
+    check generateIndividualExampleReadmes(connectorPath);
     error? result = generateBallerinaReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);
@@ -134,6 +135,7 @@ function genTestsReadme(string connectorPath) returns error? {
 }
 
 function genExamplesReadme(string connectorPath) returns error? {
+    check generateIndividualExampleReadmes(connectorPath);
     error? result = generateExamplesReadme(connectorPath);
     if result is error {
         utils:logError(string `README generation failed: ${result.message()}`);

@@ -91,8 +91,13 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
                 continue;
             }
             string exampleDirPath = examplesPath + "/" + exampleDirName;
+            boolean hasMain = check file:test(exampleDirPath + "/main.bal", file:EXISTS);
+            boolean hasBallerinaToml = check file:test(exampleDirPath + "/Ballerina.toml", file:EXISTS);
+            if !hasMain || !hasBallerinaToml {
+                continue;
+            }
 
-            error? result = generateSingleExampleReadme(example.absPath, exampleDirName, metadata);
+            error? result = generateSingleExampleReadme(examplesPath, example.absPath, exampleDirName, metadata);
             if result is error {
                 utils:logWarn(string `failed to generate documentation for ${exampleDirName}: ${result.message()}`);
             } else {
@@ -108,7 +113,8 @@ public function generateIndividualExampleReadmes(string connectorPath) returns e
     }
 }
 
-function generateSingleExampleReadme(string examplePath, string exampleDirName, ConnectorMetadata metadata) returns error? {
+function generateSingleExampleReadme(string examplesPath, string examplePath, string exampleDirName,
+        ConnectorMetadata metadata) returns error? {
     // Read all .bal files in the example directory
     ExampleData exampleData = check analyzeExampleDirectory(examplePath, exampleDirName);
 
@@ -124,10 +130,13 @@ function generateSingleExampleReadme(string examplePath, string exampleDirName, 
 
     string content = substituteVariables(exampleSpecificTemplate(), data);
 
-    string documentFileName = exampleDirName + ".md";
-    string outputPath = examplePath + "/" + documentFileName;
+    string outputPath = exampleDocumentPath(examplesPath, exampleDirName);
 
     check writeOutput(content, outputPath);
+}
+
+function exampleDocumentPath(string examplesPath, string exampleName) returns string {
+    return examplesPath + "/" + exampleName + "/" + exampleName + ".md";
 }
 
 function generateIndividualExampleContent(ExampleData exampleData, ConnectorMetadata connectorMetadata) returns map<string>|error {
@@ -247,7 +256,7 @@ function generateMainContent(ConnectorMetadata metadata) returns map<string>|err
 function retainDocumentedExamples(string connectorPath, ConnectorMetadata metadata) returns error? {
     string[] documentedExamples = [];
     foreach string exampleName in metadata.examples {
-        string documentPath = connectorPath + "/examples/" + exampleName + "/" + exampleName + ".md";
+        string documentPath = exampleDocumentPath(connectorPath + "/examples", exampleName);
         if check file:test(documentPath, file:EXISTS) {
             documentedExamples.push(exampleName);
         }

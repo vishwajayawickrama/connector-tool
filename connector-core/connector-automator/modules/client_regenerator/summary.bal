@@ -18,14 +18,24 @@ import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
 import ballerina/os;
+import ballerina/toml;
 
 import wso2/connector_automator.utils;
 
+/// A captured source-file state used to compare generated connector changes.
+///
+/// + exists - Whether the source file existed when it was captured
+/// + content - The source content, or an empty string when the file did not exist
 public type SourceFileSnapshot readonly & record {|
     boolean exists;
     string content;
 |};
 
+/// The pre-generation snapshots used for client and types version analysis.
+///
+/// + clientSnapshot - The captured client.bal state
+/// + typesSnapshot - The captured types.bal state
+/// + hasMeaningfulClient - Whether client.bal contains source beyond comments and whitespace
 public type ClientSourceBaseline readonly & record {|
     SourceFileSnapshot clientSnapshot;
     SourceFileSnapshot typesSnapshot;
@@ -81,6 +91,14 @@ function hasMeaningfulBallerinaSource(string content) returns boolean {
     return false;
 }
 
+/// Captures the current client.bal and types.bal files for later comparison.
+///
+/// The function resolves the package source directory and records missing files as
+/// non-existing snapshots. It returns an error when the package directory or an
+/// existing source file cannot be inspected or read.
+///
+/// + connectorPath - Connector project path
+/// + return - The immutable baseline, or an error when capture fails
 public function captureClientSourceBaseline(string connectorPath) returns ClientSourceBaseline|error {
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
     SourceFileSnapshot clientSnapshot = check readSourceSnapshot(ballerinaDir + "/client.bal");
@@ -161,20 +179,15 @@ function readCurrentSource(string sourcePath) returns string|error {
 }
 
 function readPackageVersion(string ballerinaDir) returns string? {
-    string|io:Error content = io:fileReadString(ballerinaDir + "/Ballerina.toml");
-    if content is io:Error {
+    map<json>|toml:Error packageConfig = toml:readFile(ballerinaDir + "/Ballerina.toml");
+    if packageConfig is toml:Error {
         return ();
     }
-    boolean inPackage = false;
-    foreach string line in regexp:split(re `\n`, content) {
-        string trimmed = line.trim();
-        if trimmed.startsWith("[") {
-            inPackage = trimmed == "[package]";
-        } else if inPackage && trimmed.startsWith("version") {
-            string[] parts = regexp:split(re `=`, trimmed);
-            if parts.length() >= 2 {
-                return regexp:replaceAll(re `^\s*"|"\s*$`, parts[1].trim(), "");
-            }
+    json? packageValue = packageConfig["package"];
+    if packageValue is map<json> {
+        json? versionValue = packageValue["version"];
+        if versionValue is string {
+            return versionValue;
         }
     }
     return ();
@@ -199,6 +212,15 @@ function recommendedVersion(string currentVersion, string changeType) returns st
     }
 }
 
+/// Compares the captured client sources with the generated sources and prints a
+/// semantic-version summary when relevant changes are found.
+///
+/// Missing or non-meaningful previous client source skips analysis. Diff failures,
+/// AI analysis failures, and source-read failures are returned to the caller.
+///
+/// + connectorPath - Connector project path after generation
+/// + baseline - Pre-generation client and types snapshots
+/// + return - An error when comparison or analysis fails
 public function executeVersionSummary(string connectorPath, ClientSourceBaseline baseline) returns error? {
     if !baseline.hasMeaningfulClient {
         utils:logVerbose("version analysis skipped: no meaningful previous client.bal");

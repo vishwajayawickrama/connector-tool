@@ -22,13 +22,20 @@ function shellQuote(string value) returns string {
     return "'" + regexp:replaceAll(re `'`, value, "'\"'\"'") + "'";
 }
 
+function isAbsolutePath(string path) returns boolean {
+    if path.startsWith("/") || path.startsWith("\\\\") {
+        return true;
+    }
+    return regexp:isFullMatch(re `^[A-Za-z]:[\\\\/].*`, path);
+}
+
 public function executeBalClientGenerate(string inputPath, string outputPath, OpenAPIToolOptions? customOptions = ()) returns utils:CommandResult {
     OpenAPIToolOptions toolOptions = customOptions ?: options;
 
     string command = string `bal openapi -i ${shellQuote(inputPath)} --mode client -o ${shellQuote(outputPath)}`;
 
     string licensePath = toolOptions.license;
-    if !licensePath.startsWith("/") {
+    if !isAbsolutePath(licensePath) {
         string workingDir = utils:getDirectoryPath(outputPath);
         licensePath = string `${workingDir}/${licensePath}`;
     }
@@ -39,15 +46,15 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
 
     if toolOptions.tags is string[] {
         string tagsList = string:'join(",", ...toolOptions.tags ?: []);
-        command += string ` --tags ${tagsList}`;
+        command += string ` --tags ${shellQuote(tagsList)}`;
     }
 
     if toolOptions.operations is string[] {
         string operationsList = string:'join(",", ...toolOptions.operations ?: []);
-        command += string ` --operations ${operationsList}`;
+        command += string ` --operations ${shellQuote(operationsList)}`;
     }
 
-    command += string ` --client-methods ${toolOptions.clientMethod}`;
+    command += string ` --client-methods ${shellQuote(toolOptions.clientMethod)}`;
 
     utils:logVerbose(string `running: ${command}`);
     return utils:executeCommand(command, utils:getDirectoryPath(outputPath));

@@ -37,8 +37,9 @@ STAGES
             changes and recommend a semantic version update.
 
        tests
-            Generate connector tests, including a mock server module and a
-            test suite derived from the connector and source specification.
+            Generate connector tests, validate them with bal test, and apply a
+            bounded number of automatic repair attempts. Reports any failures
+            that remain unresolved after repair.
 
        examples
             Generate AI-assisted Ballerina usage examples for the connector.

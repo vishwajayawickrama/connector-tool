@@ -401,7 +401,7 @@ Generate a mock server module and comprehensive test suite:
 bal run -- openapi generate-tests <connector-path> <spec-path> [options]
 ```
 
-OpenAPI tests include both mock-server tests and live server tests using `@test:Config { groups: ["live_tests", "mock_tests"] }`. Use `IS_LIVE_SERVER=true` to run against the real API.
+OpenAPI tests include both mock-server tests and live server tests using `@test:Config { groups: ["live_tests", "mock_tests"] }`. After generation, the workflow runs `bal test` and makes a bounded number of automatic repair attempts when validation fails. Any failures that remain unresolved are reported. Use `IS_LIVE_SERVER=true` to run against the real API.
 
 **Output:**
 - `<connector-path>/ballerina/modules/mock.server/mock_server.bal`
