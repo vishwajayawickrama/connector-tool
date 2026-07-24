@@ -84,11 +84,11 @@ function parseAnalysisResponse(string raw) returns AnalysisResult|error {
     return check value:fromJsonStringWithType(cleaned.trim());
 }
 
-function analyzeInSingleTurn(ai:ModelProvider model, string gitDiff) returns AnalysisResult|error {
-    string prompt = string `You are analyzing git diff output for a Ballerina connector to determine the semantic version change needed.
+function analyzeInSingleTurn(ai:ModelProvider model, string sourceDiff) returns AnalysisResult|error {
+    string prompt = string `You are analyzing generated source changes for a Ballerina connector to determine the semantic version change needed. The input contains filename-labelled sections produced by either Unix diff or Windows fc.
 
-GIT DIFF:
-${gitDiff}
+SOURCE CHANGES:
+${sourceDiff}
 
 ${VERSION_RULES}
 
@@ -105,13 +105,13 @@ ${JSON_SCHEMA}`;
     return parseAnalysisResponse(content);
 }
 
-function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns AnalysisResult|error {
-    int totalChunks = (gitDiff.length() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+function analyzeInChunks(ai:ModelProvider model, string sourceDiff) returns AnalysisResult|error {
+    int totalChunks = (sourceDiff.length() + CHUNK_SIZE - 1) / CHUNK_SIZE;
     int chunksToSend = totalChunks > MAX_CHUNKS ? MAX_CHUNKS : totalChunks;
     boolean truncated = totalChunks > MAX_CHUNKS;
 
     if truncated {
-        utils:logWarn(string `diff has ${totalChunks} chunks — capping at ${MAX_CHUNKS} to stay within model context limit (${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ${gitDiff.length() / 1000}KB analysed)`);
+        utils:logWarn(string `diff has ${totalChunks} chunks — capping at ${MAX_CHUNKS} to stay within model context limit (${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ${sourceDiff.length() / 1000}KB analysed)`);
     } else {
         utils:logInfo(string `diff too large for single turn — splitting into ${chunksToSend} chunks`);
     }
@@ -119,10 +119,10 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
     ai:ChatMessage[] messages = [];
 
     string truncationNote = truncated
-        ? string ` NOTE: the diff is very large; you will receive only the first ${chunksToSend} of ${totalChunks} parts (~${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ~${gitDiff.length() / 1000}KB). Focus on API-surface changes visible in the portion you receive.`
+        ? string ` NOTE: the source changes are very large; you will receive only the first ${chunksToSend} of ${totalChunks} parts (~${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ~${sourceDiff.length() / 1000}KB). Focus on API-surface changes visible in the portion you receive.`
         : "";
 
-    string intro = string `I will send you a large git diff for a Ballerina connector in ${chunksToSend} parts because of its size.${truncationNote} Please wait until you have received all parts before analysing. After each part simply acknowledge with "Received part X/${chunksToSend}." and nothing else.`;
+    string intro = string `I will send you large generated source changes for a Ballerina connector in ${chunksToSend} parts because of their size.${truncationNote} The input may use Unix diff or Windows fc format. Please wait until you have received all parts before analysing. After each part simply acknowledge with "Received part X/${chunksToSend}." and nothing else.`;
     messages.push({role: "user", content: intro});
 
     ai:ChatAssistantMessage introAck = check model->chat(messages);
@@ -132,8 +132,8 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
     foreach int i in 0 ..< chunksToSend {
         int startIdx = i * CHUNK_SIZE;
         int endIdx = startIdx + CHUNK_SIZE;
-        int safeEnd = endIdx < gitDiff.length() ? endIdx : gitDiff.length();
-        string chunk = gitDiff.substring(startIdx, safeEnd);
+        int safeEnd = endIdx < sourceDiff.length() ? endIdx : sourceDiff.length();
+        string chunk = sourceDiff.substring(startIdx, safeEnd);
 
         utils:logVerbose(string `sending chunk ${i + 1}/${chunksToSend} (${chunk.length()} chars)`);
 
@@ -143,10 +143,10 @@ function analyzeInChunks(ai:ModelProvider model, string gitDiff) returns Analysi
     }
 
     string truncationWarning = truncated
-        ? string `\n\nIMPORTANT: You only received the first ~${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of a ~${gitDiff.length() / 1000}KB diff. Base your classification on what you saw; set confidence to LOW if you cannot be certain.`
+        ? string `\n\nIMPORTANT: You only received the first ~${MAX_CHUNKS * CHUNK_SIZE / 1000}KB of ~${sourceDiff.length() / 1000}KB of source changes. Base your classification on what you saw; set confidence to LOW if you cannot be certain.`
         : "";
 
-    string analysisRequest = string `You have received all ${chunksToSend} parts of the git diff.${truncationWarning}
+    string analysisRequest = string `You have received all ${chunksToSend} parts of the generated source changes.${truncationWarning}
 
 ${VERSION_RULES}
 
@@ -163,16 +163,16 @@ ${JSON_SCHEMA}`;
     return parseAnalysisResponse(content);
 }
 
-public function analyzeVersionChange(string gitDiff) returns AnalysisResult|error {
-    if gitDiff.trim().length() == 0 {
-        return error("Git diff is empty");
+public function analyzeVersionChange(string sourceDiff) returns AnalysisResult|error {
+    if sourceDiff.trim().length() == 0 {
+        return error("Source diff is empty");
     }
     ai:ModelProvider model = check buildModel();
 
-    if gitDiff.length() <= CHUNK_SIZE {
-        return analyzeInSingleTurn(model, gitDiff);
+    if sourceDiff.length() <= CHUNK_SIZE {
+        return analyzeInSingleTurn(model, sourceDiff);
     }
-    return analyzeInChunks(model, gitDiff);
+    return analyzeInChunks(model, sourceDiff);
 }
 
 function formatVersionChangeAnalysis(AnalysisResult analysis, string recommendedVersion = "") returns string {
@@ -206,16 +206,16 @@ function printNoVersionChangeAnalysis() {
 // avoiding the OS ARG_MAX limit for large connectors (e.g. Asana).
 public function main(string diffFilePath) returns error? {
     utils:logInfo(string `reading diff from file: ${diffFilePath}`);
-    string gitDiffContent = check io:fileReadString(diffFilePath);
+    string sourceDiffContent = check io:fileReadString(diffFilePath);
 
-    utils:logInfo("analyzing git diff...");
-    utils:logVerbose(string `diff size: ${gitDiffContent.length()} chars`);
+    utils:logInfo("analyzing source diff...");
+    utils:logVerbose(string `diff size: ${sourceDiffContent.length()} chars`);
 
-    if gitDiffContent.length() == 0 {
-        return error("Git diff file is empty");
+    if sourceDiffContent.length() == 0 {
+        return error("Source diff file is empty");
     }
 
-    AnalysisResult analysis = check analyzeVersionChange(gitDiffContent);
+    AnalysisResult analysis = check analyzeVersionChange(sourceDiffContent);
     printVersionChangeAnalysis(analysis);
 
     json resultJson = check analysis.cloneWithType(json);

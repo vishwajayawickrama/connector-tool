@@ -17,19 +17,147 @@
 import ballerina/file;
 import ballerina/io;
 import ballerina/lang.regexp;
+import ballerina/os;
 
 import wso2/connector_automator.utils;
 
-function shellQuote(string value) returns string {
-    return "'" + regexp:replaceAll(re `'`, value, "'\"'\"'") + "'";
+public type SourceFileSnapshot readonly & record {|
+    boolean exists;
+    string content;
+|};
+
+public type ClientSourceBaseline readonly & record {|
+    SourceFileSnapshot clientSnapshot;
+    SourceFileSnapshot typesSnapshot;
+    boolean hasMeaningfulClient;
+|};
+
+type NativeDiffResult record {|
+    int exitCode;
+    string stdout;
+    string stderr;
+|};
+
+function readSourceSnapshot(string sourcePath) returns SourceFileSnapshot|error {
+    boolean|file:Error exists = file:test(sourcePath, file:EXISTS);
+    if exists is file:Error {
+        return error(string `could not inspect ${sourcePath}: ${exists.message()}`);
+    }
+    if !exists {
+        return {exists: false, content: ""};
+    }
+
+    string|io:Error content = io:fileReadString(sourcePath);
+    if content is io:Error {
+        return error(string `could not read ${sourcePath}: ${content.message()}`);
+    }
+    return {exists: true, content};
 }
 
-function resolveRelativePath(string gitRoot, string absolutePath) returns string? {
-    string prefix = gitRoot.endsWith("/") ? gitRoot : gitRoot + "/";
-    if !absolutePath.startsWith(prefix) {
-        return ();
+// A missing, empty, or comment-only client is not a usable version-analysis baseline.
+function hasMeaningfulBallerinaSource(string content) returns boolean {
+    int offset = 0;
+    while offset < content.length() {
+        string remaining = content.substring(offset);
+        string current = remaining.substring(0, 1);
+        if current.trim().length() == 0 {
+            offset += 1;
+        } else if remaining.startsWith("//") || remaining.startsWith("#") {
+            int? lineEnd = remaining.indexOf("\n");
+            if lineEnd is () {
+                return false;
+            }
+            offset += lineEnd + 1;
+        } else if remaining.startsWith("/*") {
+            int? commentEnd = remaining.indexOf("*/");
+            if commentEnd is () {
+                return false;
+            }
+            offset += commentEnd + 2;
+        } else {
+            return true;
+        }
     }
-    return absolutePath.substring(prefix.length());
+    return false;
+}
+
+public function captureClientSourceBaseline(string connectorPath) returns ClientSourceBaseline|error {
+    string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
+    SourceFileSnapshot clientSnapshot = check readSourceSnapshot(ballerinaDir + "/client.bal");
+    SourceFileSnapshot typesSnapshot = check readSourceSnapshot(ballerinaDir + "/types.bal");
+    return {
+        clientSnapshot,
+        typesSnapshot,
+        hasMeaningfulClient: clientSnapshot.exists && hasMeaningfulBallerinaSource(clientSnapshot.content)
+    };
+}
+
+function normalizeLineEndings(string content) returns string {
+    return regexp:replaceAll(re `\r\n?`, content, "\n");
+}
+
+function executeNativeDiff(string oldPath, string newPath) returns NativeDiffResult|error {
+    boolean windows = os:getEnv("OS").toLowerAscii() == "windows_nt";
+    os:Command command = windows
+        ? {value: "fc.exe", arguments: ["/L", "/N", oldPath, newPath]}
+        : {value: "diff", arguments: ["-u", oldPath, newPath]};
+
+    os:Process process = check os:exec(command);
+    byte[] stdoutBytes = check process.output();
+    byte[] stderrBytes = check process.output(io:stderr);
+    int exitCode = check process.waitForExit();
+    return {
+        exitCode,
+        stdout: check string:fromBytes(stdoutBytes),
+        stderr: check string:fromBytes(stderrBytes)
+    };
+}
+
+function compareSource(string fileName, string oldContent, string newContent) returns string|error {
+    string normalizedOld = normalizeLineEndings(oldContent);
+    string normalizedNew = normalizeLineEndings(newContent);
+    if normalizedOld == normalizedNew {
+        return "";
+    }
+
+    string tempDir = check file:createTempDir(prefix = "connector_automator_diff_");
+    string oldPath = tempDir + "/old_" + fileName;
+    string newPath = tempDir + "/new_" + fileName;
+
+    error? writeOld = io:fileWriteString(oldPath, normalizedOld);
+    if writeOld is error {
+        do { check file:remove(tempDir, file:RECURSIVE); } on fail { }
+        return error(string `could not create ${fileName} baseline: ${writeOld.message()}`);
+    }
+    error? writeNew = io:fileWriteString(newPath, normalizedNew);
+    if writeNew is error {
+        do { check file:remove(tempDir, file:RECURSIVE); } on fail { }
+        return error(string `could not create generated ${fileName} snapshot: ${writeNew.message()}`);
+    }
+
+    NativeDiffResult|error diffResult = executeNativeDiff(oldPath, newPath);
+    do { check file:remove(tempDir, file:RECURSIVE); } on fail error cleanupError {
+        utils:logVerbose(string `could not remove version-analysis files: ${cleanupError.message()}`);
+    }
+    if diffResult is error {
+        return error(string `could not compare ${fileName}: ${diffResult.message()}`);
+    }
+    if diffResult.exitCode == 0 {
+        return "";
+    }
+    if diffResult.exitCode != 1 {
+        string diagnostics = diffResult.stderr.trim();
+        return error(string `could not compare ${fileName} (exit ${diffResult.exitCode})${diagnostics.length() > 0 ? ": " + diagnostics : ""}`);
+    }
+    if diffResult.stdout.trim().length() == 0 {
+        return error(string `comparison reported changes for ${fileName} without producing output`);
+    }
+    return string `Changes in ${fileName}:\n${diffResult.stdout.trim()}`;
+}
+
+function readCurrentSource(string sourcePath) returns string|error {
+    SourceFileSnapshot snapshot = check readSourceSnapshot(sourcePath);
+    return snapshot.content;
 }
 
 function readPackageVersion(string ballerinaDir) returns string? {
@@ -71,50 +199,32 @@ function recommendedVersion(string currentVersion, string changeType) returns st
     }
 }
 
-public function executeVersionSummary(string connectorPath) returns error? {
+public function executeVersionSummary(string connectorPath, ClientSourceBaseline baseline) returns error? {
+    if !baseline.hasMeaningfulClient {
+        utils:logVerbose("version analysis skipped: no meaningful previous client.bal");
+        return;
+    }
+
     string ballerinaDir = check utils:resolveBallerinaDir(connectorPath);
-    utils:CommandResult rootResult = utils:executeCommand("git rev-parse --show-toplevel", ballerinaDir);
-    if !rootResult.success {
-        return error("connector is not inside a Git worktree");
-    }
-    string gitRoot = rootResult.stdout.trim();
-    utils:CommandResult baseResult = utils:executeCommand("git merge-base origin/main HEAD", gitRoot);
-    if !baseResult.success || baseResult.stdout.trim().length() == 0 {
-        return error("could not resolve the merge base of origin/main and HEAD");
-    }
-    string mergeBase = baseResult.stdout.trim();
+    string clientDiff = check compareSource(
+        "client.bal", baseline.clientSnapshot.content, check readCurrentSource(ballerinaDir + "/client.bal"));
+    string typesDiff = check compareSource(
+        "types.bal", baseline.typesSnapshot.content, check readCurrentSource(ballerinaDir + "/types.bal"));
 
-    string[] relativePaths = [];
-    foreach string sourcePath in [ballerinaDir + "/client.bal", ballerinaDir + "/types.bal"] {
-        if check file:test(sourcePath, file:EXISTS) {
-            string? relativePath = resolveRelativePath(gitRoot, sourcePath);
-            if relativePath is string {
-                relativePaths.push(relativePath);
-            }
-        }
+    string[] sourceDiffs = [];
+    if clientDiff.length() > 0 {
+        sourceDiffs.push(clientDiff);
     }
-    if relativePaths.length() == 0 {
-        return error("client.bal and types.bal were not found inside the Git worktree");
+    if typesDiff.length() > 0 {
+        sourceDiffs.push(typesDiff);
     }
-
-    string[] diffs = [];
-    foreach string relativePath in relativePaths {
-        string command = string `git diff ${mergeBase} -- ${shellQuote(relativePath)}`;
-        utils:CommandResult diffResult = utils:executeCommand(command, gitRoot);
-        if !diffResult.success {
-            return error(string `could not generate Git diff for ${relativePath}: ${diffResult.stderr.trim()}`);
-        }
-        if diffResult.stdout.length() > 0 {
-            diffs.push(diffResult.stdout);
-        }
-    }
-    string gitDiff = string:'join("\n", ...diffs).trim();
-    if gitDiff.length() == 0 {
+    string sourceDiff = string:'join("\n\n", ...sourceDiffs).trim();
+    if sourceDiff.length() == 0 {
         printNoVersionChangeAnalysis();
         return;
     }
 
-    AnalysisResult analysis = check analyzeVersionChange(gitDiff);
+    AnalysisResult analysis = check analyzeVersionChange(sourceDiff);
     string recommended = "";
     string? currentVersion = readPackageVersion(ballerinaDir);
     if currentVersion is string {

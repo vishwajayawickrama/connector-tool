@@ -16,11 +16,16 @@
 import wso2/connector_automator.utils;
 
 import ballerina/file;
+import ballerina/lang.regexp;
+
+function shellQuote(string value) returns string {
+    return "'" + regexp:replaceAll(re `'`, value, "'\"'\"'") + "'";
+}
 
 public function executeBalClientGenerate(string inputPath, string outputPath, OpenAPIToolOptions? customOptions = ()) returns utils:CommandResult {
     OpenAPIToolOptions toolOptions = customOptions ?: options;
 
-    string command = string `bal openapi -i ${inputPath} --mode client -o ${outputPath}`;
+    string command = string `bal openapi -i ${shellQuote(inputPath)} --mode client -o ${shellQuote(outputPath)}`;
 
     string licensePath = toolOptions.license;
     if !licensePath.startsWith("/") {
@@ -29,7 +34,7 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
     }
     boolean|file:Error licenseExists = file:test(licensePath, file:EXISTS);
     if licenseExists is boolean && licenseExists {
-        command += string ` --license ${licensePath}`;
+        command += string ` --license ${shellQuote(licensePath)}`;
     }
 
     if toolOptions.tags is string[] {

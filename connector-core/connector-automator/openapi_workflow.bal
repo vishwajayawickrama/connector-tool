@@ -109,8 +109,15 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         step += 1;
         utils:logStep(step, total, "Generating Ballerina Client");
 
+        client_regenerator:ClientSourceBaseline|error baselineResult =
+            client_regenerator:captureClientSourceBaseline(clientPath);
+        if baselineResult is error {
+            utils:logWarn(string `could not capture existing client sources — version analysis will be skipped: ${baselineResult.message()}`);
+        }
+
         // Generating client.
         error? clientResult = client_generator:executeClientGen(sanitizedSpec, clientPath, customOptions = toolOptions);
+        boolean clientGenerationSucceeded = clientResult is ();
         if clientResult is error {
             utils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`);
         } else {
@@ -158,9 +165,13 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         }
         utils:logInfo("✓ client built and validated");
 
-        error? summaryResult = client_regenerator:executeVersionSummary(outputDir);
-        if summaryResult is error {
-            utils:logWarn(string `version analysis skipped: ${summaryResult.message()}`);
+        if clientGenerationSucceeded && baselineResult is client_regenerator:ClientSourceBaseline {
+            error? summaryResult = client_regenerator:executeVersionSummary(outputDir, baselineResult);
+            if summaryResult is error {
+                utils:logWarn(string `version analysis skipped: ${summaryResult.message()}`);
+            }
+        } else if !clientGenerationSucceeded {
+            utils:logVerbose("version analysis skipped: client generation failed");
         }
 
         if interactive && step < total {

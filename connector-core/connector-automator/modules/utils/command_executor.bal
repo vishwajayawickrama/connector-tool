@@ -143,8 +143,16 @@ public function executeCommand(string command, string workingDir, int timeoutSec
 
 public function getDirectoryPath(string filePath) returns string {
     int? lastSlashIndex = filePath.lastIndexOf("/");
+    int? lastBackslashIndex = filePath.lastIndexOf("\\");
+    int separatorIndex = -1;
     if lastSlashIndex is int {
-        return filePath.substring(0, lastSlashIndex);
+        separatorIndex = lastSlashIndex;
+    }
+    if lastBackslashIndex is int && lastBackslashIndex > separatorIndex {
+        separatorIndex = lastBackslashIndex;
+    }
+    if separatorIndex >= 0 {
+        return filePath.substring(0, separatorIndex);
     }
     return ".";
 }
