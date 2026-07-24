@@ -27,6 +27,5 @@ connector-core/build/
 # Local documentation and investigation notes
 /docs/
 
-# Local agent instructions, not shared via git
-CLAUDE.md
+# Local development files
 connector-tool/docker.env
