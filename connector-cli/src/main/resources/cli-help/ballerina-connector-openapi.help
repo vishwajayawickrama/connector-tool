@@ -38,7 +38,7 @@ STAGES
 
        tests
             Generate connector tests, validate them with bal test, and apply a
-            bounded number of automatic repair attempts. Reports any failures
+            bounded number of automatic repair attempts. Report any failures
             that remain unresolved after repair.
 
        examples

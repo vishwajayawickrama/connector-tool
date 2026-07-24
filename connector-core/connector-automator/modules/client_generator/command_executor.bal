@@ -23,7 +23,7 @@ function shellQuote(string value) returns string {
 }
 
 function isAbsolutePath(string path) returns boolean {
-    if path.startsWith("/") || path.startsWith("\\\\") {
+    if path.startsWith("/") || path.startsWith("\\") {
         return true;
     }
     return regexp:isFullMatch(re `^[A-Za-z]:[\\\\/].*`, path);
@@ -35,11 +35,12 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
     string command = string `bal openapi -i ${shellQuote(inputPath)} --mode client -o ${shellQuote(outputPath)}`;
 
     string licensePath = toolOptions.license;
-    if !isAbsolutePath(licensePath) {
+    string licensePathForTest = licensePath;
+    if !isAbsolutePath(licensePathForTest) {
         string workingDir = utils:getDirectoryPath(outputPath);
-        licensePath = string `${workingDir}/${licensePath}`;
+        licensePathForTest = string `${workingDir}/${licensePathForTest}`;
     }
-    boolean|file:Error licenseExists = file:test(licensePath, file:EXISTS);
+    boolean|file:Error licenseExists = file:test(licensePathForTest, file:EXISTS);
     if licenseExists is boolean && licenseExists {
         command += string ` --license ${shellQuote(licensePath)}`;
     }

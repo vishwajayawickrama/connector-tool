@@ -147,7 +147,7 @@ function genExamplesReadme(string connectorPath) returns error? {
 function genIndividualExampleReadmes(string connectorPath) returns error? {
     error? result = generateIndividualExampleReadmes(connectorPath);
     if result is error {
-        utils:logError(string `README generation failed: ${result.message()}`);
+        utils:logError(string `Individual example documentation generation failed: ${result.message()}`);
         return result;
     }
     utils:logInfo(string `✓ example docs: ${connectorPath}/examples/*/*.md`);

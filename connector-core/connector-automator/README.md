@@ -436,7 +436,7 @@ bal run -- openapi generate-docs <doc-command> <connector-path> [options]
 
 | Command | Description |
 |---------|-------------|
-| `generate-all` | Generate all READMEs |
+| `generate-all` | Generate all documentation |
 | `generate-ballerina` | Generate module README |
 | `generate-tests` | Generate tests README |
 | `generate-examples` | Generate examples README |
