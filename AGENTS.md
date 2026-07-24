@@ -34,12 +34,17 @@ The main areas are:
 ## Build and validation
 
 Run commands from the repository root unless a different directory is stated.
-
-The CI-equivalent validation is:
+After completing each logical repository change set, run the following command
+before handing the work back:
 
 ```bash
-./gradlew clean build --stacktrace --console=plain --no-daemon
+./gradlew build
 ```
+
+This final build is mandatory. Focused checks may be used while iterating, but
+they do not replace it. If the build fails, fix the failure and rerun it. If an
+environmental limitation prevents the build from running, report that explicitly
+instead of claiming the change is complete and validated.
 
 Use the narrowest useful check while iterating:
 
