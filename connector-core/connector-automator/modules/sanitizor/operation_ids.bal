@@ -227,6 +227,8 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, string ai
     map<OperationLocation> requestLocations = {};
     string apiContext = extractApiContext(specMap);
     collectOperationIdRequests(paths, requests, requestLocations, apiContext, currentMappings);
+    int totalBatches = logBatchWorkload(
+        "operationId request", "operationId requests", requests.length(), specFilePath);
 
     map<OperationIdRequest> requestsById = {};
     foreach OperationIdRequest request in requests {
@@ -237,7 +239,6 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, string ai
     int operationIdsChanged = 0;
     int operationsPending = 0;
     int failedBatches = 0;
-    int totalBatches = 0;
     int startIdx = 0;
     while startIdx < requests.length() {
         int endIdx = startIdx + BATCH_SIZE;
@@ -246,8 +247,7 @@ public function improveOperationIdsBatchWithRetry(string specFilePath, string ai
         }
         OperationIdRequest[] batch = requests.slice(startIdx, endIdx);
         int batchNum = (startIdx / BATCH_SIZE) + 1;
-        totalBatches += 1;
-        utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`);
+        logBatchProgress("operationId", batchNum, totalBatches, batch.length());
 
         BatchOperationIdResponse[]|error batchResult = generateOperationIdsBatchWithRetry(
                 batch, apiContext, reservedOperationIds, config);

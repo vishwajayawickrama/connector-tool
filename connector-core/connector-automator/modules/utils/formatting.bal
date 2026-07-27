@@ -73,3 +73,50 @@ public function getDisplayPath(string path) returns string {
     }
     return path;
 }
+
+# Returns a command with invocation-directory path prefixes shortened for display.
+# The returned value must not be used for command execution.
+#
+# + command - Command string to format for user-facing output
+# + return - Command with local absolute path prefixes made invocation-relative
+public function getDisplayCommand(string command) returns string {
+    if command.length() == 0 {
+        return command;
+    }
+
+    string invocationDir = file:getCurrentDir();
+    if invocationDir.length() == 0 {
+        return command;
+    }
+
+    string normalizedInvocationDir = regexp:replaceAll(re `\\`, invocationDir, "/");
+    while normalizedInvocationDir.length() > 1 && normalizedInvocationDir.endsWith("/") &&
+        !regexp:isFullMatch(re `^[A-Za-z]:/$`, normalizedInvocationDir) {
+        normalizedInvocationDir = normalizedInvocationDir.substring(0, normalizedInvocationDir.length() - 1);
+    }
+    if normalizedInvocationDir == "/" ||
+        regexp:isFullMatch(re `^[A-Za-z]:/$`, normalizedInvocationDir) {
+        return command;
+    }
+
+    string displayCommand = replaceAllLiteral(command, normalizedInvocationDir + "/", "");
+    string windowsInvocationDir = regexp:replaceAll(re `/`, normalizedInvocationDir, "\\");
+    displayCommand = replaceAllLiteral(displayCommand, windowsInvocationDir + "\\", "");
+    return displayCommand;
+}
+
+function replaceAllLiteral(string value, string target, string replacement) returns string {
+    if target.length() == 0 || !value.includes(target) {
+        return value;
+    }
+
+    string result = "";
+    int searchOffset = 0;
+    int? matchStart = value.indexOf(target, searchOffset);
+    while matchStart is int {
+        result += value.substring(searchOffset, matchStart) + replacement;
+        searchOffset = matchStart + target.length();
+        matchStart = value.indexOf(target, searchOffset);
+    }
+    return result + value.substring(searchOffset);
+}

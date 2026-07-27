@@ -13,10 +13,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import wso2/connector_automator.utils;
-
 import ballerina/file;
 import ballerina/lang.regexp;
+
+import wso2/connector_automator.utils;
 
 function shellQuote(string value) returns string {
     return "'" + regexp:replaceAll(re `'`, value, "'\"'\"'") + "'";
@@ -57,6 +57,5 @@ public function executeBalClientGenerate(string inputPath, string outputPath, Op
 
     command += string ` --client-methods ${shellQuote(toolOptions.clientMethod)}`;
 
-    utils:logVerbose(string `running: ${command}`);
     return utils:executeCommand(command, utils:getDirectoryPath(outputPath));
 }

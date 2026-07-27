@@ -15,14 +15,14 @@
 
 import ballerina/file;
 import ballerina/io;
+import ballerina/lang.regexp;
 import ballerina/os;
 import ballerina/random;
-import ballerina/lang.regexp;
 import ballerina/time;
 
 public function executeCommand(string command, string workingDir, int timeoutSeconds = 1800) returns CommandResult {
     time:Utc startTime = time:utcNow();
-    logVerbose(string `executing: ${command}`);
+    logVerbose(string `executing: ${getDisplayCommand(command)}`);
 
     string stdout = "";
     string stderr = "";
@@ -42,7 +42,7 @@ public function executeCommand(string command, string workingDir, int timeoutSec
                     exitCode = 1;
                     success = false;
                 } else {
-                    logVerbose(string `created working directory: ${workingDir}`);
+                    logVerbose(string `created working directory: ${getDisplayPath(workingDir)}`);
                 }
             }
         }

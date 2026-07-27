@@ -35,10 +35,10 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     boolean interactive = interactiveArg == "interactive";
     string[] excluded = excludedStages.length() == 0 ? [] : re`,`.split(excludedStages);
 
-    utils:logVerbose(string `spec: ${openApiSpec}`);
-    utils:logVerbose(string `output: ${outputDir}`);
-    utils:logVerbose(string `spec-dir: ${specDir}`);
-    utils:logVerbose(string `examples-dir: ${examplesDir}`);
+    utils:logVerbose(string `spec: ${utils:getDisplayPath(openApiSpec)}`);
+    utils:logVerbose(string `output: ${utils:getDisplayPath(outputDir)}`);
+    utils:logVerbose(string `spec-dir: ${utils:getDisplayPath(specDir)}`);
+    utils:logVerbose(string `examples-dir: ${utils:getDisplayPath(examplesDir)}`);
 
     if excluded.length() > 0 {
         utils:logInfo(string `skipping stages: ${string:'join(", ", ...excluded)}`);

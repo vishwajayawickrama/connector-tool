@@ -19,6 +19,23 @@ import wso2/connector_automator.utils;
 
 configurable RetryConfig retryConfig = {};
 
+function logBatchWorkload(string singularLabel, string pluralLabel, int itemCount,
+        string specFilePath) returns int {
+    int totalBatches = itemCount == 0 ? 0 : (itemCount + BATCH_SIZE - 1) / BATCH_SIZE;
+    string itemLabel = itemCount == 1 ? singularLabel : pluralLabel;
+    string batchDetails = totalBatches > 1 ? string ` in ${totalBatches} batches` : "";
+    utils:logVerbose(string `processing ${itemCount} ${itemLabel}${batchDetails} from ${
+        utils:getDisplayPath(specFilePath)}`);
+    return totalBatches;
+}
+
+function logBatchProgress(string batchLabel, int batchNum, int totalBatches, int batchSize) {
+    if totalBatches > 1 {
+        utils:logVerbose(string `${batchLabel} batch ${batchNum}/${totalBatches} (${batchSize} item${
+            batchSize == 1 ? "" : "s"})`);
+    }
+}
+
 public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests, string apiContext, RetryConfig? config = ()) returns BatchDescriptionResponse[]|error {
     RetryConfig retryConf = config ?: retryConfig;
 
@@ -127,9 +144,6 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
 }
 
 public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns DescriptionEnhancementResult|error {
-    utils:logVerbose(string `processing spec for missing descriptions: ${utils:getDisplayPath(
-                    specFilePath)} (batch size ${BATCH_SIZE})`);
-
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
         return error("Failed to read OpenAPI spec file", specResult);
@@ -170,9 +184,9 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         collectOperationDescriptionRequests(specJson, allRequests, requestToLocationMap);
 
         int totalRequests = allRequests.length();
-        utils:logVerbose(string `collected ${totalRequests} description requests`);
+        int totalBatches = logBatchWorkload(
+            "description request", "description requests", totalRequests, specFilePath);
 
-        int totalBatches = 0;
         int failedBatches = 0;
         int startIdx = 0;
         while startIdx < totalRequests {
@@ -183,13 +197,10 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
             int batchNum = (startIdx / BATCH_SIZE) + 1;
-            totalBatches += 1;
-            utils:logVerbose(string `processing descriptions batch ${batchNum} (${batch.length()} items)`);
+            logBatchProgress("description", batchNum, totalBatches, batch.length());
 
             BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
             if batchResult is BatchDescriptionResponse[] {
-                utils:logVerbose(string `batch ${batchNum} complete (${batchResult.length()} descriptions)`);
-
                 foreach BatchDescriptionResponse response in batchResult {
                     string|string[]? location = requestToLocationMap[response.id];
                     error? updateResult = ();
@@ -272,9 +283,6 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
 }
 
 public function improveOperationSummariesBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns int|error {
-    utils:logVerbose(string `processing spec for operation summaries: ${utils:getDisplayPath(
-                    specFilePath)} (batch size ${BATCH_SIZE})`);
-
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
         return error("Failed to read OpenAPI spec file", specResult);
@@ -293,9 +301,9 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
         collectOperationSummaryRequests(specJson, allRequests, requestToLocationMap);
 
         int totalRequests = allRequests.length();
-        utils:logVerbose(string `collected ${totalRequests} summary requests`);
+        int totalBatches = logBatchWorkload(
+            "summary request", "summary requests", totalRequests, specFilePath);
 
-        int totalBatches = 0;
         int failedBatches = 0;
         int startIdx = 0;
         while startIdx < totalRequests {
@@ -306,13 +314,10 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
 
             DescriptionRequest[] batch = allRequests.slice(startIdx, endIdx);
             int batchNum = (startIdx / BATCH_SIZE) + 1;
-            totalBatches += 1;
-            utils:logVerbose(string `processing summaries batch ${batchNum} (${batch.length()} items)`);
+            logBatchProgress("summary", batchNum, totalBatches, batch.length());
 
             BatchDescriptionResponse[]|error batchResult = generateDescriptionsBatchWithRetry(batch, apiContext, config);
             if batchResult is BatchDescriptionResponse[] {
-                utils:logVerbose(string `batch ${batchNum} complete (${batchResult.length()} summaries)`);
-
                 foreach BatchDescriptionResponse response in batchResult {
                     string? location = requestToLocationMap[response.id];
                     if location is string {

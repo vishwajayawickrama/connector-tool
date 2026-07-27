@@ -101,6 +101,8 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
         });
     }
 
+    int totalBatches = logBatchWorkload(
+        "schema name request", "schema name requests", requests.length(), specFilePath);
     string[] reservedNames = schemas.keys();
     foreach string target in reusedNames {
         if reservedNames.indexOf(target) is () {
@@ -118,10 +120,12 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
             endIdx = requests.length();
         }
         SchemaRenameRequest[] batch = requests.slice(startIdx, endIdx);
+        int batchNum = (startIdx / BATCH_SIZE) + 1;
+        logBatchProgress("schema name", batchNum, totalBatches, batch.length());
         BatchRenameResponse[]|error responseResult = generateSchemaNamesBatchWithRetry(
                 batch, apiContext, reservedNames, config);
         if responseResult is error {
-            return error(string `Schema naming batch ${(startIdx / BATCH_SIZE) + 1} failed`, responseResult);
+            return error(string `Schema naming batch ${batchNum} failed`, responseResult);
         }
 
         map<boolean> expected = {};
