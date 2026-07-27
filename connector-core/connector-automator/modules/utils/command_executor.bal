@@ -152,6 +152,12 @@ public function getDirectoryPath(string filePath) returns string {
         separatorIndex = lastBackslashIndex;
     }
     if separatorIndex >= 0 {
+        if separatorIndex == 0 {
+            return filePath.substring(0, 1);
+        }
+        if separatorIndex == 2 && filePath.substring(1, 2) == ":" {
+            return filePath.substring(0, 3);
+        }
         return filePath.substring(0, separatorIndex);
     }
     return ".";
