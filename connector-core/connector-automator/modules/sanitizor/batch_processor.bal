@@ -164,6 +164,8 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         }
 
         collectParameterDescriptionRequests(specJson, allRequests, requestToLocationMap);
+        collectRequestBodyDescriptionRequests(specJson, allRequests, requestToLocationMap);
+        collectSecuritySchemeDescriptionRequests(specJson, allRequests, requestToLocationMap);
         collectOperationDescriptionRequests(specJson, allRequests, requestToLocationMap);
 
         int totalRequests = allRequests.length();
@@ -211,6 +213,21 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
                             json|error pathsResult = specMap.get("paths");
                             if pathsResult is map<json> {
                                 updateResult = updateParameterDescriptionInSpec(<map<json>>pathsResult, location, response.description);
+                            }
+                        } else if location.startsWith("paths.") && location.endsWith(".requestBody") {
+                            json|error pathsResult = specMap.get("paths");
+                            if pathsResult is map<json> {
+                                updateResult = updateRequestBodyDescriptionInSpec(<map<json>>pathsResult,
+                                        location, response.description);
+                            }
+                        } else if location.startsWith("components.securitySchemes.") {
+                            json|error componentsResult2 = specMap.get("components");
+                            if componentsResult2 is map<json> {
+                                json|error schemesResult = componentsResult2.get("securitySchemes");
+                                if schemesResult is map<json> {
+                                    updateResult = updateSecuritySchemeDescriptionInSpec(
+                                            <map<json>>schemesResult, location, response.description);
+                                }
                             }
                         } else if location.startsWith("paths.") && location.includes(".responses.") && location.endsWith(".description") {
                             json|error pathsResult = specMap.get("paths");

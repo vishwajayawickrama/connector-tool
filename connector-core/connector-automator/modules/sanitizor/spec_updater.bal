@@ -13,9 +13,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import wso2/connector_automator.utils;
-
 import ballerina/lang.regexp;
+
+import wso2/connector_automator.utils;
 
 // Helper function to update description in spec using a segment-array location.
 // Segments (e.g. ["User", "properties", "user.name"]) are pre-split so property
@@ -128,6 +128,72 @@ function updateParameterDescriptionInSpec(map<json> paths, string location, stri
     }
 
     return error("Could not find parameter at location: " + location);
+}
+
+// Updates the description of an operation request body.
+function updateRequestBodyDescriptionInSpec(map<json> paths, string location, string description) returns error? {
+    string suffix = ".requestBody";
+    if !location.startsWith("paths.") || !location.endsWith(suffix) {
+        return error("Could not find request body at location: " + location);
+    }
+
+    string pathAndMethod = location.substring(6, location.length() - suffix.length());
+    int? lastDot = pathAndMethod.lastIndexOf(".");
+    if !(lastDot is int) {
+        return error("Could not find request body at location: " + location);
+    }
+
+    string path = pathAndMethod.substring(0, lastDot);
+    string method = pathAndMethod.substring(lastDot + 1);
+    if !paths.hasKey(path) {
+        return error("Could not find request body path at location: " + location);
+    }
+    json|error pathItemResult = paths.get(path);
+    if !(pathItemResult is map<json>) {
+        return error("Could not find request body path at location: " + location);
+    }
+    map<json> pathItem = <map<json>>pathItemResult;
+    if !pathItem.hasKey(method) {
+        return error("Could not find request body operation at location: " + location);
+    }
+    json|error operationResult = pathItem.get(method);
+    if !(operationResult is map<json>) {
+        return error("Could not find request body operation at location: " + location);
+    }
+    map<json> operation = <map<json>>operationResult;
+    if !operation.hasKey("requestBody") {
+        return error("Could not find request body at location: " + location);
+    }
+    json|error requestBodyResult = operation.get("requestBody");
+    if !(requestBodyResult is map<json>) {
+        return error("Could not find request body at location: " + location);
+    }
+
+    map<json> requestBody = <map<json>>requestBodyResult;
+    requestBody["description"] = description;
+    return ();
+}
+
+// Updates the description of an API-key security scheme.
+function updateSecuritySchemeDescriptionInSpec(map<json> securitySchemes, string location,
+        string description) returns error? {
+    string prefix = "components.securitySchemes.";
+    if !location.startsWith(prefix) || location.length() == prefix.length() {
+        return error("Could not find security scheme at location: " + location);
+    }
+
+    string schemeName = location.substring(prefix.length());
+    if !securitySchemes.hasKey(schemeName) {
+        return error("Could not find security scheme at location: " + location);
+    }
+    json|error schemeResult = securitySchemes.get(schemeName);
+    if !(schemeResult is map<json>) {
+        return error("Could not find security scheme at location: " + location);
+    }
+
+    map<json> scheme = <map<json>>schemeResult;
+    scheme["description"] = description;
+    return ();
 }
 
 // Helper function to update operation description in spec
@@ -251,11 +317,11 @@ function updateNestedDescription(map<json> current, string[] pathParts, int inde
 
 # Updates the `operationId` of an operation in an OpenAPI paths map.
 #
-# + paths       - The OpenAPI `paths` object as a mutable JSON map
-# + path        - The path key as it appears in the spec (e.g. `"/pets/{id}"`)
-# + method      - The HTTP method in lowercase (e.g. `"get"`, `"delete"`)
+# + paths - The OpenAPI `paths` object as a mutable JSON map
+# + path - The path key as it appears in the spec (e.g. `"/pets/{id}"`)
+# + method - The HTTP method in lowercase (e.g. `"get"`, `"delete"`)
 # + operationId - The new operation ID to assign
-# + return      - An error if the operation could not be found
+# + return - An error if the operation could not be found
 function updateOperationIdInSpec(map<json> paths, string path, string method, string operationId) returns error? {
     json|error pathItem = paths.get(path);
     if pathItem is map<json> {

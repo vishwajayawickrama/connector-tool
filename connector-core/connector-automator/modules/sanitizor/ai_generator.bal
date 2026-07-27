@@ -30,14 +30,7 @@ public function generateDescriptionsBatch(DescriptionRequest[] requests, string 
     string requestsSection = "";
     foreach int i in 0 ..< requests.length() {
         DescriptionRequest req = requests[i];
-        string requestType = "field";
-        if req.schemaPath.startsWith("paths.") && req.schemaPath.includes("parameters[name=") {
-            requestType = "parameter";
-        } else if req.schemaPath.startsWith("paths.") && req.schemaPath.endsWith(".summary") {
-            requestType = "operationSummary";
-        } else if req.schemaPath.startsWith("paths.") && !req.schemaPath.includes(".properties.") {
-            requestType = "operation";
-        }
+        string requestType = getDescriptionRequestType(req.schemaPath);
 
         requestsSection += string `
 ${i + 1}. ID: ${req.id}
@@ -59,17 +52,19 @@ ${requestsSection}
 INSTRUCTIONS:
 1. For FIELD descriptions: Describe what the field represents (under 80 characters)
 2. For PARAMETER descriptions: Explain the parameter's purpose (under 100 characters)
-3. For OPERATION descriptions: Describe what the operation returns (under 120 characters, suitable for return parameter docs)
-4. For OPERATION SUMMARY: Produce a short imperative-verb action phrase suitable as a one-line doc comment. Rules (all mandatory, no exceptions):
+3. For REQUEST BODY descriptions: Describe the submitted payload and its purpose (under 100 characters)
+4. For SECURITY SCHEME descriptions: Describe the credential and where/how it is supplied (under 100 characters)
+5. For OPERATION descriptions: Describe what the operation returns (under 120 characters, suitable for return parameter docs)
+6. For OPERATION SUMMARY: Produce a short imperative-verb action phrase suitable as a one-line doc comment. Rules (all mandatory, no exceptions):
    a) HARD LIMIT: ${DISPLAY_NAME_MAX_LENGTH} characters total — count every character including spaces before you respond.
    b) The phrase MUST be complete: it must end at a natural sentence or clause boundary — never mid-word and never mid-sentence. If your draft exceeds ${DISPLAY_NAME_MAX_LENGTH} characters, shorten the idea (drop qualifiers, use a shorter synonym, simplify the verb object) until the entire phrase fits within ${DISPLAY_NAME_MAX_LENGTH} characters as a finished thought.
    c) Use an imperative verb phrase, e.g. "Retrieve a contact by ID" or "List all active deals". Do not restate the operationId verbatim.
    d) If the context provides an existing summary marked as "too long", condense that exact summary to fit the limit while preserving its meaning — do not invent unrelated wording.
-5. Use professional API documentation language
-6. Consider the API context and element context
-7. Return responses in the exact JSON format shown below
-8. Do not include fenced code blocks in the response
-9. Keep descriptions concise but informative
+7. Use professional API documentation language
+8. Consider the API context and element context
+9. Return responses in the exact JSON format shown below
+10. Do not include fenced code blocks in the response
+11. Keep descriptions concise but informative
 
 REQUIRED RESPONSE FORMAT (JSON):
 {
@@ -117,6 +112,25 @@ REQUIRED RESPONSE FORMAT (JSON):
         }
     }
     return error("Invalid batch response format");
+}
+
+function getDescriptionRequestType(string schemaPath) returns string {
+    if schemaPath.startsWith("paths.") && schemaPath.includes("parameters[name=") {
+        return "parameter";
+    }
+    if schemaPath.startsWith("paths.") && schemaPath.endsWith(".requestBody") {
+        return "requestBody";
+    }
+    if schemaPath.startsWith("components.securitySchemes.") {
+        return "securityScheme";
+    }
+    if schemaPath.startsWith("paths.") && schemaPath.endsWith(".summary") {
+        return "operationSummary";
+    }
+    if schemaPath.startsWith("paths.") && !schemaPath.includes(".properties.") {
+        return "operation";
+    }
+    return "field";
 }
 
 // Process multiple operationId requests in a single LLM call

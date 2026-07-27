@@ -435,6 +435,144 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
     }
 }
 
+// Collects missing descriptions for operation request bodies. These descriptions
+// become the payload parameter documentation in the generated Ballerina client.
+function collectRequestBodyDescriptionRequests(json spec, DescriptionRequest[] requests,
+        map<string|string[]> locationMap) {
+    json|error pathsResult = spec.paths;
+    if !(pathsResult is map<json>) {
+        return;
+    }
+
+    foreach string path in pathsResult.keys() {
+        json|error pathResult = pathsResult.get(path);
+        if !(pathResult is map<json>) {
+            continue;
+        }
+        map<json> pathItem = <map<json>>pathResult;
+        string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
+
+        foreach string method in httpMethods {
+            if !pathItem.hasKey(method) {
+                continue;
+            }
+            json|error operationResult = pathItem.get(method);
+            if !(operationResult is map<json>) {
+                continue;
+            }
+            map<json> operation = <map<json>>operationResult;
+            if !operation.hasKey("requestBody") {
+                continue;
+            }
+            json|error requestBodyResult = operation.get("requestBody");
+            if !(requestBodyResult is map<json>) {
+                // A remaining reference-only request body cannot be updated in place here.
+                continue;
+            }
+            map<json> requestBody = <map<json>>requestBodyResult;
+            if requestBody.hasKey("$ref") || !isInvalidDescription(requestBody) {
+                continue;
+            }
+
+            string operationId = operation.hasKey("operationId") &&
+                operation.get("operationId") is string ?
+                <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
+            string requestId = generateRequestId("requestBody", encodeSegments([path, method]), "description");
+            string context = string `Request body for operation '${operationId}' (${method.toUpperAscii()} ${path}).`;
+
+            if operation.hasKey("summary") {
+                json|error summaryResult = operation.get("summary");
+                if summaryResult is string && summaryResult.trim().length() > 0 {
+                    context += string ` Summary: ${summaryResult.trim()}.`;
+                }
+            }
+            if operation.hasKey("description") {
+                json|error descriptionResult = operation.get("description");
+                if descriptionResult is string && descriptionResult.trim().length() > 0 {
+                    context += string ` Operation description: ${descriptionResult.trim()}.`;
+                }
+            }
+
+            boolean required = requestBody.hasKey("required") && requestBody.get("required") == true;
+            context += string ` Required: ${required}.`;
+            if requestBody.hasKey("content") {
+                json|error contentResult = requestBody.get("content");
+                if contentResult is map<json> {
+                    map<json> content = <map<json>>contentResult;
+                    context += string ` Content types: ${string:'join(", ", ...content.keys())}.`;
+                    context += string ` Content schemas: ${content.toString()}.`;
+                }
+            }
+            context += " Describe the complete submitted payload and its purpose.";
+
+            requests.push({
+                id: requestId,
+                name: operationId + " payload",
+                context: context,
+                schemaPath: string `paths.${path}.${method}.requestBody`
+            });
+            locationMap[requestId] = string `paths.${path}.${method}.requestBody`;
+        }
+    }
+}
+
+// Collects missing descriptions for API-key security schemes. The OpenAPI
+// generator uses these descriptions for fields in ApiKeysConfig.
+function collectSecuritySchemeDescriptionRequests(json spec, DescriptionRequest[] requests,
+        map<string|string[]> locationMap) {
+    if !(spec is map<json>) {
+        return;
+    }
+    map<json> specMap = <map<json>>spec;
+    if !specMap.hasKey("components") {
+        return;
+    }
+    json|error componentsResult = specMap.get("components");
+    if !(componentsResult is map<json>) {
+        return;
+    }
+    map<json> components = <map<json>>componentsResult;
+    if !components.hasKey("securitySchemes") {
+        return;
+    }
+    json|error schemesResult = components.get("securitySchemes");
+    if !(schemesResult is map<json>) {
+        return;
+    }
+
+    map<json> schemes = <map<json>>schemesResult;
+    foreach string schemeName in schemes.keys() {
+        json|error schemeResult = schemes.get(schemeName);
+        if !(schemeResult is map<json>) {
+            continue;
+        }
+        map<json> scheme = <map<json>>schemeResult;
+        if !scheme.hasKey("type") || scheme.get("type") != "apiKey" || !isInvalidDescription(scheme) {
+            continue;
+        }
+
+        string keyName = scheme.hasKey("name") && scheme.get("name") is string ?
+            <string>scheme.get("name") : schemeName;
+        string keyLocation = scheme.hasKey("in") && scheme.get("in") is string ?
+            <string>scheme.get("in") : "unspecified location";
+        string context = string `API-key security scheme '${schemeName}'. Credential name: '${keyName}'. ` +
+            string `Supplied in: ${keyLocation}.`;
+        if scheme.hasKey("x-ballerina-name") && scheme.get("x-ballerina-name") is string {
+            context += string ` Generated Ballerina field name: '${<string>scheme.get("x-ballerina-name")}'.`;
+        }
+        context += " Describe the credential and where it is supplied.";
+
+        string requestId = generateRequestId("securityScheme", encodeSegments([schemeName]), "description");
+        requests.push({
+            id: requestId,
+            name: schemeName,
+            context: context,
+            schemaPath: string `components.securitySchemes.${schemeName}`
+        });
+        locationMap[requestId] = string `components.securitySchemes.${schemeName}`;
+    }
+}
+
 // Helper function to collect operation description requests (for client return parameters)
 function collectOperationDescriptionRequests(json spec, DescriptionRequest[] requests, map<string|string[]> locationMap) {
     json|error pathsResult = spec.paths;
