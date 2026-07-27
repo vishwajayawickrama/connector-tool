@@ -53,6 +53,14 @@ public type SchemaNameImprovementResult record {|
     int schemasRenamed;
 |};
 
+public type OperationIdImprovementResult record {|
+    int mappingsReused;
+    int operationsReviewed;
+    int operationIdsChanged;
+    int operationsPending;
+    int failedBatches;
+|};
+
 public type OperationIdRequest record {
     string id;
     string path;

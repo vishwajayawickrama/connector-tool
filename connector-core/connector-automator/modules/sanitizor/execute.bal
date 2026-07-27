@@ -13,33 +13,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import wso2/connector_automator.utils;
-
 import ballerina/file;
+
+import wso2/connector_automator.utils;
 
 public function executeSanitizor(string inputSpecPath, string specDir) returns error? {
     utils:logVerbose(string `input: ${inputSpecPath}`);
     utils:logVerbose(string `output: ${specDir}/aligned_ballerina_openapi.json`);
-
-    // Conditional step:  create path+method:operationId map 
-    map<map<string>>? priorIds = ();
-    string existingAlignedSpec = specDir + "/aligned_ballerina_openapi.json";
-    boolean|file:Error alignedSpecExists = file:test(existingAlignedSpec, file:EXISTS);
-    if alignedSpecExists is file:Error {
-        return error("Failed to check for previous aligned spec: " + alignedSpecExists.message());
-    } else if alignedSpecExists {
-        map<map<string>>|error priorMap = buildOperationIdMap(existingAlignedSpec);
-        if priorMap is map<map<string>> && priorMap.length() > 0 {
-            priorIds = priorMap;
-        } else {
-            utils:logVerbose("previous aligned spec found but contains no operationIds — all IDs will be AI-improved");
-        }
-    }
-
-    error? llmInitResult = utils:initAIService();
-    if llmInitResult is error {
-        return error("AI service initialization failed — cannot run sanitization", llmInitResult);
-    }
 
     // Step 1: Flatten
     utils:logVerbose("flattening OpenAPI specification");
@@ -96,6 +76,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     }
 
     string alignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";
+    string aiMappingsPath = specDir + "/ai-mappings.json";
 
     // Step 3: Add missing descriptions
     utils:logVerbose("enhancing field descriptions");
@@ -117,18 +98,19 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
 
     // Step 5: Improve operationIds (uses descriptions and summaries from Steps 3-4 as context)
     utils:logVerbose("improving operationIds");
-    int|error operationIdResult = improveOperationIdsBatchWithRetry(alignedSpec, priorIds);
+    OperationIdImprovementResult|error operationIdResult = improveOperationIdsBatchWithRetry(alignedSpec, aiMappingsPath);
     if operationIdResult is error {
-        utils:logWarn(string `operationId improvement failed: ${operationIdResult.message()}`);
+        return error("OperationId improvement failed", operationIdResult);
     } else {
-        utils:logInfo(string `  improved ${operationIdResult} operationId${operationIdResult == 1 ? "" : "s"}`);
+        utils:logInfo(string `  improved ${operationIdResult.operationsReviewed} operationId${operationIdResult.operationsReviewed == 1 ? "" : "s"}`);
+        if operationIdResult.operationsPending > 0 {
+            utils:logWarn(string `  ${operationIdResult.operationsPending} operationId${operationIdResult.operationsPending == 1 ? "" : "s"} pending after ${operationIdResult.failedBatches} failed batch${operationIdResult.failedBatches == 1 ? "" : "es"}`);
+        }
     }
 
     // Step 6: Stable schema-name improvement
     utils:logVerbose("improving schema names");
-    string aiMappingsPath = specDir + "/ai-mappings.json";
-    SchemaNameImprovementResult|error schemaRenameResult = improveSchemaNamesBatchWithRetry(
-        alignedSpec, aiMappingsPath);
+    SchemaNameImprovementResult|error schemaRenameResult = improveSchemaNamesBatchWithRetry(alignedSpec, aiMappingsPath);
     if schemaRenameResult is error {
         return error("Schema-name improvement failed", schemaRenameResult);
     } else {

@@ -12,11 +12,10 @@
 // KIND, either express or implied. See the License for the
 // specific language governing permissions and limitations
 // under the License.
-
-import wso2/connector_automator.utils;
-
 import ballerina/io;
 import ballerina/lang.runtime;
+
+import wso2/connector_automator.utils;
 
 configurable RetryConfig retryConfig = {};
 
@@ -61,11 +60,17 @@ public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests
         BatchOperationIdResponse[]|error result = generateOperationIdsBatch(requests, apiContext, existingOperationIds);
 
         if result is BatchOperationIdResponse[] {
-            if attempt > 0 {
-                utils:logVerbose(string `batch operationId generation succeeded after retry (attempt ${attempt})`);
+            error? validationResult = validateOperationIdBatchResponses(requests, result);
+            if validationResult is () {
+                if attempt > 0 {
+                    utils:logVerbose(string `batch operationId generation succeeded after retry (attempt ${attempt})`);
+                }
+                return result;
             }
-            return result;
-        } else {
+            result = validationResult;
+        }
+
+        if result is error {
             if attempt == retryConf.maxRetries {
                 utils:logError(string `batch operationId generation failed after all retries (${retryConf.maxRetries}): ${result.message()}`);
                 return result;
@@ -80,6 +85,8 @@ public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests
             utils:logVerbose(string `batch operationId generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
             runtime:sleep(delay);
             attempt += 1;
+        } else {
+            return error("Unexpected operationId batch validation state");
         }
     }
 
@@ -313,157 +320,4 @@ public function improveOperationSummariesBatchWithRetry(string specFilePath, Ret
     check writeJsonAtomically(specFilePath, specJson);
 
     return summariesImproved;
-}
-
-public function improveOperationIdsBatchWithRetry(string specFilePath, map<map<string>>? priorOperationIds) returns int|error {
-    
-    utils:logVerbose(string `processing spec for operationId improvement: ${specFilePath}`);
-
-    json|error specResult = io:fileReadJson(specFilePath);
-    if specResult is error {
-        return error("Failed to read OpenAPI spec file", specResult);
-    }
-    json specJson = specResult;
-    if !(specJson is map<json>) {
-        return error("spec is not a valid JSON object");
-    }
-    map<json> specMap = <map<json>>specJson;
-
-    json|error pathsResult = specMap.get("paths");
-    if !(pathsResult is map<json>) {
-        return error("No paths section found in OpenAPI spec");
-    }
-    map<json> paths = <map<json>>pathsResult;
-    string apiContext = extractApiContext(specMap);
-
-    // Pass A: Deterministic restoration from prior map.
-    int reuseCount = 0;
-    if priorOperationIds is map<map<string>> {
-        string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
-        foreach string path in paths.keys() {
-            json|error pathItem = paths.get(path);
-            if pathItem is map<json> {
-                map<json> pathItemMap = <map<json>>pathItem;
-                foreach string method in httpMethods {
-                    if pathItemMap.hasKey(method) {
-                        map<string>? methodMap = priorOperationIds[path];
-                        string? priorId = methodMap is map<string> ? methodMap[method] : ();
-                        if priorId is string {
-                            error? updateResult = updateOperationIdInSpec(paths, path, method, priorId);
-                            if updateResult is () {
-                                reuseCount += 1;
-                            } else {
-                                utils:logError(string `failed to restore operationId for ${method} ${path}: ${updateResult.message()}`);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if reuseCount > 0 {
-            utils:logInfo(string `  ✓ reused ${reuseCount} operationId${reuseCount == 1 ? "" : "s"} from previous run`);
-        }
-    }
-
-    // Collect all current operationIds (including those just restored in Pass A) as reserved names
-    string[] existingOperationIds = [];
-    collectExistingOperationIds(paths, existingOperationIds, priorOperationIds);
-
-    // Pass B: AI improvement for operations not covered by Pass A
-    OperationIdRequest[] requests = [];
-    map<OperationLocation> requestToLocationMap = {};
-    collectOperationIdRequests(paths, requests, requestToLocationMap, apiContext, priorOperationIds);
-
-    int totalRequests = requests.length();
-    int aiImproved = 0;
-    if totalRequests == 0 {
-        utils:logVerbose("no operations to improve with AI");
-    } else {
-        utils:logVerbose(string `collected ${totalRequests} operationId improvement request${totalRequests == 1 ? "" : "s"}`);
-
-        int totalBatches = 0;
-        int failedBatches = 0;
-        int startIdx = 0;
-        while startIdx < totalRequests {
-            int endIdx = startIdx + BATCH_SIZE;
-            if endIdx > totalRequests { endIdx = totalRequests; }
-            OperationIdRequest[] batch = requests.slice(startIdx, endIdx);
-            int batchNum = (startIdx / BATCH_SIZE) + 1;
-            totalBatches += 1;
-            utils:logVerbose(string `processing operationId batch ${batchNum} (${batch.length()} operations)`);
-
-            BatchOperationIdResponse[]|error batchResult = generateOperationIdsBatchWithRetry(batch, apiContext, existingOperationIds);
-            if batchResult is BatchOperationIdResponse[] {
-                utils:logVerbose(string `operationId batch ${batchNum} complete (${batchResult.length()} operations)`);
-                foreach BatchOperationIdResponse response in batchResult {
-                    OperationLocation? loc = requestToLocationMap[response.id];
-                    if loc is OperationLocation {
-                        // De-duplicate: two responses in the same batch can collide, and the
-                        // AI may re-propose a name already reserved. Suffix until unique.
-                        string opId = response.operationId;
-                        int counter = 1;
-                        while existingOperationIds.indexOf(opId) is int {
-                            opId = response.operationId + counter.toString();
-                            counter += 1;
-                        }
-                        error? updateResult = updateOperationIdInSpec(paths, loc.path, loc.method, opId);
-                        if updateResult is () {
-                            existingOperationIds.push(opId);
-                            aiImproved += 1;
-                        } else {
-                            utils:logError(string `failed to apply operationId for ${response.id}: ${updateResult.message()}`);
-                        }
-                    }
-                }
-            } else {
-                failedBatches += 1;
-                utils:logError(string `operationId batch ${batchNum} failed after all retries: ${batchResult.message()}`);
-            }
-            startIdx += BATCH_SIZE;
-        }
-
-        if totalBatches > 0 && failedBatches == totalBatches {
-            return error(string `all ${totalBatches} operationId batches failed — spec not updated`);
-        }
-        if failedBatches > 0 {
-            utils:logWarn(string `${failedBatches}/${totalBatches} operationId batches failed — results are partial`);
-        }
-    }
-
-    // Uniqueness guard: warn on duplicate operationIds (client gen will also surface them)
-    map<string[]> seenIds = {};
-    string[] httpMethodsCheck = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
-    foreach string path in paths.keys() {
-        json|error pathItem = paths.get(path);
-        if pathItem is map<json> {
-            map<json> pathItemMap = <map<json>>pathItem;
-            foreach string method in httpMethodsCheck {
-                if pathItemMap.hasKey(method) {
-                    json|error operationResult = pathItemMap.get(method);
-                    if operationResult is map<json> {
-                        map<json> operation = <map<json>>operationResult;
-                        if operation.hasKey("operationId") {
-                            json|error opIdResult = operation.get("operationId");
-                            if opIdResult is string {
-                                string opId = <string>opIdResult;
-                                string[] locs = seenIds[opId] ?: [];
-                                locs.push(string `${method.toUpperAscii()} ${path}`);
-                                seenIds[opId] = locs;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    foreach string opId in seenIds.keys() {
-        string[] locs = seenIds[opId] ?: [];
-        if locs.length() > 1 {
-            utils:logWarn(string `duplicate operationId "${opId}" at: ${string:'join(", ", ...locs)}`);
-        }
-    }
-
-    check writeJsonAtomically(specFilePath, specJson);
-
-    return aiImproved;
 }

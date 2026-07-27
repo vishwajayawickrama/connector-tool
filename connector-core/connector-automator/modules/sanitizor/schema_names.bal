@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/file;
 import ballerina/io;
 import ballerina/lang.array;
 
@@ -24,32 +23,17 @@ import ballerina/lang.array;
 # + aiMappingsFilePath - Stable AI-generated name mappings file
 # + config - Optional AI retry configuration
 # + return - Schema-name processing counts or an error
-public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiMappingsFilePath,
-        RetryConfig? config = ()) returns SchemaNameImprovementResult|error {
+public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiMappingsFilePath, RetryConfig? config = ()) returns SchemaNameImprovementResult|error {
 
     // Read persisted AI mappings and extract schema-name mappings, if any.
-    map<json> aiMappingsDocument = {};
+    map<json> aiMappingsDocument = check readAiMappingsDocument(aiMappingsFilePath);
     map<json> persistedMappings = {};
-    boolean|file:Error mappingsExist = file:test(aiMappingsFilePath, file:EXISTS);
-    if mappingsExist is file:Error {
-        return error("Failed to check AI mappings file", mappingsExist);
-    }
-    if mappingsExist {
-        json|error mappingResult = io:fileReadJson(aiMappingsFilePath);
-        if mappingResult is error {
-            return error("Failed to read AI mappings file", mappingResult);
+    if aiMappingsDocument.hasKey("schemaNames") {
+        json|error schemaNamesResult = aiMappingsDocument.get("schemaNames");
+        if !(schemaNamesResult is map<json>) {
+            return error("Invalid AI mappings file: schemaNames must be a JSON object");
         }
-        if !(mappingResult is map<json>) {
-            return error("Invalid AI mappings file: root must be a JSON object");
-        }
-        aiMappingsDocument = mappingResult;
-        if aiMappingsDocument.hasKey("schemaNames") {
-            json|error schemaNamesResult = aiMappingsDocument.get("schemaNames");
-            if !(schemaNamesResult is map<json>) {
-                return error("Invalid AI mappings file: schemaNames must be a JSON object");
-            }
-            persistedMappings = schemaNamesResult;
-        }
+        persistedMappings = schemaNamesResult;
     }
 
     // Read the OpenAPI spec
@@ -61,7 +45,6 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
         return error("spec is not a valid JSON object");
     }
     map<json> specMap = <map<json>>specResult;
-
 
     map<map<json>> schemas = {};
     map<json>? components = ();
@@ -136,7 +119,7 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
         }
         SchemaRenameRequest[] batch = requests.slice(startIdx, endIdx);
         BatchRenameResponse[]|error responseResult = generateSchemaNamesBatchWithRetry(
-            batch, apiContext, reservedNames, config);
+                batch, apiContext, reservedNames, config);
         if responseResult is error {
             return error(string `Schema naming batch ${(startIdx / BATCH_SIZE) + 1} failed`, responseResult);
         }
@@ -232,7 +215,8 @@ public function improveSchemaNamesBatchWithRetry(string specFilePath, string aiM
         }
     }
     aiMappingsDocument["schemaNames"] = sortedMappings;
-    check writeJsonAtomically(aiMappingsFilePath, aiMappingsDocument);
+    map<json> preparedMappingsDocument = prepareAiMappingsDocumentForWrite(aiMappingsDocument);
+    check writeJsonAtomically(aiMappingsFilePath, preparedMappingsDocument);
     check writeJsonAtomically(specFilePath, updatedSpec);
     return {mappingsReused: reused, schemasReviewed: reviewed, schemasRenamed: renamed};
 }

@@ -13,7 +13,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/io;
 import ballerina/lang.regexp;
 
 // Helper function to extract API context (info section)
@@ -213,158 +212,9 @@ function collectPropertyDescriptionRequests(map<json> properties, string parentS
     }
 }
 
-// Helper function to collect existing operationIds from paths
-function collectExistingOperationIds(map<json> paths, string[] existingOperationIds, map<map<string>>? priorOperationIds = ()) {
-    string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
-
-    foreach string path in paths.keys() {
-        json|error pathItem = paths.get(path);
-        if pathItem is map<json> {
-            map<json> pathItemMap = <map<json>>pathItem;
-
-            foreach string method in httpMethods {
-                if pathItemMap.hasKey(method) {
-                    json|error operation = pathItemMap.get(method);
-                    if operation is map<json> {
-                        map<json> operationMap = <map<json>>operation;
-                        if operationMap.hasKey("operationId") {
-                            json|error operationIdResult = operationMap.get("operationId");
-                            if operationIdResult is string {
-                                boolean coveredByPassA = priorOperationIds is map<map<string>>
-                                    && priorOperationIds.hasKey(path)
-                                    && (<map<string>>priorOperationIds.get(path)).hasKey(method);
-                                if priorOperationIds is () || coveredByPassA {
-                                    existingOperationIds.push(<string>operationIdResult);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Helper function to collect missing operationId requests
-function collectMissingOperationIdRequests(map<json> paths, OperationIdRequest[] requests,
-        map<OperationLocation> locationMap, string apiContext) {
-    string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
-
-    foreach string path in paths.keys() {
-        json|error pathItem = paths.get(path);
-        if pathItem is map<json> {
-            map<json> pathItemMap = <map<json>>pathItem;
-
-            foreach string method in httpMethods {
-                if pathItemMap.hasKey(method) {
-                    json|error operationResult = pathItemMap.get(method);
-                    if operationResult is map<json> {
-                        map<json> operation = <map<json>>operationResult;
-
-                        // Check if operationId is missing
-                        if !operation.hasKey("operationId") {
-                            string requestId = generateOperationRequestId(path, method);
-
-                            // Safely extract optional fields
-                            string? summary = ();
-                            if operation.hasKey("summary") {
-                                json summaryJson = operation.get("summary");
-                                if summaryJson is string {
-                                    summary = summaryJson;
-                                }
-                            }
-
-                            string? description = ();
-                            if operation.hasKey("description") {
-                                json descriptionJson = operation.get("description");
-                                if descriptionJson is string {
-                                    description = descriptionJson;
-                                }
-                            }
-
-                            string[]? tags = ();
-                            if operation.hasKey("tags") {
-                                json tagsJson = operation.get("tags");
-                                if tagsJson is json[] {
-                                    string[] tagStrings = [];
-                                    foreach json tag in tagsJson {
-                                        if tag is string {
-                                            tagStrings.push(tag);
-                                        }
-                                    }
-                                    if tagStrings.length() > 0 {
-                                        tags = tagStrings;
-                                    }
-                                }
-                            }
-
-                            OperationIdRequest request = {
-                                id: requestId,
-                                path: path,
-                                method: method,
-                                summary: summary,
-                                description: description,
-                                tags: tags
-                            };
-
-                            requests.push(request);
-                            locationMap[requestId] = {path, method};
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Returns path → { method → operationId } from a prior aligned spec, or error if unreadable.
-function buildOperationIdMap(string alignedSpecPath) returns map<map<string>>|error {
-    json|error specResult = io:fileReadJson(alignedSpecPath);
-    if specResult is error {
-        return error("Failed to read aligned spec: " + specResult.message());
-    }
-    json specJson = specResult;
-    if !(specJson is map<json>) {
-        return error("Invalid aligned spec format");
-    }
-    map<json> specMap = <map<json>>specJson;
-    json|error pathsResult = specMap.get("paths");
-    if !(pathsResult is map<json>) {
-        return {};
-    }
-    map<json> paths = <map<json>>pathsResult;
-
-    string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
-    map<map<string>> operationIdMap = {};
-
-    foreach string path in paths.keys() {
-        json|error pathItem = paths.get(path);
-        if pathItem is map<json> {
-            map<json> pathItemMap = <map<json>>pathItem;
-            foreach string method in httpMethods {
-                if pathItemMap.hasKey(method) {
-                    json|error operationResult = pathItemMap.get(method);
-                    if operationResult is map<json> {
-                        map<json> operation = <map<json>>operationResult;
-                        if operation.hasKey("operationId") {
-                            json|error opIdResult = operation.get("operationId");
-                            if opIdResult is string {
-                                map<string> methodMap = operationIdMap[path] ?: {};
-                                methodMap[method] = <string>opIdResult;
-                                operationIdMap[path] = methodMap;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return operationIdMap;
-}
-
 // Collects operationId requests for all ops not in skipKeys, including those with existing IDs.
 function collectOperationIdRequests(map<json> paths, OperationIdRequest[] requests,
-        map<OperationLocation> locationMap, string apiContext, map<map<string>>? skipKeys) {
+        map<OperationLocation> locationMap, string apiContext, map<map<string>> skipKeys) {
     string[] httpMethods = ["get", "post", "put", "delete", "patch", "head", "options", "trace"];
 
     foreach string path in paths.keys() {
@@ -378,7 +228,7 @@ function collectOperationIdRequests(map<json> paths, OperationIdRequest[] reques
                     if operationResult is map<json> {
                         map<json> operation = <map<json>>operationResult;
 
-                        if skipKeys is map<map<string>> && skipKeys.hasKey(path) {
+                        if skipKeys.hasKey(path) {
                             map<string> methodMap = skipKeys.get(path);
                             if methodMap.hasKey(method) {
                                 continue;
@@ -390,13 +240,17 @@ function collectOperationIdRequests(map<json> paths, OperationIdRequest[] reques
                         string? summary = ();
                         if operation.hasKey("summary") {
                             json summaryJson = operation.get("summary");
-                            if summaryJson is string { summary = summaryJson; }
+                            if summaryJson is string {
+                                summary = summaryJson;
+                            }
                         }
 
                         string? description = ();
                         if operation.hasKey("description") {
                             json descriptionJson = operation.get("description");
-                            if descriptionJson is string { description = descriptionJson; }
+                            if descriptionJson is string {
+                                description = descriptionJson;
+                            }
                         }
 
                         string[]? tags = ();
@@ -405,16 +259,22 @@ function collectOperationIdRequests(map<json> paths, OperationIdRequest[] reques
                             if tagsJson is json[] {
                                 string[] tagStrings = [];
                                 foreach json tag in tagsJson {
-                                    if tag is string { tagStrings.push(tag); }
+                                    if tag is string {
+                                        tagStrings.push(tag);
+                                    }
                                 }
-                                if tagStrings.length() > 0 { tags = tagStrings; }
+                                if tagStrings.length() > 0 {
+                                    tags = tagStrings;
+                                }
                             }
                         }
 
                         string? currentOperationId = ();
                         if operation.hasKey("operationId") {
                             json opIdJson = operation.get("operationId");
-                            if opIdJson is string { currentOperationId = opIdJson; }
+                            if opIdJson is string {
+                                currentOperationId = opIdJson;
+                            }
                         }
 
                         requests.push({
@@ -596,7 +456,7 @@ function collectOperationDescriptionRequests(json spec, DescriptionRequest[] req
                                 string operationId = operation.hasKey("operationId") ? <string>operation.get("operationId") : string `${method.toUpperAscii()} ${path}`;
                                 string summary = operation.hasKey("summary") ? <string>operation.get("summary") : "";
 
-                                                                string requestId = generateRequestId("operation", encodeSegments([path, method]), "description");
+                                string requestId = generateRequestId("operation", encodeSegments([path, method]), "description");
                                 string context = string `Operation '${operationId}' (${method.toUpperAscii()} ${path})`;
                                 if summary.length() > 0 {
                                     context += string `. Summary: ${summary}`;

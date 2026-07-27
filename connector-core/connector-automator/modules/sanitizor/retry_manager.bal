@@ -13,7 +13,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 public function calculateBackoffDelay(int attempt, RetryConfig config) returns decimal {
     decimal delay = config.initialDelaySeconds;
 
@@ -91,6 +90,7 @@ public function isRetryableError(error err) returns boolean {
     boolean isLLMResponseError = message.includes("unrecognized token") ||
                             message.includes("failed to extract") ||
                             message.includes("failed to parse") ||
+                            message.includes("invalid batch operationid response") ||
                             message.includes("invalid batch rename response format");
 
     return isNetworkError || isRateLimitError || isServerError || isTemporaryError || isLLMResponseError;
