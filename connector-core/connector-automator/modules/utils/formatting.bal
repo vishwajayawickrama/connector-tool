@@ -13,7 +13,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/file;
 import ballerina/io;
+import ballerina/lang.regexp;
 
 public function repeat() {
     io:fprintln(io:stderr, createSeparator("=", 80));
@@ -27,4 +29,47 @@ public function createSeparator(string char, int count) returns string {
         i += 1;
     }
     return sep;
+}
+
+# Returns an invocation-relative path for user-facing output.
+# Operational paths must continue to use the original value.
+#
+# + path - Absolute or relative filesystem path
+# + return - Invocation-relative path when it is within the current directory; otherwise, the original path
+public function getDisplayPath(string path) returns string {
+    if path.length() == 0 {
+        return path;
+    }
+
+    string invocationDir = file:getCurrentDir();
+    if invocationDir.length() == 0 {
+        return path;
+    }
+
+    string normalizedPath = regexp:replaceAll(re `\\`, path, "/");
+    string normalizedInvocationDir = regexp:replaceAll(re `\\`, invocationDir, "/");
+    boolean isAbsolute = normalizedPath.startsWith("/") ||
+        regexp:isFullMatch(re `^[A-Za-z]:/.*`, normalizedPath);
+    if !isAbsolute {
+        return path;
+    }
+
+    while normalizedInvocationDir.length() > 1 && normalizedInvocationDir.endsWith("/") &&
+        !regexp:isFullMatch(re `^[A-Za-z]:/$`, normalizedInvocationDir) {
+        normalizedInvocationDir = normalizedInvocationDir.substring(0, normalizedInvocationDir.length() - 1);
+    }
+
+    if normalizedPath == normalizedInvocationDir {
+        return ".";
+    }
+    if normalizedInvocationDir == "/" ||
+        regexp:isFullMatch(re `^[A-Za-z]:/$`, normalizedInvocationDir) {
+        return path;
+    }
+
+    string invocationPrefix = normalizedInvocationDir + "/";
+    if normalizedPath.startsWith(invocationPrefix) {
+        return normalizedPath.substring(invocationPrefix.length());
+    }
+    return path;
 }

@@ -122,7 +122,7 @@ public function generateSanitationsDoc(
     check io:fileWriteString(sanitationsPath, content);
 
     string verb = existsAlready ? "Updated" : "Generated";
-    utils:logInfo(string `✓ ${verb} sanitations.md at: ${sanitationsPath}`);
+    utils:logInfo(string `✓ ${verb} sanitations.md at: ${utils:getDisplayPath(sanitationsPath)}`);
 }
 
 # Read sanitations.md and apply all recorded changes to the new spec.
@@ -154,7 +154,7 @@ public function applySanitations(
         utils:logWarn("AI service unavailable — sanitations will use rule-based fallback");
     }
 
-    utils:logVerbose(string `reading sanitations from: ${sanitationsPath}`);
+    utils:logVerbose(string `reading sanitations from: ${utils:getDisplayPath(sanitationsPath)}`);
 
     string sanitationsContent = check io:fileReadString(sanitationsPath);
 

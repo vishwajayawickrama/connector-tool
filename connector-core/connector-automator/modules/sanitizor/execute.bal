@@ -18,8 +18,9 @@ import ballerina/file;
 import wso2/connector_automator.utils;
 
 public function executeSanitizor(string inputSpecPath, string specDir) returns error? {
-    utils:logVerbose(string `input: ${inputSpecPath}`);
-    utils:logVerbose(string `output: ${specDir}/aligned_ballerina_openapi.json`);
+    utils:logVerbose(string `input: ${utils:getDisplayPath(inputSpecPath)}`);
+    utils:logVerbose(string `output: ${utils:getDisplayPath(
+                    specDir + "/aligned_ballerina_openapi.json")}`);
 
     // Step 1: Flatten
     utils:logVerbose("flattening OpenAPI specification");

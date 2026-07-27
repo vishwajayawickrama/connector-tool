@@ -127,7 +127,8 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
 }
 
 public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns DescriptionEnhancementResult|error {
-    utils:logVerbose(string `processing spec for missing descriptions: ${specFilePath} (batch size ${BATCH_SIZE})`);
+    utils:logVerbose(string `processing spec for missing descriptions: ${utils:getDisplayPath(
+                    specFilePath)} (batch size ${BATCH_SIZE})`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
@@ -271,7 +272,8 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
 }
 
 public function improveOperationSummariesBatchWithRetry(string specFilePath, RetryConfig? config = ()) returns int|error {
-    utils:logVerbose(string `processing spec for operation summaries: ${specFilePath} (batch size ${BATCH_SIZE})`);
+    utils:logVerbose(string `processing spec for operation summaries: ${utils:getDisplayPath(
+                    specFilePath)} (batch size ${BATCH_SIZE})`);
 
     json|error specResult = io:fileReadJson(specFilePath);
     if specResult is error {
