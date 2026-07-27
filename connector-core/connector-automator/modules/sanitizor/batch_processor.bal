@@ -144,17 +144,20 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
         DescriptionRequest[] allRequests = [];
         map<string|string[]> requestToLocationMap = {};
 
-        json|error componentsResult = specMap.get("components");
-        if componentsResult is map<json> {
-            json|error schemasResult = componentsResult.get("schemas");
-            if schemasResult is map<json> {
-                map<json> schemas = <map<json>>schemasResult;
+        if specMap.hasKey("components") {
+            json|error componentsResult = specMap.get("components");
+            if componentsResult is map<json> && componentsResult.hasKey("schemas") {
+                json|error schemasResult = componentsResult.get("schemas");
+                if schemasResult is map<json> {
+                    map<json> schemas = <map<json>>schemasResult;
 
-                foreach string schemaName in schemas.keys() {
-                    json|error schemaResult = schemas.get(schemaName);
-                    if schemaResult is map<json> {
-                        map<json> schemaMap = <map<json>>schemaResult;
-                        collectDescriptionRequests(schemaMap, schemaName, [], allRequests, requestToLocationMap, specJson);
+                    foreach string schemaName in schemas.keys() {
+                        json|error schemaResult = schemas.get(schemaName);
+                        if schemaResult is map<json> {
+                            map<json> schemaMap = <map<json>>schemaResult;
+                            collectDescriptionRequests(schemaMap, schemaName, [], allRequests,
+                                    requestToLocationMap, specJson);
+                        }
                     }
                 }
             }
@@ -191,12 +194,15 @@ public function addMissingDescriptionsBatchWithRetry(string specFilePath, RetryC
 
                     if location is string[] {
                         // Schema/property description — segment-array location
-                        dispatched = true;
-                        json|error componentsResult2 = specMap.get("components");
-                        if componentsResult2 is map<json> {
-                            json|error schemasResult2 = componentsResult2.get("schemas");
-                            if schemasResult2 is map<json> {
-                                updateResult = updateDescriptionInSpec(<map<json>>schemasResult2, location, response.description);
+                        if specMap.hasKey("components") {
+                            json|error componentsResult2 = specMap.get("components");
+                            if componentsResult2 is map<json> && componentsResult2.hasKey("schemas") {
+                                json|error schemasResult2 = componentsResult2.get("schemas");
+                                if schemasResult2 is map<json> {
+                                    dispatched = true;
+                                    updateResult = updateDescriptionInSpec(<map<json>>schemasResult2, location,
+                                            response.description);
+                                }
                             }
                         }
                     } else if location is string {

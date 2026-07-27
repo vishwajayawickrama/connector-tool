@@ -658,20 +658,23 @@ function getReferencedSchemaDescription(map<json> response, json spec) returns s
 
 // Helper function to get schema description from components/schemas
 function getSchemaDescriptionFromSpec(string schemaName, json spec) returns string? {
-    if spec is map<json> {
+    if spec is map<json> && spec.hasKey("components") {
         json|error componentsResult = spec.get("components");
-        if componentsResult is map<json> {
+        if componentsResult is map<json> && componentsResult.hasKey("schemas") {
             map<json> components = <map<json>>componentsResult;
             json|error schemasResult = components.get("schemas");
             if schemasResult is map<json> {
                 map<json> schemas = <map<json>>schemasResult;
-                json|error schemaResult = schemas.get(schemaName);
-                if schemaResult is map<json> {
-                    map<json> schema = <map<json>>schemaResult;
-                    if schema.hasKey("description") {
-                        string? desc = schema.get("description") is string ? <string>schema.get("description") : ();
-                        if desc is string && desc.trim().length() > 0 {
-                            return desc;
+                if schemas.hasKey(schemaName) {
+                    json|error schemaResult = schemas.get(schemaName);
+                    if schemaResult is map<json> {
+                        map<json> schema = <map<json>>schemaResult;
+                        if schema.hasKey("description") {
+                            string? desc = schema.get("description") is string ?
+                                <string>schema.get("description") : ();
+                            if desc is string && desc.trim().length() > 0 {
+                                return desc;
+                            }
                         }
                     }
                 }
