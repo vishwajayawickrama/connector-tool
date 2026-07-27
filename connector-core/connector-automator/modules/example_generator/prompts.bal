@@ -207,26 +207,26 @@ Use Case: ${useCase}
 <NAMING_GUIDELINES>
 **Requirements**:
 - Exactly 3-4 words maximum
-- Use kebab-case (lowercase with hyphens)
+- Use snake_case (lowercase with underscores)
 - Be descriptive and professional
 - Focus on the main action or workflow
 - Avoid generic terms like "example" or "demo"
 
 **Good Examples**:
-- "channel-message-posting"
-- "user-profile-creation" 
-- "file-upload-workflow"
-- "team-member-invitation"
-- "project-status-tracking"
+- "channel_message_posting"
+- "user_profile_creation"
+- "file_upload_workflow"
+- "team_member_invitation"
+- "project_status_tracking"
 
 **Avoid**:
-- Generic names like "basic-example"
+- Generic names like "basic_example"
 - Too many words or complex phrases
 - Technical jargon that's not widely understood
 
 **The output must be the raw name itself, not wrapped in any markdown or quotes.**
 </NAMING_GUIDELINES>
 
-Generate ONLY the example name following kebab-case format, no additional text or explanations:
+Generate ONLY the example name following snake_case format, no additional text or explanations:
 `;
 }

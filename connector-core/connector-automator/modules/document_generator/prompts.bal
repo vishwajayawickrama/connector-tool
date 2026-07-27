@@ -602,9 +602,9 @@ Your goal is to generate a complete guide that is **structurally and textually i
 
 The ${backtick}twitter${backtick} connector provides practical examples illustrating usage in various scenarios. Explore these [examples](https://github.com/ballerina-platform/module-ballerinax-twitter/tree/main/examples), covering use cases like Direct message company mentions, and tweet performance tracker.
 
-1. [Direct message company mentions](./DM-mentions/DM-mentions.md) - Integrate Twitter to send direct messages to users who mention the company in tweets.
+1. [Direct message company mentions](./dm_mentions/dm_mentions.md) - Integrate Twitter to send direct messages to users who mention the company in tweets.
 
-2. [Tweet performance tracker](./tweet-performance-tracker/tweet-performance-tracker.md) - Analyze the performance of tweets posted by a user over the past month.
+2. [Tweet performance tracker](./tweet_performance_tracker/tweet_performance_tracker.md) - Analyze the performance of tweets posted by a user over the past month.
 
 ## Prerequisites
 
@@ -645,7 +645,7 @@ Now, generate a new "Examples" README for the connector specified below. You mus
 2.  **Numbered Example List:**
     * For each directory name in "Available Example Directories", create one item in a numbered list (1., 2., 3., etc.).
     * Each list item MUST follow this format: ${backtick}[Example Title](URL_to_example) - One-sentence description.${backtick}
-    * **Example Title:** Convert the directory name (e.g., "DM-mentions") into a human-readable title (e.g., "Direct message company mentions").
+    * **Example Title:** Convert the directory name (e.g., "dm_mentions") into a human-readable title (e.g., "Direct message company mentions").
     * **URL_to_example:** Use the exact relative path ${backtick}./[example_directory_name]/[example_directory_name].md${backtick}. Preserve the exact casing of the directory name in both path segments.
     * **One-sentence description:** Write a single, concise sentence that summarizes the purpose of the example based on its name.
 

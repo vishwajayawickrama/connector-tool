@@ -13,10 +13,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import wso2/connector_automator.utils;
-
 import ballerina/file;
 import ballerina/lang.runtime;
+
+import wso2/connector_automator.utils;
 
 public function executeExampleGen(string connectorPath, string examplesDir = "") returns error? {
     string resolvedExamplesDir = examplesDir.length() > 0 ? examplesDir : connectorPath + "/examples";
@@ -51,6 +51,7 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
     utils:logVerbose(string `generating ${numExamples} example${numExamples == 1 ? "" : "s"}`);
 
     string[] usedFunctionNames = [];
+    string[] generatedExampleNames = [];
     int successCount = 0;
 
     foreach int i in 1 ... numExamples {
@@ -93,20 +94,32 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
         }
 
         string|error exampleNameResult = generateExampleName(useCase);
-        string exampleName;
+        string baseName;
         if exampleNameResult is error {
             utils:logVerbose(string `  name generation failed, using fallback: ${exampleNameResult.message()}`);
-            exampleName = "example_" + i.toString();
+            baseName = "example_" + i.toString();
         } else {
-            exampleName = exampleNameResult;
+            baseName = normalizeExampleName(exampleNameResult);
+            if baseName.length() == 0 {
+                baseName = "example_" + i.toString();
+            }
         }
 
+        string|error uniqueNameResult = resolveUniqueExampleName(
+                resolvedExamplesDir, baseName, generatedExampleNames);
+        if uniqueNameResult is error {
+            utils:logWarn(string `failed to resolve name for example ${i}: ${uniqueNameResult.message()}`);
+            continue;
+        }
+        string exampleName = uniqueNameResult;
+
         error? writeResult = writeExampleToFile(resolvedExamplesDir, exampleName, useCase, generatedCode,
-            details.connectorOrg, details.connectorName, details.connectorVersion, details.connectorDistribution);
+                details.connectorOrg, details.connectorName, details.connectorVersion, details.connectorDistribution);
         if writeResult is error {
             utils:logWarn(string `failed to write example ${i}: ${writeResult.message()}`);
             continue;
         }
+        generatedExampleNames.push(exampleName);
 
         runtime:sleep(10);
 
@@ -127,6 +140,18 @@ public function executeExampleGen(string connectorPath, string examplesDir = "")
     } else {
         utils:logInfo(string `✓ all ${numExamples} example${numExamples == 1 ? "" : "s"} generated at ${resolvedExamplesDir}/`);
     }
+}
+
+function resolveUniqueExampleName(string examplesDir, string baseName,
+        string[] reservedNames) returns string|error {
+    string candidate = baseName;
+    int suffix = 2;
+    while reservedNames.indexOf(candidate) is int ||
+            check file:test(examplesDir + "/" + candidate, file:EXISTS) {
+        candidate = baseName + "_" + suffix.toString();
+        suffix += 1;
+    }
+    return candidate;
 }
 
 function getExistingExampleDirectories(string examplesPath) returns string[]|error {

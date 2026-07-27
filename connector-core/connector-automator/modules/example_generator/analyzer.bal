@@ -181,7 +181,8 @@ public function writeExampleToFile(string examplesDir, string exampleName, strin
     // Create examples directory if it doesn't exist
     check file:createDir(examplesDir, file:RECURSIVE);
 
-    if exampleName.includes("..") || exampleName.includes("/") || exampleName.includes("\\") {
+    if exampleName.length() == 0 || normalizeExampleName(exampleName) != exampleName ||
+            exampleName.includes("..") || exampleName.includes("/") || exampleName.includes("\\") {
         return error(string `Invalid example name '${exampleName}'`);
     }
 
@@ -202,26 +203,17 @@ public function writeExampleToFile(string examplesDir, string exampleName, strin
     check io:fileWriteString(ballerinaTomlPath, ballerinaTomlContent);
 }
 
-// Function to sanitize example name for Ballerina package name
-function sanitizePackageName(string exampleName) returns string {
-    string sanitized = regexp:replaceAll(re `-`, exampleName, "_");
-
-    sanitized = regexp:replaceAll(re `[^a-zA-Z0-9_.]`, sanitized, "");
-    // Ensure it's not empty
-    if sanitized == "" {
-        sanitized = "example";
-    }
-
-    return sanitized;
+function normalizeExampleName(string suggestedName) returns string {
+    string normalized = suggestedName.trim().toLowerAscii();
+    normalized = regexp:replaceAll(re `[^a-z0-9]+`, normalized, "_");
+    return regexp:replaceAll(re `^_+|_+$`, normalized, "");
 }
 
 function generateBallerinaToml(string exampleName, string connectorOrg, string connectorName,
         string connectorVersion, string connectorDistribution) returns string {
-    string packageName = sanitizePackageName(exampleName);
-
     return string `[package]
 org = "generated_examples"
-name = "${packageName}"
+name = "${exampleName}"
 version = "0.1.0"
 distribution = "${connectorDistribution}"
 
