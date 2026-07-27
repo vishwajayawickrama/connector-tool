@@ -114,6 +114,6 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     if schemaRenameResult is error {
         return error("Schema-name improvement failed", schemaRenameResult);
     } else {
-        utils:logInfo("     schema names improved");
+        utils:logInfo(string `  improved ${schemaRenameResult.schemasRenamed} schema name${schemaRenameResult.schemasRenamed == 1 ? "" : "s"}`);
     }
 }

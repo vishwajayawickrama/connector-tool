@@ -15,8 +15,6 @@
 
 import ballerina/lang.regexp;
 
-import wso2/connector_automator.utils;
-
 // Helper function to update description in spec using a segment-array location.
 // Segments (e.g. ["User", "properties", "user.name"]) are pre-split so property
 // names containing dots navigate correctly.
@@ -354,7 +352,6 @@ function updateSchemaReferences(map<json> jsonData, map<string> nameMapping) ret
                     if newName is string {
                         string newRef = "#/components/schemas/" + newName;
                         resultMap[key] = newRef;
-                        utils:logVerbose(string `updated schema ref: ${refValue} → ${newRef}`);
                     } else {
                         resultMap[key] = value;
                     }
