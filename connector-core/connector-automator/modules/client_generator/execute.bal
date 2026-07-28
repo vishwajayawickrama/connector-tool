@@ -48,7 +48,7 @@ public function generateBallerinaClient(string specPath, string outputDir, Clien
         return error("client generation failed: " + generateResult.stderr);
     }
 
-    utils:logInfo(string `✓ client generated at: ${outputDir}`);
+    utils:logInfo(string `  client generated at: ${outputDir}`);
 }
 
 function printUsage() {

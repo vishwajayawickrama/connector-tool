@@ -87,7 +87,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             utils:logError(string `sanitization failed: ${sanitizeResult.message()}`);
             return sanitizeResult;
         }
-        utils:logInfo("✓ sanitization complete");
+        utils:logInfo("sanitization complete");
 
         // Generating or updating sanitizations.md.
         error? sanitationsDocResult = sanitizor:generateSanitationsDoc(openApiSpec, sanitizedSpec, specDir);
@@ -121,7 +121,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
         if clientResult is error {
             utils:logWarn(string `client generation failed: ${clientResult.message()} — continuing`);
         } else {
-            utils:logInfo("✓ client generated");
+            utils:logInfo("  client generated");
         }
 
         utils:CommandResult buildResult = utils:executeBalBuild(clientPath);
@@ -163,7 +163,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
                 return error(string `client build failed: ${buildResult.stderr}`);
             }
         }
-        utils:logInfo("✓ client built and validated");
+        utils:logInfo("  client built and validated");
 
         if clientGenerationSucceeded && baselineResult is client_regenerator:ClientSourceBaseline {
             error? summaryResult = client_regenerator:executeVersionSummary(outputDir, baselineResult);

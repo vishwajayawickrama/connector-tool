@@ -122,7 +122,7 @@ public function generateSanitationsDoc(
     check io:fileWriteString(sanitationsPath, content);
 
     string verb = existsAlready ? "Updated" : "Generated";
-    utils:logInfo(string `✓ ${verb} sanitations.md at: ${utils:getDisplayPath(sanitationsPath)}`);
+    utils:logInfo(string `  ${verb} sanitations.md at: ${utils:getDisplayPath(sanitationsPath)}`);
 }
 
 # Read sanitations.md and apply all recorded changes to the new spec.
@@ -177,7 +177,7 @@ public function applySanitations(
         json|error modifiedSpec = applySanitationsViaLLM(sanitationsContent, specStr);
         if modifiedSpec is json {
             check writeJsonAtomically(newSpecPath, modifiedSpec);
-            utils:logInfo("✓ sanitations applied (AI-powered)");
+            utils:logInfo("  sanitations applied (AI-powered)");
             return;
         }
 
@@ -189,7 +189,7 @@ public function applySanitations(
     utils:logVerbose(string `rules parsed — server: ${rules.serverUrlChanges.length()}, paths: ${rules.pathPrefixRules.length()}, types: ${rules.typeChanges.length()}, nullability: ${rules.nullabilityChanges.length()}, formats: ${rules.formatChanges.length()}`);
     check applyRulesToSpec(newSpecPath, rules);
 
-    utils:logInfo("✓ sanitations applied (rule-based)");
+    utils:logInfo("  sanitations applied (rule-based)");
 }
 
 // ─────────────────────────────────────────────────────────────

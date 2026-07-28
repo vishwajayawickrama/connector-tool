@@ -33,7 +33,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     if !utils:isCommandSuccessfull(flattenResult) {
         utils:logWarn(string `flatten operation failed: ${flattenResult.stderr.trim()}`);
     } else {
-        utils:logVerbose("✓ spec flattened");
+        utils:logVerbose("  spec flattened");
     }
 
     // Step 2: Align
@@ -63,7 +63,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     if !utils:isCommandSuccessfull(alignResult) {
         utils:logWarn(string `align operation failed: ${alignResult.stderr.trim()}`);
     } else {
-        utils:logVerbose("✓ spec aligned");
+        utils:logVerbose("  spec aligned");
     }
 
     if isYamlFormat(inputSpecPath) {
@@ -73,7 +73,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
             utils:logWarn(string `YAML to JSON conversion failed: ${conversionResult.message()}`);
             return error("YAML to JSON conversion failed: " + conversionResult.message());
         }
-        utils:logVerbose("✓ YAML spec converted to JSON");
+        utils:logVerbose("  YAML spec converted to JSON");
     }
 
     string alignedSpec = alignedSpecPath + "/aligned_ballerina_openapi.json";

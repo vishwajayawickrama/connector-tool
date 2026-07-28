@@ -24,14 +24,14 @@ function logBatchWorkload(string singularLabel, string pluralLabel, int itemCoun
     int totalBatches = itemCount == 0 ? 0 : (itemCount + BATCH_SIZE - 1) / BATCH_SIZE;
     string itemLabel = itemCount == 1 ? singularLabel : pluralLabel;
     string batchDetails = totalBatches > 1 ? string ` in ${totalBatches} batches` : "";
-    utils:logVerbose(string `processing ${itemCount} ${itemLabel}${batchDetails} from ${
+    utils:logVerbose(string `  processing ${itemCount} ${itemLabel}${batchDetails} from ${
         utils:getDisplayPath(specFilePath)}`);
     return totalBatches;
 }
 
 function logBatchProgress(string batchLabel, int batchNum, int totalBatches, int batchSize) {
     if totalBatches > 1 {
-        utils:logVerbose(string `${batchLabel} batch ${batchNum}/${totalBatches} (${batchSize} item${
+        utils:logVerbose(string `    ${batchLabel} batch ${batchNum}/${totalBatches} (${batchSize} item${
             batchSize == 1 ? "" : "s"})`);
     }
 }
@@ -45,7 +45,7 @@ public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests
 
         if result is BatchDescriptionResponse[] {
             if attempt > 0 {
-                utils:logVerbose(string `batch description generation succeeded after retry (attempt ${attempt})`);
+                utils:logVerbose(string `    batch description generation succeeded after retry (attempt ${attempt})`);
             }
             return result;
         } else {
@@ -60,7 +60,7 @@ public function generateDescriptionsBatchWithRetry(DescriptionRequest[] requests
             }
 
             decimal delay = calculateBackoffDelay(attempt, retryConf);
-            utils:logVerbose(string `batch description generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
+            utils:logVerbose(string `    batch description generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
             runtime:sleep(delay);
             attempt += 1;
         }
@@ -80,7 +80,7 @@ public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests
             error? validationResult = validateOperationIdBatchResponses(requests, result);
             if validationResult is () {
                 if attempt > 0 {
-                    utils:logVerbose(string `batch operationId generation succeeded after retry (attempt ${attempt})`);
+                    utils:logVerbose(string `    batch operationId generation succeeded after retry (attempt ${attempt})`);
                 }
                 return result;
             }
@@ -99,7 +99,7 @@ public function generateOperationIdsBatchWithRetry(OperationIdRequest[] requests
             }
 
             decimal delay = calculateBackoffDelay(attempt, retryConf);
-            utils:logVerbose(string `batch operationId generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
+            utils:logVerbose(string `    batch operationId generation failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
             runtime:sleep(delay);
             attempt += 1;
         } else {
@@ -119,7 +119,7 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
 
         if result is BatchRenameResponse[] {
             if attempt > 0 {
-                utils:logVerbose(string `batch schema naming succeeded after retry (attempt ${attempt})`);
+                utils:logVerbose(string `    batch schema naming succeeded after retry (attempt ${attempt})`);
             }
             return result;
         } else {
@@ -134,7 +134,7 @@ public function generateSchemaNamesBatchWithRetry(SchemaRenameRequest[] requests
             }
 
             decimal delay = calculateBackoffDelay(attempt, retryConf);
-            utils:logVerbose(string `batch schema naming failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
+            utils:logVerbose(string `    batch schema naming failed, retrying (attempt ${attempt + 1}/${retryConf.maxRetries}, delay ${delay}s)`);
             runtime:sleep(delay);
             attempt += 1;
         }

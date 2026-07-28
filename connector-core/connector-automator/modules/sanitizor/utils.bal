@@ -195,6 +195,6 @@ function convertAlignedYamlToJson(string alignedSpecPath) returns error? {
 
     check writeJsonAtomically(jsonAlignedSpec, jsonData);
 
-    utils:logVerbose("✓ converted YAML aligned spec to JSON");
+    utils:logVerbose("  converted YAML aligned spec to JSON");
     return;
 }
