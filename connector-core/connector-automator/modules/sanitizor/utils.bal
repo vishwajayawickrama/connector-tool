@@ -60,6 +60,14 @@ function isValidSchemaName(string name) returns boolean {
     return regexp:isFullMatch(re `[A-Z][a-zA-Z0-9]*`, name);
 }
 
+// Helper function to validate if a persisted operationId is a safe identifier
+function isValidOperationId(string operationId) returns boolean {
+    if operationId.length() == 0 || operationId.length() > 100 {
+        return false;
+    }
+    return regexp:isFullMatch(re `[A-Za-z_][A-Za-z0-9_]*`, operationId);
+}
+
 // Helper function to generate unique request IDs for operationId requests
 function generateOperationRequestId(string path, string method) returns string {
     string cleanPath = regexp:replaceAll(re `_`, path, "_u");

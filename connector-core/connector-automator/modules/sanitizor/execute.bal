@@ -103,7 +103,7 @@ public function executeSanitizor(string inputSpecPath, string specDir) returns e
     if operationIdResult is error {
         return error("OperationId improvement failed", operationIdResult);
     } else {
-        utils:logInfo(string `  improved ${operationIdResult.operationsReviewed} operationId${operationIdResult.operationsReviewed == 1 ? "" : "s"}`);
+        utils:logInfo(string `  improved ${operationIdResult.operationIdsChanged} operationId${operationIdResult.operationIdsChanged == 1 ? "" : "s"}`);
         if operationIdResult.operationsPending > 0 {
             utils:logWarn(string `  ${operationIdResult.operationsPending} operationId${operationIdResult.operationsPending == 1 ? "" : "s"} pending after ${operationIdResult.failedBatches} failed batch${operationIdResult.failedBatches == 1 ? "" : "es"}`);
         }

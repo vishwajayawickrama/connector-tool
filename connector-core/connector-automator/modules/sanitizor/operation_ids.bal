@@ -47,10 +47,17 @@ function parseOperationIdMappings(map<json> aiMappingsDocument) returns map<map<
                 return error(string `Invalid operationId mapping for '${path}': unsupported method '${method}'`);
             }
             json|error operationIdResult = pathMappingsResult.get(method);
-            if !(operationIdResult is string) || operationIdResult.trim().length() == 0 {
+            if !(operationIdResult is string) {
                 return error(string `Invalid operationId mapping for '${method} ${path}': operationId must be a non-empty string`);
             }
-            methodMappings[method] = operationIdResult.trim();
+            string operationId = operationIdResult.trim();
+            if operationId.length() == 0 {
+                return error(string `Invalid operationId mapping for '${method} ${path}': operationId must be a non-empty string`);
+            }
+            if !isValidOperationId(operationId) {
+                return error(string `Invalid operationId mapping for '${method} ${path}': '${operationId}' is not a valid identifier`);
+            }
+            methodMappings[method] = operationId;
         }
         parsedMappings[path] = methodMappings;
     }

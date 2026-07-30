@@ -435,6 +435,48 @@ function collectParameterDescriptionRequests(json spec, DescriptionRequest[] req
     }
 }
 
+function summarizeRequestBodyContent(map<json> content) returns string {
+    string[] schemaSummaries = [];
+    foreach string mediaType in content.keys() {
+        json|error mediaResult = content.get(mediaType);
+        if !(mediaResult is map<json>) {
+            continue;
+        }
+        json|error schemaResult = mediaResult.get("schema");
+        if !(schemaResult is map<json>) {
+            continue;
+        }
+
+        string schemaSummary = "inline schema";
+        json|error referenceResult = schemaResult.get("$ref");
+        if referenceResult is string {
+            schemaSummary = string `ref ${referenceResult}`;
+        } else {
+            json|error propertiesResult = schemaResult.get("properties");
+            if propertiesResult is map<json> {
+                string[] propertyNames = propertiesResult.keys();
+                string[] displayedNames = propertyNames.length() > 10 ?
+                    propertyNames.slice(0, 10) : propertyNames;
+                string suffix = propertyNames.length() > 10 ? ", ..." : "";
+                schemaSummary = string `properties [${string:'join(", ", ...displayedNames)}${suffix}]`;
+            } else {
+                json|error typeResult = schemaResult.get("type");
+                if typeResult is string {
+                    schemaSummary = string `type ${typeResult}`;
+                }
+            }
+        }
+        schemaSummaries.push(string `${mediaType}: ${schemaSummary}`);
+    }
+
+    string summary = string:'join("; ", ...schemaSummaries);
+    int summaryLimit = 500;
+    if summary.length() > summaryLimit {
+        return summary.substring(0, summaryLimit) + "...";
+    }
+    return summary;
+}
+
 // Collects missing descriptions for operation request bodies. These descriptions
 // become the payload parameter documentation in the generated Ballerina client.
 function collectRequestBodyDescriptionRequests(json spec, DescriptionRequest[] requests,
@@ -500,7 +542,10 @@ function collectRequestBodyDescriptionRequests(json spec, DescriptionRequest[] r
                 if contentResult is map<json> {
                     map<json> content = <map<json>>contentResult;
                     context += string ` Content types: ${string:'join(", ", ...content.keys())}.`;
-                    context += string ` Content schemas: ${content.toString()}.`;
+                    string contentSummary = summarizeRequestBodyContent(content);
+                    if contentSummary.length() > 0 {
+                        context += string ` Content schemas: ${contentSummary}.`;
+                    }
                 }
             }
             context += " Describe the complete submitted payload and its purpose.";
