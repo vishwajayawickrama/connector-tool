@@ -194,6 +194,8 @@ ${fixHistory.length() > 0 ? fixHistory : "None"}
 
 Repair compilation errors, assertion failures, panics, mock-service startup failures, and invalid generated test data while preserving the intended test coverage. Do not disable or remove tests merely to make the command pass. Keep the test deterministic and compatible with the supplied client and type definitions.
 
+When fixing ${"`"}tests/mock_service.bal${"`"}, every resource signature is authoritative. Preserve its HTTP method, path, annotations, parameters, and complete return type exactly. Do not add, remove, duplicate, or rename resources. ${"`"}AnydataDefault${"`"} represents an OpenAPI default response and must not be replaced with ${"`"}http:InternalServerError${"`"}, ${"`"}http:Response${"`"}, ${"`"}error${"`"}, or another convenient type. Do not replace status-bearing response wrappers with their underlying body records. Resolve unknown types using ${"`"}<AUTHORITATIVE_CONNECTOR_CONTEXT>${"`"}; if a necessary type is absent, do not invent a semantically different substitute.
+
 Return only the complete corrected Ballerina source for ${filePath}. Do not include explanations, markdown, or ${tripleBacktick} fences.
 `;
 }

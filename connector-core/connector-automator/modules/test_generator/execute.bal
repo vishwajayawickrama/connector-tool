@@ -35,31 +35,42 @@ public function executeTestGen(string workflowType, string connectorPath, string
 
 // Runs the generated tests and attempts to repair test failures until they pass or no progress can be made.
 public function validateGeneratedTests(string ballerinaDir) returns TestValidationResult|error {
-    utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir);
+    utils:CommandResult testResult = utils:executeCommand("bal test", ballerinaDir, logFailureDetails = false);
     if testResult.success {
         return {success: true, attempts: 0, stdout: testResult.stdout, stderr: testResult.stderr};
     }
 
     int attempts = 0;
     string previousDiagnostics = "";
+    boolean retryRejectedRepair = false;
     int iterationLimit = code_fixer:getConfiguredMaxIterations();
     while attempts < iterationLimit {
         string diagnostics = string `${testResult.stderr}\n${testResult.stdout}`;
-        if attempts > 0 && diagnostics == previousDiagnostics {
+        if attempts > 0 && diagnostics == previousDiagnostics && !retryRejectedRepair {
             utils:logWarn("`bal test` diagnostics did not change — stopping test repair");
             break;
         }
+        retryRejectedRepair = false;
         previousDiagnostics = diagnostics;
         attempts += 1;
+        string progress = attempts == 1 ? "test validation failed" : "test validation still fails";
+        utils:logVerbose(string `${progress}; attempting repair ${attempts}/${iterationLimit}`);
 
-        code_fixer:TestRepairResult repairResult =
-            check code_fixer:fixBalTestFailure(ballerinaDir, testResult, attempts);
+        code_fixer:TestRepairResult|error repairResult =
+            code_fixer:fixBalTestFailure(ballerinaDir, testResult, attempts);
+        if repairResult is error {
+            if repairResult.detail()["retryable"] is boolean {
+                retryRejectedRepair = true;
+                continue;
+            }
+            return repairResult;
+        }
         if !repairResult.applied {
             utils:logWarn("AI produced no applicable test changes — stopping test repair");
             break;
         }
 
-        testResult = utils:executeCommand("bal test", ballerinaDir);
+        testResult = utils:executeCommand("bal test", ballerinaDir, logFailureDetails = false);
         if testResult.success {
             return {success: true, attempts, stdout: testResult.stdout, stderr: testResult.stderr};
         }

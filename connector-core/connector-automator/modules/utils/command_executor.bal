@@ -20,7 +20,8 @@ import ballerina/os;
 import ballerina/random;
 import ballerina/time;
 
-public function executeCommand(string command, string workingDir, int timeoutSeconds = 1800) returns CommandResult {
+public function executeCommand(string command, string workingDir, int timeoutSeconds = 1800,
+        boolean logFailureDetails = true) returns CommandResult {
     time:Utc startTime = time:utcNow();
     logVerbose(string `executing: ${getDisplayCommand(command)}`);
 
@@ -121,7 +122,7 @@ public function executeCommand(string command, string workingDir, int timeoutSec
     time:Utc endTime = time:utcNow();
     decimal executionTime = <decimal>(endTime[0] - startTime[0]);
 
-    if !success {
+    if !success && logFailureDetails {
         logVerbose(string `command exited ${exitCode}: ${stderr.trim()}`);
     }
 

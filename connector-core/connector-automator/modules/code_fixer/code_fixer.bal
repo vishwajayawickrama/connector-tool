@@ -899,7 +899,9 @@ public function fixBalTestFailure(string projectPath, utils:CommandResult testRe
     foreach string relativePath in candidates {
         string fullPath = check file:joinPath(projectPath, relativePath);
         string currentCode = check io:fileReadString(fullPath);
-        string fixHistory = attempt > 1 ? string `Retry attempt ${attempt}; do not return the unchanged source.` : "";
+        string fixHistory = attempt > 1 ?
+            string `Retry attempt ${attempt}; the previous candidate did not pass validation. Do not return the unchanged source or alter authoritative resource signatures.` :
+            "";
         string prompt = createTestFailureFixPrompt(currentCode, relativePath, testResult.stderr, testResult.stdout,
                 getTypeContextForFile(projectPath, relativePath), fixHistory);
         string|error response = utils:callAI(prompt);
@@ -912,6 +914,14 @@ public function fixBalTestFailure(string projectPath, utils:CommandResult testRe
         if fixedCode.length() == 0 || fixedCode == currentCode.trim() {
             continue;
         }
+        string normalizedRelativePath = regexp:replaceAll(re `\\`, relativePath, "/");
+        if normalizedRelativePath.endsWith("tests/mock_service.bal") {
+            error? signatureValidation = validateMockServiceResourceSignatures(currentCode, fixedCode);
+            if signatureValidation is error {
+                utils:logWarn("proposed test repair changed mock-service API semantics — retrying without applying it");
+                return error(signatureValidation.message(), retryable = true);
+            }
+        }
         boolean|error applyResult = applyFix(projectPath, relativePath, fixedCode);
         if applyResult is error || !applyResult {
             continue;
@@ -923,6 +933,166 @@ public function fixBalTestFailure(string projectPath, utils:CommandResult testRe
     }
 
     return {applied, modifiedFiles};
+}
+
+function validateMockServiceResourceSignatures(string currentCode, string fixedCode) returns error? {
+    string[] currentSignatures = check extractMockServiceResourceSignatures(currentCode);
+    string[] fixedSignatures = check extractMockServiceResourceSignatures(fixedCode);
+    if currentSignatures.length() != fixedSignatures.length() {
+        return error("A mock-service resource was added or removed");
+    }
+    foreach int index in 0 ..< currentSignatures.length() {
+        if currentSignatures[index] != fixedSignatures[index] {
+            return error(string `Mock-service resource signature ${index + 1} was changed`);
+        }
+    }
+}
+
+function extractMockServiceResourceSignatures(string sourceCode) returns string[]|error {
+    string[] signatures = [];
+    string marker = "resource function ";
+    int searchStart = 0;
+
+    while searchStart < sourceCode.length() {
+        int? signatureStart = sourceCode.indexOf(marker, searchStart);
+        if signatureStart is () {
+            break;
+        }
+        int bodyStart = check findResourceFunctionBodyStart(sourceCode, signatureStart);
+        int authoritativeStart = findResourceAnnotationStart(sourceCode, signatureStart);
+        signatures.push(canonicalizeResourceSignature(sourceCode.substring(authoritativeStart, bodyStart)));
+        searchStart = bodyStart + 1;
+    }
+    return signatures;
+}
+
+function findResourceAnnotationStart(string sourceCode, int signatureStart) returns int {
+    int signatureLineStart = findCodeLineStart(sourceCode, signatureStart);
+    int scanEnd = signatureLineStart;
+    int candidateStart = signatureLineStart;
+    boolean foundAnnotation = false;
+
+    while scanEnd >= 2 {
+        int lineStart = findCodeLineStart(sourceCode, scanEnd - 2);
+        string line = sourceCode.substring(lineStart, scanEnd).trim();
+        if line.length() == 0 || line.startsWith("#") {
+            break;
+        }
+        candidateStart = lineStart;
+        if line.startsWith("@") {
+            foundAnnotation = true;
+            break;
+        }
+        scanEnd = lineStart;
+    }
+    return foundAnnotation ? candidateStart : signatureStart;
+}
+
+function findCodeLineStart(string sourceCode, int index) returns int {
+    int? newlineIndex = sourceCode.lastIndexOf("\n", index);
+    return newlineIndex is int ? newlineIndex + 1 : 0;
+}
+
+function findResourceFunctionBodyStart(string sourceCode, int signatureStart) returns int|error {
+    int parenthesisDepth = 0;
+    int bracketDepth = 0;
+    int typeBraceDepth = 0;
+    boolean inString = false;
+    boolean escaped = false;
+    int index = signatureStart;
+
+    while index < sourceCode.length() {
+        string character = sourceCode.substring(index, index + 1);
+        if inString {
+            if escaped {
+                escaped = false;
+            } else if character == "\\" {
+                escaped = true;
+            } else if character == "\"" {
+                inString = false;
+            }
+            index += 1;
+            continue;
+        }
+
+        if character == "\"" {
+            inString = true;
+        } else if character == "(" {
+            parenthesisDepth += 1;
+        } else if character == ")" {
+            parenthesisDepth -= 1;
+        } else if character == "[" {
+            bracketDepth += 1;
+        } else if character == "]" {
+            bracketDepth -= 1;
+        } else if character == "{" {
+            if typeBraceDepth > 0 {
+                typeBraceDepth += 1;
+            } else if isRecordTypeOpening(sourceCode, index) {
+                typeBraceDepth = 1;
+            } else if parenthesisDepth == 0 && bracketDepth == 0 {
+                return index;
+            }
+        } else if character == "}" && typeBraceDepth > 0 {
+            typeBraceDepth -= 1;
+        }
+        if parenthesisDepth < 0 || bracketDepth < 0 || typeBraceDepth < 0 {
+            return error("Malformed mock-service resource signature");
+        }
+        index += 1;
+    }
+    return error("Unterminated mock-service resource signature");
+}
+
+function isRecordTypeOpening(string sourceCode, int braceIndex) returns boolean {
+    if braceIndex + 1 < sourceCode.length() && sourceCode.substring(braceIndex + 1, braceIndex + 2) == "|" {
+        return true;
+    }
+    int index = braceIndex - 1;
+    while index >= 0 && isSignatureWhitespace(sourceCode.substring(index, index + 1)) {
+        index -= 1;
+    }
+    int wordEnd = index + 1;
+    while index >= 0 && isSignatureWordCharacter(sourceCode.substring(index, index + 1)) {
+        index -= 1;
+    }
+    return sourceCode.substring(index + 1, wordEnd) == "record";
+}
+
+function canonicalizeResourceSignature(string signature) returns string {
+    string canonical = "";
+    boolean inString = false;
+    boolean escaped = false;
+    foreach int index in 0 ..< signature.length() {
+        string character = signature.substring(index, index + 1);
+        if inString {
+            canonical += character;
+            if escaped {
+                escaped = false;
+            } else if character == "\\" {
+                escaped = true;
+            } else if character == "\"" {
+                inString = false;
+            }
+        } else if character == "\"" {
+            inString = true;
+            canonical += character;
+        } else if !isSignatureWhitespace(character) {
+            canonical += character;
+        }
+    }
+    return canonical;
+}
+
+function isSignatureWhitespace(string character) returns boolean {
+    return character == " " || character == "\t" || character == "\r" || character == "\n";
+}
+
+function isSignatureWordCharacter(string character) returns boolean {
+    return character == "_" ||
+        (character >= "A" && character <= "Z") ||
+        (character >= "a" && character <= "z") ||
+        (character >= "0" && character <= "9");
 }
 
 // Java patch-based edit types and functions

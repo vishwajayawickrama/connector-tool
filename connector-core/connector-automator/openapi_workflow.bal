@@ -214,11 +214,18 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
             if validationResult is error {
                 utils:logWarn(string `test validation could not complete: ${validationResult.message()}`);
             } else if validationResult.success {
-                utils:logInfo("✓ bal test passed");
+                if validationResult.attempts == 0 {
+                    utils:logInfo("✓ bal test passed");
+                } else {
+                    utils:logInfo(string `✓ bal test passed after ${validationResult.attempts} repair attempt${validationResult.attempts == 1 ? "" : "s"}`);
+                }
             } else {
                 string diagnostics = validationResult.stderr.trim().length() > 0 ?
                     validationResult.stderr.trim() : validationResult.stdout.trim();
-                utils:logWarn(string `bal test still fails after ${validationResult.attempts} repair attempt${validationResult.attempts == 1 ? "" : "s"}: ${diagnostics}`);
+                string failureDetails = diagnostics.length() > 0 ?
+                    formatTestFailureDiagnostics(diagnostics) :
+                    "    `bal test` exited unsuccessfully without diagnostic output";
+                utils:logWarn(string `bal test still fails after ${validationResult.attempts} repair attempt${validationResult.attempts == 1 ? "" : "s"}\n${failureDetails}`);
             }
         } else {
             utils:logWarn("test validation skipped because no tests directory was generated");
@@ -287,6 +294,16 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
     }
 
     utils:logCompletion(outputDir);
+}
+
+function formatTestFailureDiagnostics(string diagnostics) returns string {
+    string[] formattedLines = [];
+    foreach string line in re `\r?\n`.split(diagnostics.trim()) {
+        if line.trim().length() > 0 {
+            formattedLines.push(string `    ${line}`);
+        }
+    }
+    return string:'join("\n", ...formattedLines);
 }
 
 // Returns true only when every parsed compilation error originates from a test file
