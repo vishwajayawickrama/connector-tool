@@ -178,6 +178,9 @@ function warnOnDuplicateOperationIds(map<json> paths) {
                 if pathItemResult.hasKey(method) {
                     json|error operationResult = pathItemResult.get(method);
                     if operationResult is map<json> {
+                        if !operationResult.hasKey("operationId") {
+                            continue;
+                        }
                         json|error operationIdResult = operationResult.get("operationId");
                         if operationIdResult is string {
                             string[] locations = seenIds[operationIdResult] ?: [];

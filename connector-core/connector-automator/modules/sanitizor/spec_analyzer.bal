@@ -442,24 +442,36 @@ function summarizeRequestBodyContent(map<json> content) returns string {
         if !(mediaResult is map<json>) {
             continue;
         }
+        if !mediaResult.hasKey("schema") {
+            continue;
+        }
         json|error schemaResult = mediaResult.get("schema");
         if !(schemaResult is map<json>) {
             continue;
         }
 
         string schemaSummary = "inline schema";
-        json|error referenceResult = schemaResult.get("$ref");
-        if referenceResult is string {
-            schemaSummary = string `ref ${referenceResult}`;
-        } else {
-            json|error propertiesResult = schemaResult.get("properties");
-            if propertiesResult is map<json> {
-                string[] propertyNames = propertiesResult.keys();
-                string[] displayedNames = propertyNames.length() > 10 ?
-                    propertyNames.slice(0, 10) : propertyNames;
-                string suffix = propertyNames.length() > 10 ? ", ..." : "";
-                schemaSummary = string `properties [${string:'join(", ", ...displayedNames)}${suffix}]`;
-            } else {
+        boolean schemaSummarized = false;
+        if schemaResult.hasKey("$ref") {
+            json|error referenceResult = schemaResult.get("$ref");
+            if referenceResult is string {
+                schemaSummary = string `ref ${referenceResult}`;
+                schemaSummarized = true;
+            }
+        }
+        if !schemaSummarized {
+            if schemaResult.hasKey("properties") {
+                json|error propertiesResult = schemaResult.get("properties");
+                if propertiesResult is map<json> {
+                    string[] propertyNames = propertiesResult.keys();
+                    string[] displayedNames = propertyNames.length() > 10 ?
+                        propertyNames.slice(0, 10) : propertyNames;
+                    string suffix = propertyNames.length() > 10 ? ", ..." : "";
+                    schemaSummary = string `properties [${string:'join(", ", ...displayedNames)}${suffix}]`;
+                    schemaSummarized = true;
+                }
+            }
+            if !schemaSummarized && schemaResult.hasKey("type") {
                 json|error typeResult = schemaResult.get("type");
                 if typeResult is string {
                     schemaSummary = string `type ${typeResult}`;
