@@ -220,8 +220,7 @@ public function runOpenApiGenerationWorkflow(string openApiSpec, string outputDi
                     utils:logInfo(string `✓ bal test passed after ${validationResult.attempts} repair attempt${validationResult.attempts == 1 ? "" : "s"}`);
                 }
             } else {
-                string diagnostics = validationResult.stderr.trim().length() > 0 ?
-                    validationResult.stderr.trim() : validationResult.stdout.trim();
+                string diagnostics = string `${validationResult.stderr}\n${validationResult.stdout}`.trim();
                 string failureDetails = diagnostics.length() > 0 ?
                     formatTestFailureDiagnostics(diagnostics) :
                     "    `bal test` exited unsuccessfully without diagnostic output";

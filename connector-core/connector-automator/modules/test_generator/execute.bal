@@ -42,15 +42,13 @@ public function validateGeneratedTests(string ballerinaDir) returns TestValidati
 
     int attempts = 0;
     string previousDiagnostics = "";
-    boolean retryRejectedRepair = false;
     int iterationLimit = code_fixer:getConfiguredMaxIterations();
     while attempts < iterationLimit {
         string diagnostics = string `${testResult.stderr}\n${testResult.stdout}`;
-        if attempts > 0 && diagnostics == previousDiagnostics && !retryRejectedRepair {
+        if attempts > 0 && diagnostics == previousDiagnostics {
             utils:logWarn("`bal test` diagnostics did not change — stopping test repair");
             break;
         }
-        retryRejectedRepair = false;
         previousDiagnostics = diagnostics;
         attempts += 1;
         string progress = attempts == 1 ? "test validation failed" : "test validation still fails";
@@ -59,10 +57,6 @@ public function validateGeneratedTests(string ballerinaDir) returns TestValidati
         code_fixer:TestRepairResult|error repairResult =
             code_fixer:fixBalTestFailure(ballerinaDir, testResult, attempts);
         if repairResult is error {
-            if repairResult.detail()["retryable"] is boolean {
-                retryRejectedRepair = true;
-                continue;
-            }
             return repairResult;
         }
         if !repairResult.applied {

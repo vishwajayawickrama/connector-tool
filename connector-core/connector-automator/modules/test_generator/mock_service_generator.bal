@@ -61,14 +61,19 @@ function generateMockServerStub(string connectorPath, string specPath, string[]?
     string serviceTypesPath = testsDir + "/types.bal";
     if check file:test(serviceTypesPath, file:EXISTS) {
         string connectorTypesPath = ballerinaDir + "/types.bal";
-        int mergedTypeCount = check mergeMissingServiceTypes(connectorTypesPath, serviceTypesPath);
-        if mergedTypeCount > 0 {
-            utils:logVerbose(string `merged ${mergedTypeCount} service response type${mergedTypeCount == 1 ? "" : "s"} into types.bal`);
+        if check file:test(connectorTypesPath, file:EXISTS) {
+            int mergedTypeCount = check mergeMissingServiceTypes(connectorTypesPath, serviceTypesPath);
+            if mergedTypeCount > 0 {
+                utils:logVerbose(string `merged ${mergedTypeCount} service response type${mergedTypeCount == 1 ? "" : "s"} into types.bal`);
+            } else {
+                utils:logVerbose("all service response types already available");
+            }
+            check file:remove(serviceTypesPath);
+            utils:logVerbose("removed generated tests/types.bal");
         } else {
-            utils:logVerbose("all service response types already available");
+            check file:rename(serviceTypesPath, connectorTypesPath);
+            utils:logVerbose("moved generated service types to types.bal");
         }
-        check file:remove(serviceTypesPath);
-        utils:logVerbose("removed generated tests/types.bal");
     }
 }
 
@@ -212,7 +217,8 @@ function findAttachedTypeMetadataStart(string content, int declarationStart) ret
         }
         int previousLineStart = findLineStart(content, previousLineEnd - 2);
         string previousLine = content.substring(previousLineStart, previousLineEnd).trim();
-        if previousLine.length() == 0 || previousLine.endsWith(";") {
+        if previousLine.length() == 0 || previousLine.endsWith(";") ||
+                previousLine.endsWith("}") || previousLine.endsWith("{") {
             break;
         }
         sourceStart = previousLineStart;
@@ -246,18 +252,22 @@ function addMissingImports(string content, string[] missingImports) returns stri
     }
 
     int insertionPoint = 0;
-    int searchStart = 0;
-    while searchStart < content.length() {
-        int? importStart = content.indexOf("import ", searchStart);
-        if importStart is () {
+    int lineStart = 0;
+    while lineStart < content.length() {
+        int? newlineIndex = content.indexOf("\n", lineStart);
+        int lineEnd = newlineIndex is int ? newlineIndex : content.length();
+        string line = content.substring(lineStart, lineEnd);
+        string trimmedLine = line.trim();
+        if trimmedLine.startsWith("import ") && trimmedLine.endsWith(";") {
+            int? semicolonIndex = line.lastIndexOf(";");
+            if semicolonIndex is int {
+                insertionPoint = lineStart + semicolonIndex + 1;
+            }
+        }
+        if newlineIndex is () {
             break;
         }
-        int? importEnd = content.indexOf(";", importStart);
-        if importEnd is () {
-            break;
-        }
-        insertionPoint = importEnd + 1;
-        searchStart = insertionPoint;
+        lineStart = newlineIndex + 1;
     }
 
     string importsText = string:'join("\n", ...missingImports);

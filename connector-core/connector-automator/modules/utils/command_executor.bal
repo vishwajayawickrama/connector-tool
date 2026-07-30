@@ -102,7 +102,7 @@ public function executeCommand(string command, string workingDir, int timeoutSec
                         // Exit 124 = sentinel confirms watchdog fired → timed out.
                         if exitCode == 124 {
                             stderr = string `${stderr}${stderr.trim().length() > 0 ? "\n" : ""}command timed out after ${timeoutSeconds}s`;
-                            logWarn(string `command timed out after ${timeoutSeconds}s: ${command}`);
+                            logWarn(string `command timed out after ${timeoutSeconds}s: ${getDisplayCommand(command)}`);
                         }
 
                         do { check file:remove(stdoutFile); } on fail { }

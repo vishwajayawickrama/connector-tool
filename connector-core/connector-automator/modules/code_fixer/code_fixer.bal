@@ -918,8 +918,8 @@ public function fixBalTestFailure(string projectPath, utils:CommandResult testRe
         if normalizedRelativePath.endsWith("tests/mock_service.bal") {
             error? signatureValidation = validateMockServiceResourceSignatures(currentCode, fixedCode);
             if signatureValidation is error {
-                utils:logWarn("proposed test repair changed mock-service API semantics — retrying without applying it");
-                return error(signatureValidation.message(), retryable = true);
+                utils:logWarn("proposed test repair changed mock-service API semantics — skipping candidate");
+                continue;
             }
         }
         boolean|error applyResult = applyFix(projectPath, relativePath, fixedCode);
@@ -975,7 +975,8 @@ function findResourceAnnotationStart(string sourceCode, int signatureStart) retu
     while scanEnd >= 2 {
         int lineStart = findCodeLineStart(sourceCode, scanEnd - 2);
         string line = sourceCode.substring(lineStart, scanEnd).trim();
-        if line.length() == 0 || line.startsWith("#") {
+        if line.length() == 0 || line.startsWith("#") || line.endsWith("}") ||
+                line.endsWith("{") || line.endsWith(";") {
             break;
         }
         candidateStart = lineStart;
